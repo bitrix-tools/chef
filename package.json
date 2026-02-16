@@ -3,6 +3,10 @@
   "version": "0.0.0.beta",
   "description": "Bitrix frontend tool",
   "main": "./dist/cli.js",
+  "files": [
+    "dist/**/*",
+    "types/**/*"
+  ],
   "types": "./types/index.d.ts",
   "engines": {
     "node": ">=22"
