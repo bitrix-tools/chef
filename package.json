@@ -1,0 +1,92 @@
+{
+  "name": "@bitrix/chef",
+  "version": "0.0.0.beta",
+  "description": "Bitrix frontend tool",
+  "main": "./dist/cli.js",
+  "types": "./types/index.d.ts",
+  "engines": {
+    "node": ">=22"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsup-node ./src/cli.ts --format esm --splitting=false",
+    "test": "tsx --import=tsx/esm ./node_modules/.bin/mocha ./test/**/*.test.ts --inline-diffs --color=true",
+    "test:watch": "tsx watch --import=tsx/esm ./node_modules/.bin/mocha ./test/**/*.test.ts --inline-diffs --color=true"
+  },
+  "bin": {
+    "chef": "./bin/chef"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bitrix-tools/chef.git"
+  },
+  "homepage": "https://github.com/bitrix-tools/chef#readme",
+  "bugs": {
+    "url": "https://github.com/bitrix-tools/chef/issues"
+  },
+  "author": "Bitrix",
+  "license": "MIT",
+  "devDependencies": {
+    "@babel/generator": "^7.29.1",
+    "@babel/parser": "^7.29.0",
+    "@babel/traverse": "^7.29.0",
+    "@babel/types": "^7.29.0",
+    "@types/babel__core": "^7.20.5",
+    "@types/eslint": "^9.6.1",
+    "@types/node": "^24.0.12",
+    "tsup": "^8.5.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@babel/core": "^7.28.3",
+    "@babel/plugin-external-helpers": "^7.27.1",
+    "@babel/plugin-transform-flow-strip-types": "^7.27.1",
+    "@babel/preset-env": "^7.28.3",
+    "@inquirer/prompts": "^8.2.0",
+    "@playwright/test": "^1.57.0",
+    "@rollup/plugin-babel": "^6.0.4",
+    "@rollup/plugin-commonjs": "^28.0.6",
+    "@rollup/plugin-image": "^3.0.3",
+    "@rollup/plugin-json": "^6.1.0",
+    "@rollup/plugin-node-resolve": "^16.0.1",
+    "@rollup/plugin-typescript": "^12.3.0",
+    "@types/chai": "^5.2.3",
+    "@types/mocha": "^10.0.10",
+    "browserslist": "^4.28.1",
+    "chai": "^6.2.1",
+    "chalk": "^5.6.0",
+    "chokidar": "^5.0.0",
+    "commander": "^14.0.0",
+    "concat-with-sourcemaps": "^1.1.0",
+    "eslint": "^8.57.1",
+    "fast-glob": "^3.3.3",
+    "mocha": "^12.0.0-beta-3",
+    "ora": "^8.2.0",
+    "p-queue": "^8.1.0",
+    "php-parser": "^3.2.5",
+    "playwright": "^1.57.0",
+    "prettier": "^3.7.4",
+    "prettier-plugin-brace-style": "^0.8.2",
+    "rollup": "^4.49.0",
+    "rollup-plugin-postcss": "^4.0.2",
+    "terser": "^5.43.1",
+    "text-table": "^0.2.0",
+    "tslib": "^2.8.1"
+  },
+  "optionalDependencies": {
+    "weak": "^1.0.1"
+  },
+  "directories": {
+    "test": "test"
+  },
+  "keywords": [
+    "bitrix",
+    "cli",
+    "builder",
+    "linter",
+    "test-runner",
+    "orchestrator",
+    "chef"
+  ]
+}
