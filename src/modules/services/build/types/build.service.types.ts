@@ -24,6 +24,7 @@ export type BuildOptions = {
 		js?: Array<string>;
 		css?: Array<string>;
 	};
+	resolve?: boolean,
 };
 
 export type BuildCodeOptions = {
@@ -31,6 +32,8 @@ export type BuildCodeOptions = {
 	targets: string[];
 	namespace: string;
 	typescript?: boolean;
+	resolve?: boolean,
+	standalone?: boolean;
 };
 
 export interface BuildCodeResult {
