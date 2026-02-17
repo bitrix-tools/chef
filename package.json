@@ -19,6 +19,7 @@
   },
   "type": "module",
   "scripts": {
+    "prebuild": "cp -r src/commands/create/templates dist/",
     "build": "tsup-node ./src/cli.ts --format esm --splitting=false",
     "test": "tsx --import=tsx/esm ./node_modules/.bin/mocha ./test/**/*.test.ts --inline-diffs --color=true",
     "test:watch": "tsx watch --import=tsx/esm ./node_modules/.bin/mocha ./test/**/*.test.ts --inline-diffs --color=true"
