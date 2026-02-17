@@ -347,18 +347,30 @@ export class RollupBuildStrategy extends BuildStrategy
 
 						if (typeof tsConfigPath === 'string' && tsConfigPath.length > 0)
 						{
-							const tsConfig = await this.#loadTsConfig(tsConfigPath, path.dirname(options.input));
-							const plugin = await this.#createTypeScriptPlugin(tsConfig, path.dirname(options.input));
+							const tsConfig = await this.#loadTsConfig(
+								tsConfigPath,
+								path.dirname(options.input),
+							);
 
-							return plugin;
+							return await this.#createTypeScriptPlugin(
+								tsConfig,
+								path.dirname(options.input),
+							);
 						}
 					}
 
 					return Promise.resolve();
 				})(),
-				nodeResolve({
-					browser: true,
-				}),
+				(() => {
+					if (options.resolve)
+					{
+						return nodeResolve({
+							browser: true,
+						});
+					}
+
+					return null;
+				})(),
 				babelPlugin({
 					babelHelpers: 'external',
 					presets: [
