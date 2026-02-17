@@ -203,9 +203,16 @@ export class RollupBuildStrategy extends BuildStrategy
 		const bundle: RollupBuild = await rollup(rollupInputOptions);
 
 		const outputOptions: OutputOptions = this.#buildRollupBuildCodeOutputOptions(options);
-
 		const globals = RollupBuildStrategy.makeGlobals(dependenciesRef);
-		const result: RollupOutput = await bundle.generate({ ...outputOptions, globals });
+		const result: RollupOutput = await bundle.generate({
+			...outputOptions,
+			globals: {
+				...globals,
+				mocha: 'window',
+				chai: 'window',
+				sinon: 'window',
+			},
+		});
 
 		await bundle.close();
 
@@ -434,6 +441,7 @@ export class RollupBuildStrategy extends BuildStrategy
 				typescript: options.typescript,
 				targets: options.targets,
 				namespace: options.namespace,
+				resolve: true,
 			},
 			onWarning,
 		);
@@ -448,6 +456,11 @@ export class RollupBuildStrategy extends BuildStrategy
 				...sourceRollupInputOptions.plugins,
 			],
 			treeshake: false,
+			external: [
+				'mocha',
+				'chai',
+				'sinon',
+			],
 		}
 	}
 
