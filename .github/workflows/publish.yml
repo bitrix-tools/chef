@@ -36,7 +36,12 @@ jobs:
           scope: '@bitrix'
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          npm ci || (
+            echo "npm ci failed, falling back to npm install..."
+            rm -rf node_modules package-lock.json
+            npm install
+          )
 
       - name: Build package
         run: npm run build
