@@ -6,12 +6,13 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 
+require('tsx').globalPreload();
+
 if (fs.existsSync(path.resolve(import.meta.dirname, '../dist/cli.js')))
 {
 		require('../dist/cli.js');
 }
 else
 {
-		require('tsx').globalPreload();
 		require('../src/cli.ts');
 }
