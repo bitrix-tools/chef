@@ -18,5 +18,5 @@ export function resolvePackage(extensionName: string): string | null
 		return path.join(root, moduleName, PathIndicators.getInstallJs(), moduleName, ...trace);
 	}
 
-	return path.join(root, PathIndicators.getLocalJs(), ...trace);
+	return path.join(root, PathIndicators.getLocalJs(), moduleName, ...trace);
 }
