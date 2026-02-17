@@ -500,7 +500,7 @@ export abstract class BasePackage
 		const buildResult = await buildService.buildCode({
 			code: sourceTestsCode,
 			targets: this.getTargets(),
-			typescript: false,
+			typescript: this.isTypeScriptMode(),
 			namespace: 'BX.TestsBundle',
 		});
 
@@ -535,7 +535,9 @@ export abstract class BasePackage
 			'playwright.config.ts',
 		);
 		const playwrightConfigModule = await import(playwrightConfigPath);
-		const playwrightConfig = playwrightConfigModule.default || playwrightConfigModule;
+		const playwrightConfig = playwrightConfigModule.default.default
+			|| playwrightConfigModule.default
+			|| playwrightConfigModule;
 
 		const playwright = await import('playwright');
 		const browser = await playwright.chromium.launch({
