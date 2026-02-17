@@ -57,5 +57,12 @@ export function createPackageName(sourceDir: string): string
 
 			return fullExtensionTrace.join('.');
 		}
+
+		if (PathDetector.isBitrixJs(sourceDir))
+		{
+			const { fullExtensionTrace } = PathParser.parseBitrixJs(sourceDir);
+
+			return fullExtensionTrace.join('.');
+		}
 	}
 }

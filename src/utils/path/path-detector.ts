@@ -111,4 +111,9 @@ export class PathDetector
 			&& sourcePath.includes(PathIndicators.getInstallTemplates())
 		);
 	}
+
+	static isBitrixJs(sourcePath: string): boolean
+	{
+		return sourcePath.includes(PathIndicators.getBitrixJs());
+	}
 }

@@ -132,4 +132,21 @@ export class PathParser
 			fullExtensionTrace,
 		};
 	}
+
+	static parseBitrixJs(sourceDir: string): {
+		moduleName: string,
+		extensionTrace: Array<string>,
+		fullExtensionTrace: Array<string>,
+	}
+	{
+		const [, extensionDir] = sourceDir.split(PathIndicators.getBitrixJs());
+		const [moduleName, ...extensionTrace] = extensionDir.split(path.sep);
+		const fullExtensionTrace = [moduleName, ...extensionTrace];
+
+		return {
+			moduleName,
+			extensionTrace,
+			fullExtensionTrace,
+		};
+	}
 }

@@ -166,7 +166,7 @@ export abstract class BasePackage
 					path: this.getPath(),
 				});
 
-				if (targets.length > 0)
+				if (targets && targets.length > 0)
 				{
 					return targets;
 				}
@@ -175,7 +175,12 @@ export abstract class BasePackage
 			return bundleConfig.get('browserslist');
 		})();
 
-		return browserslist(query);
+		if (Array.isArray(query) || typeof query === 'string')
+		{
+			return browserslist(query);
+		}
+
+		return [];
 	}
 
 	getGlobal(): { [name: string]: string }

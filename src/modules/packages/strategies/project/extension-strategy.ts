@@ -7,6 +7,7 @@ export const extensionStrategy: PackageFactoryStrategy = {
 		return (
 			PathDetector.isLocalJs(path)
 			|| PathDetector.isLocalInstallJs(path)
+			|| PathDetector.isBitrixJs(path)
 		);
 	},
 	create: ({ path }) => new ExtensionPackage({ path }),

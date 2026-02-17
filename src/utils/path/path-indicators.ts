@@ -56,4 +56,9 @@ export class PathIndicators
 	{
 		return path.join(path.sep, 'local', 'modules', path.sep);
 	}
+
+	static getBitrixJs(): string
+	{
+		return path.join(path.sep, 'bitrix', 'js', path.sep);
+	}
 }
