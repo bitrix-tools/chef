@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { confirm } from '@inquirer/prompts';
+import chalk from 'chalk';
 
 import { Environment } from '../../environment/environment';
 import { pathOption } from './options/path-option';
@@ -19,6 +20,7 @@ createCommand
 	.description('Create bitrix extensions')
 	.argument('<name>', 'Extension name')
 	.option('-t, --tech [tech]', 'Extension technology name')
+	.option('-f, --force', 'Force creation')
 	.addOption(pathOption)
 	.action(async (extensionName, args) => {
 		const packagePath = resolvePackage(extensionName);
@@ -33,7 +35,7 @@ createCommand
 			}
 		})();
 
-		if (isDirectoryExists)
+		if (isDirectoryExists && !args.force)
 		{
 			const isProceed = await confirm({
 				message: `The directory '${packagePath}' already exists. Continue?`,
@@ -42,6 +44,7 @@ createCommand
 
 			if (!isProceed)
 			{
+				console.log(`${extensionName} create canceled`);
 				return;
 			}
 		}
@@ -154,6 +157,9 @@ createCommand
 		await fs.mkdir(path.join(packagePath, 'test', 'e2e'), { recursive: true });
 		const endToEndTestPath = path.join(packagePath, 'test', 'e2e', createInputFileName(extensionName, useTS ? 'spec.ts' : 'spec.js'));
 		await fs.writeFile(endToEndTestPath, endToEndTestContent, 'utf8');
+
+		console.log(`${chalk.green('✔')} ${extensionName} created successfully`);
+		console.log(`  file://${packagePath}`);
 	});
 
 
