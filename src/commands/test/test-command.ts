@@ -46,7 +46,7 @@ testCommand
 							},
 							subtasks: [
 								runUnitTestsTask(extension, args),
-								// runEndToEndTestsTask(extension, args),
+								runEndToEndTestsTask(extension, args),
 							],
 						},
 					]);
