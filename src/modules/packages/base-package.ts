@@ -14,7 +14,9 @@ import { Environment } from '../../environment/environment';
 import { flattenTree } from '../../utils/flatten.tree';
 import { buildDependenciesTree } from '../../utils/package/build.dependencies.tree';
 import { RollupBuildStrategy } from '../services/build/strategies/rollup.strategy';
+import { FileFinder } from '../../utils/file.finder';
 
+import type { PlaywrightTestConfig } from '@playwright/test';
 import type { BuildService } from '../services/build/build.service';
 import type { BuildOptions, BuildResult } from '../services/build/types/build.service.types';
 import type { DependencyNode } from './types/dependency.node';
@@ -473,6 +475,33 @@ export abstract class BasePackage
 		};
 	}
 
+	getPlaywrightConfigPath(): string | null
+	{
+		return FileFinder.findUpFile({
+			fileName: `playwright.config.${this.isTypeScriptMode() ? 'ts' : 'js'}`,
+			fromDir: this.getPath(),
+			rootDir: Environment.getRoot(),
+		});
+	}
+
+	async getPlaywrightConfig(): Promise<PlaywrightTestConfig | null>
+	{
+		const playwrightConfigPath = this.getPlaywrightConfigPath();
+		if (playwrightConfigPath === null)
+		{
+			return null;
+		}
+
+		const playwrightConfigModule = await import(playwrightConfigPath);
+
+		return (
+			playwrightConfigModule.default.default
+			|| playwrightConfigModule.default
+			|| playwrightConfigModule
+			|| null
+		);
+	}
+
 	async getUnitTests(): Promise<Array<string>>
 	{
 		const patterns = [
@@ -535,12 +564,8 @@ export abstract class BasePackage
 
 	async runUnitTests(args: Record<string, any> = {}): Promise<any>
 	{
-		const playwrightConfigPath = path.join(
-			Environment.getRoot(),
-			'playwright.config.ts',
-		);
-
-		if (!fs.existsSync(playwrightConfigPath))
+		const playwrightConfig = await this.getPlaywrightConfig();
+		if (playwrightConfig === null)
 		{
 			return {
 				report: [],
@@ -550,11 +575,6 @@ export abstract class BasePackage
 				],
 			};
 		}
-
-		const playwrightConfigModule = await import(playwrightConfigPath);
-		const playwrightConfig = playwrightConfigModule.default.default
-			|| playwrightConfigModule.default
-			|| playwrightConfigModule;
 
 		const playwright = await import('playwright');
 		const browser = await playwright.chromium.launch({
