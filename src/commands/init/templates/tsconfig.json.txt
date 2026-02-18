@@ -1,0 +1,19 @@
+{
+	"extends": "./aliases.tsconfig.json",
+	"compilerOptions": {
+		"module": "ESNext",
+		"target": "ESNext",
+		"moduleResolution": "bundler",
+		"preserveSymlinks": false,
+		"allowJs": true,
+		"checkJs": false,
+		"strict": true,
+		"lib": [
+			"ESNext",
+			"DOM"
+		]
+	},
+	"include": [
+		"src/**/*.ts",
+	]
+}
