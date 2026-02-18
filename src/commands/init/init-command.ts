@@ -14,7 +14,27 @@ const initTestsCommand = new Command('tests')
 	.description('Initialize tests environment')
 	.addOption(pathOption)
 	.action(async (subcommand, args) => {
-		console.log('init tests');
+		console.log('Preparing TypeScript environment');
+		const spinner = ora('Generate configuration files').start();
+		const playwrightConfigPath = path.join(__dirname, 'templates', 'playwright.config.ts.txt');
+		const playwrightConfigContent = await fs.readFile(playwrightConfigPath, 'utf8');
+
+		await fs.writeFile(
+			path.join(Environment.getRoot(), 'playwright.config.ts'),
+			playwrightConfigContent,
+		);
+
+		const dotEnvTestPath = path.join(__dirname, 'templates', '.env.test.txt');
+		const dotEnvTestContent = await fs.readFile(dotEnvTestPath, 'utf8');
+
+		await fs.writeFile(
+			path.join(Environment.getRoot(), '.env.test'),
+			dotEnvTestContent,
+		);
+
+		spinner.succeed('Added files:');
+		console.log(`  file://${path.join(Environment.getRoot(), 'playwright.config.ts')}`);
+		console.log(`  file://${path.join(Environment.getRoot(), '.env.test')}`);
 	});
 
 const initTSCommand = new Command('ts')
