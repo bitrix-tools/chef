@@ -477,8 +477,19 @@ export abstract class BasePackage
 
 	getPlaywrightConfigPath(): string | null
 	{
+		const tsVersion = FileFinder.findUpFile({
+			fileName: 'playwright.config.ts',
+			fromDir: this.getPath(),
+			rootDir: Environment.getRoot(),
+		});
+
+		if (tsVersion)
+		{
+			return tsVersion;
+		}
+
 		return FileFinder.findUpFile({
-			fileName: `playwright.config.${this.isTypeScriptMode() ? 'ts' : 'js'}`,
+			fileName: 'playwright.config.js',
 			fromDir: this.getPath(),
 			rootDir: Environment.getRoot(),
 		});
@@ -571,7 +582,7 @@ export abstract class BasePackage
 				report: [],
 				stats: [],
 				errors: [
-					new Error('playwright.config.ts does not exist run `chef test:init` for configure playwright'),
+					new Error('playwright.config.ts does not exist run `chef init test` for configure playwright'),
 				],
 			};
 		}
@@ -665,18 +676,14 @@ export abstract class BasePackage
 
 	async runEndToEndTests(sourceArgs: Record<string, any> = {}): Promise<any>
 	{
-		const playwrightConfigPath = path.join(
-			Environment.getRoot(),
-			'playwright.config.ts',
-		);
-
-		if (!fs.existsSync(playwrightConfigPath))
+		const playwrightConfig = this.getPlaywrightConfig();
+		if (playwrightConfig === null)
 		{
 			return {
 				report: [],
 				stats: [],
 				errors: [
-					new Error('playwright.config.ts does not exist run `chef test:init` for configure playwright'),
+					new Error('playwright.config.ts does not exist run `chef init test` for configure playwright'),
 				],
 			};
 		}
