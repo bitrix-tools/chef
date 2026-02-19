@@ -45,7 +45,7 @@ testCommand
 								return Promise.resolve();
 							},
 							subtasks: [
-								// runUnitTestsTask(extension, args),
+								runUnitTestsTask(extension, args),
 								runEndToEndTestsTask(extension, args),
 							],
 						},
