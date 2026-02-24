@@ -1,0 +1,45 @@
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+import { confirm } from '@inquirer/prompts';
+import { fileExistsAsync } from './file.exists.async';
+import chalk from 'chalk';
+
+export enum SaveFileStatus {
+	CREATED = 'created',
+	REPLACED = 'replaced',
+	CANCELLED = 'cancelled',
+}
+
+export async function safeFileWrite(filePath: string, data: any): Promise<SaveFileStatus>
+{
+	const filename = path.basename(filePath);
+
+	if (await fileExistsAsync(filePath))
+	{
+		const isReplaced = await confirm({
+			message: `File "${filename}" already exists. Overwrite?`,
+			transformer: (value: boolean) => {
+				if (value)
+				{
+					return `(Y)\n  → ${filename} overwritten successfully.`;
+				}
+
+				return `(N)\n  Creation ${filename} canceled...`;
+			},
+			default: false,
+		});
+
+		if (isReplaced)
+		{
+			return SaveFileStatus.REPLACED;
+		}
+
+		return SaveFileStatus.CANCELLED;
+	}
+
+	await fs.writeFile(filePath, data);
+
+	console.log(`  ${chalk.green('✔')} → ${filename} — created successfully.`);
+
+	return SaveFileStatus.CREATED;
+}
