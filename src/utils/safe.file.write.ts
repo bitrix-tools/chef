@@ -10,8 +10,15 @@ export enum SaveFileStatus {
 	CANCELLED = 'cancelled',
 }
 
-export async function safeFileWrite(filePath: string, data: any): Promise<SaveFileStatus>
+export type SafeFileWriteOptions = {
+	filePath: string;
+	data?: any;
+	theme?: any;
+};
+
+export async function safeFileWrite(options: SafeFileWriteOptions): Promise<SaveFileStatus>
 {
+	const { filePath, data, theme } = options;
 	const filename = path.basename(filePath);
 
 	if (await fileExistsAsync(filePath))
@@ -24,9 +31,10 @@ export async function safeFileWrite(filePath: string, data: any): Promise<SaveFi
 					return `(Y)\n  → ${filename} overwritten successfully.`;
 				}
 
-				return `(N)\n  Creation ${filename} canceled...`;
+				return `(N)\n  → Creation ${filename} canceled...`;
 			},
 			default: false,
+			theme: theme,
 		});
 
 		if (isReplaced)
