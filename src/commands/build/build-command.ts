@@ -18,7 +18,6 @@ import type { FSWatcher } from 'chokidar';
 import type { BasePackage } from '../../modules/packages/base-package';
 import chalk from 'chalk';
 
-
 const buildCommand = new Command('build');
 
 buildCommand
@@ -37,9 +36,16 @@ buildCommand
 		});
 
 		const watchers: Array<FSWatcher> = [];
+		const timers = new Map<string, NodeJS.Timeout>();
 
 		extensionsStream
 			.on('data', async ({ extension }: { extension: BasePackage }) => {
+				const extensionId = extension.getName();
+
+				await buildQueue.add(
+					build(extension, args),
+				);
+
 				if (args.watch)
 				{
 					await buildQueue.add(async () => {
@@ -50,17 +56,24 @@ buildCommand
 
 						watchers.push(watcher);
 
-						watcher.on('change', async () => {
-							await buildQueue.add(
-								build(extension, args),
-							);
+						watcher.on('change', () => {
+							const existingTimer = timers.get(extensionId);
+							if (existingTimer)
+							{
+								clearTimeout(existingTimer);
+							}
+
+							const timer = setTimeout(() => {
+								buildQueue.add(
+									build(extension, args),
+								);
+								timers.delete(extensionId);
+							}, 100);
+
+							timers.set(extensionId, timer);
 						});
 					});
 				}
-
-				await buildQueue.add(
-					build(extension, args),
-				);
 			})
 			.on('done', async ({ count }) => {
 				await buildQueue.onIdle();
@@ -101,6 +114,11 @@ buildCommand
 					await watcher.close();
 				}
 
+				for (const timer of timers.values())
+				{
+					clearTimeout(timer);
+				}
+
 				await buildQueue.onIdle();
 
 				console.log('👋 Goodbye!');
@@ -115,5 +133,3 @@ buildCommand
 export {
 	buildCommand,
 };
-
-
