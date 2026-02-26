@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import chalk from 'chalk';
 
 import { watchOption } from './options/watch-option';
 import { extensionsOption } from './options/extensions-option';
@@ -16,7 +17,6 @@ import { build } from './internal/build';
 
 import type { FSWatcher } from 'chokidar';
 import type { BasePackage } from '../../modules/packages/base-package';
-import chalk from 'chalk';
 
 const buildCommand = new Command('build');
 
