@@ -323,8 +323,8 @@ export class RollupBuildStrategy extends BuildStrategy
 				`${srcPath}/**`,
 			],
 			exclude: [
-				'**/dist/**',
-				'**/test/**',
+				`${srcPath}/dist/**`,
+				`${srcPath}/test/**`,
 				'bundle.config.ts',
 			]
 		});
