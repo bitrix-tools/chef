@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from 'ui.test.e2e.auth';
 
 test('Has top menu', async ({ page }) => {
 	await page.goto('/online');

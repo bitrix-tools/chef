@@ -10,9 +10,11 @@ describe('{{extensionName}}', () => {
 		assert.equal(instance.getName(), 'testName');
 	});
 
-	it('Should throw if create instance without options', () => {
-		assert.throws(() => {
-			void new {{name}}();
-		});
+	it('Should set passed name', () => {
+		const instance = new {{name}}('testName');
+        assert.equal(instance.getName(), 'testName');
+
+        instance.setName('testName2');
+        assert.equal(instance.getName(), 'testName2');
 	});
 });
