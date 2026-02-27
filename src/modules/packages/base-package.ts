@@ -284,6 +284,10 @@ export abstract class BasePackage
 			namespace: this.getBundleConfig().get('namespace'),
 			typescript: this.isTypeScriptMode(),
 			concat: this.getBundleConfig().get('concat'),
+			cssImages: this.getBundleConfig().get('cssImages'),
+			resolveFiles: this.getBundleConfig().get('resolveFilesImport'),
+			minify: this.getBundleConfig().get('minification'),
+			sourceMaps: this.getBundleConfig().get('sourceMaps'),
 		};
 	}
 
