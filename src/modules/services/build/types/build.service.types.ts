@@ -1,4 +1,5 @@
 import type { RollupLog } from 'rollup';
+import { MinifyOptions } from 'terser';
 
 export interface BundleFileInfo {
 	fileName: string;
@@ -25,6 +26,16 @@ export type BuildOptions = {
 		css?: Array<string>;
 	};
 	resolve?: boolean,
+	cssImages?: {
+		type: 'inline' | 'copy',
+		maxSize: number,
+	},
+	resolveFiles?: {
+		include?: string[];
+		exclude?: string[];
+	},
+	minify?: boolean | MinifyOptions,
+	sourceMaps?: boolean,
 };
 
 export type BuildCodeOptions = {

@@ -20,6 +20,9 @@ import commonjs from '@rollup/plugin-commonjs';
 import jsonPlugin from '@rollup/plugin-json';
 import imagePlugin from '@rollup/plugin-image';
 import postcss from 'rollup-plugin-postcss';
+import postcssUrl from 'postcss-url';
+import postcssSvgo from 'postcss-svgo';
+import autoprefixer from 'autoprefixer';
 
 import presetEnv from '@babel/preset-env';
 import flowStripTypesPlugin from '@babel/plugin-transform-flow-strip-types';
@@ -394,15 +397,33 @@ export class RollupBuildStrategy extends BuildStrategy
 						externalHelpersPlugin,
 					],
 				}),
-				commonjs(),
+				jsonPlugin(),
 				postcss({
-					extract: options.output.css,
+					extensions: ['.css'],
+					extract: options.output.css || true,
+					to: options.output.css,
 					sourceMap: false,
 					plugins: [
-
-					]
+						autoprefixer({
+							overrideBrowserslist: options.targets,
+						}),
+						postcssUrl({
+							url: options?.cssImages?.type ?? 'inline',
+							maxSize: options?.cssImages?.maxSize ?? 14,
+							inline: (size: number) => {
+								return size < (options?.cssImages?.maxSize ?? 14) * 1024;
+							},
+							fallback: 'copy',
+							useHash: false,
+						}),
+						postcssSvgo({
+							encode: true,
+						}),
+					],
 				}),
-				jsonPlugin(),
+				commonjs({
+					sourceMap: false,
+				}),
 				imagePlugin(),
 				// concatPlugin({
 				//
@@ -421,11 +442,11 @@ export class RollupBuildStrategy extends BuildStrategy
 	{
 		return {
 			file: options.output.js,
-			name: options.namespace,
+			name: options?.namespace ?? 'window',
 			format: 'iife',
 			banner: '/* eslint-disable */',
 			extend: true,
-			sourcemap: true,
+			sourcemap: options?.sourceMaps ?? true,
 		};
 	}
 
