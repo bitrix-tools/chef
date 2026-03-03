@@ -17,6 +17,8 @@ export interface BuildResult {
 export type BuildOptions = {
 	input: string;
 	output: { js: string, css: string };
+	packageRoot: string,
+	publicPath: string,
 	targets: string[];
 	namespace: string;
 	typescript?: boolean;
@@ -40,6 +42,8 @@ export type BuildOptions = {
 
 export type BuildCodeOptions = {
 	code: string;
+	packageRoot: string,
+	publicPath: string,
 	targets: string[];
 	namespace: string;
 	typescript?: boolean;

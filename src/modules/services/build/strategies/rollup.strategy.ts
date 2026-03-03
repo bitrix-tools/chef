@@ -1,4 +1,5 @@
 import path from 'node:path';
+import * as fs from 'node:fs';
 
 import {
 	rollup,
@@ -18,7 +19,7 @@ import nodeResolve from '@rollup/plugin-node-resolve';
 import babelPlugin from '@rollup/plugin-babel';
 import commonjs from '@rollup/plugin-commonjs';
 import jsonPlugin from '@rollup/plugin-json';
-import imagePlugin from '@rollup/plugin-image';
+import urlPlugin from '@rollup/plugin-url';
 import postcss from 'rollup-plugin-postcss';
 import postcssUrl from 'postcss-url';
 import postcssSvgo from 'postcss-svgo';
@@ -283,7 +284,7 @@ export class RollupBuildStrategy extends BuildStrategy
 		};
 	}
 
-	async #loadTsConfig(configPath: string, srcPath: string): Promise<ParsedCommandLine>
+	async #loadTsConfig(configPath: string, packageRoot: string): Promise<ParsedCommandLine>
 	{
 		const { default: ts } = await import('typescript');
 		const tsConfig = ts.readConfigFile(configPath, ts.sys.readFile);
@@ -298,7 +299,7 @@ export class RollupBuildStrategy extends BuildStrategy
 			tsConfig.config,
 			// @ts-ignore
 			host,
-			srcPath,
+			packageRoot,
 		);
 
 		const configDirname = path.dirname(configPath);
@@ -314,20 +315,34 @@ export class RollupBuildStrategy extends BuildStrategy
 		return config;
 	}
 
-	async #createTypeScriptPlugin(tsConfig: ParsedCommandLine, srcPath: string): Promise<Plugin>
+	async #createTypeScriptPlugin(tsConfig: ParsedCommandLine, packageRoot: string): Promise<Plugin>
 	{
 		const { default: typescriptPlugin } = await import('@rollup/plugin-typescript');
+		const typesPath = (() => {
+			const devExtension = PackageResolver.resolve('ui.dev');
+			if (devExtension)
+			{
+				return devExtension.getInputPath();
+			}
+
+			return '';
+		})();
 
 		return typescriptPlugin({
 			tsconfig: false,
 			target: 'esnext',
 			paths: tsConfig.options.paths,
 			include: [
-				`${srcPath}/**`,
+				...(tsConfig?.raw?.include ?? []),
+				`${packageRoot}/src/**`,
+			],
+			types: [
+				typesPath,
 			],
 			exclude: [
-				`${srcPath}/dist/**`,
-				`${srcPath}/test/**`,
+				...(tsConfig?.raw?.exclude ?? []),
+				`${packageRoot}/dist/**`,
+				`${packageRoot}/test/**`,
 				'bundle.config.ts',
 			]
 		});
@@ -359,12 +374,12 @@ export class RollupBuildStrategy extends BuildStrategy
 						{
 							const tsConfig = await this.#loadTsConfig(
 								tsConfigPath,
-								path.dirname(options.input),
+								options.packageRoot,
 							);
 
 							return await this.#createTypeScriptPlugin(
 								tsConfig,
-								path.dirname(options.input),
+								options.packageRoot,
 							);
 						}
 					}
@@ -424,7 +439,20 @@ export class RollupBuildStrategy extends BuildStrategy
 				commonjs({
 					sourceMap: false,
 				}),
-				imagePlugin(),
+				urlPlugin({
+					emitFiles: true,
+					fileName: 'assets/[name][extname]',
+					publicPath: path.join(
+						options.publicPath,
+						path.relative(
+							options.packageRoot,
+							path.dirname(
+								options.output.js,
+							),
+						),
+						'/',
+					),
+				}),
 				// concatPlugin({
 				//
 				// }),
@@ -459,6 +487,8 @@ export class RollupBuildStrategy extends BuildStrategy
 					js: 'source-code.bundle.js',
 					css: 'source-code.bundle.css',
 				},
+				packageRoot: options.packageRoot,
+				publicPath: options.publicPath,
 				typescript: options.typescript,
 				targets: options.targets,
 				namespace: options.namespace,

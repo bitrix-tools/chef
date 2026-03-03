@@ -139,6 +139,11 @@ export abstract class BasePackage
 	abstract getName(): string
 	abstract getModuleName(): string
 
+	getPublicPath(): string
+	{
+		return '';
+	}
+
 	getBundleConfig(): BundleConfigManager
 	{
 		return this.#cache.remember('bundleConfig', () => {
@@ -280,6 +285,8 @@ export abstract class BasePackage
 				js: this.getOutputJsPath(),
 				css: this.getOutputCssPath(),
 			},
+			packageRoot: this.getPath(),
+			publicPath: this.getPublicPath(),
 			targets: this.getTargets(),
 			namespace: this.getBundleConfig().get('namespace'),
 			typescript: this.isTypeScriptMode(),
@@ -549,6 +556,8 @@ export abstract class BasePackage
 		const buildResult = await buildService.buildCode({
 			code: sourceTestsCode,
 			targets: this.getTargets(),
+			packageRoot: this.getPath(),
+			publicPath: this.getPublicPath(),
 			typescript: this.isTypeScriptMode(),
 			namespace: 'BX.TestsBundle',
 		});

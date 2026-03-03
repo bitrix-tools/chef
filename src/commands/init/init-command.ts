@@ -16,6 +16,7 @@ import { multiline } from '../../utils/multiline.text.tag';
 
 import type { FlexibleCompilerOptions } from '@rollup/plugin-typescript';
 import type { BasePackage } from '../../modules/packages/base-package';
+import { PackageResolver } from '../../modules/packages/package.resolver';
 
 const initTestsCommand = new Command('tests')
 	.description('Initialize tests environment')
@@ -142,9 +143,22 @@ const initTSCommand = new Command('ts')
 			packageFactory,
 		});
 
+		const typesPath = (() => {
+			const devExtension = PackageResolver.resolve('ui.dev');
+			if (devExtension)
+			{
+				return devExtension.getInputPath();
+			}
+
+			return '';
+		})();
+
 		const tsconfig: FlexibleCompilerOptions = {
 			compilerOptions: {
 				baseUrl: Environment.getRoot(),
+				types: [
+					typesPath,
+				],
 				paths: {},
 			},
 		};
