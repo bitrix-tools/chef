@@ -144,6 +144,35 @@ export abstract class BasePackage
 		return '';
 	}
 
+	protected resolvePublicPath(relativePath: string): string
+	{
+		const environmentType = Environment.getType();
+
+		if (environmentType === 'source')
+		{
+			return `/bitrix/${relativePath}/`;
+		}
+
+		if (environmentType === 'project')
+		{
+			const localPath = `/local/${relativePath}/`;
+			const fullLocalPath = path.join(Environment.getRoot(), localPath);
+			if (fs.existsSync(fullLocalPath))
+			{
+				return localPath;
+			}
+
+			const bitrixPath = `/bitrix/${relativePath}/`;
+			const fullBitrixPath = path.join(Environment.getRoot(), bitrixPath);
+			if (fs.existsSync(fullBitrixPath))
+			{
+				return bitrixPath;
+			}
+		}
+
+		return '';
+	}
+
 	getBundleConfig(): BundleConfigManager
 	{
 		return this.#cache.remember('bundleConfig', () => {
