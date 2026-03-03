@@ -114,9 +114,9 @@ flowToTsCommand
 					]);
 				});
 			})
-			.on('done', async ({ count }) => {
+			.on('done', async () => {
 				await convertQueue.onIdle();
-				process.exit(1);
+				process.exit(0);
 			})
 			.on('error', (err: Error) => {
 				console.error('❌ Error while reading packages:', err);

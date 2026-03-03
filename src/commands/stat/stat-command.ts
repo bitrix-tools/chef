@@ -36,7 +36,7 @@ statCommand
 		});
 
 		extensionsStream
-			.on('data', ({ extension, count }) => {
+			.on('data', ({ extension }) => {
 				statQueue.add(async () => {
 					const name = extension.getName();
 
@@ -59,16 +59,12 @@ statCommand
 					]);
 				});
 			})
-			.on('done', async ({ count }) => {
+			.on('done', async () => {
 				await statQueue.onIdle();
 				process.exit(0);
-				// console.log('\n📊 Statistics:');
-				// console.log(`Total extensions: ${count}`);
 			});
 	});
 
 export {
 	statCommand,
 };
-
-
