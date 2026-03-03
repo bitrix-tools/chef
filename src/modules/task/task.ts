@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import ora from 'ora';
+import ora, { type Ora } from 'ora';
 
 export interface TaskContext
 {
@@ -19,91 +19,126 @@ export interface Task
 	subtasks?: Task[];
 }
 
+type TaskContextOptions = {
+	spinner: Ora;
+	taskTitle: string;
+	indent?: string;
+	getPreviousResult?: () => any;
+};
+
+type TaskContextState = {
+	isFinished: boolean;
+};
+
+function createTaskContext(options: TaskContextOptions, state: TaskContextState): TaskContext
+{
+	const { spinner, taskTitle, indent = '', getPreviousResult } = options;
+
+	return {
+		get previousResult() {
+			return getPreviousResult?.();
+		},
+		update: (message: string) => {
+			if (!state.isFinished)
+			{
+				spinner.text = message;
+			}
+		},
+		log: (message: string) => {
+			if (indent)
+			{
+				const indentedMessage = message
+					.split('\n')
+					.map(line => `${indent}${line}`)
+					.join('\n');
+				console.log(indentedMessage);
+			}
+			else
+			{
+				console.log(message);
+			}
+		},
+		succeed: (message: string) => {
+			if (!state.isFinished)
+			{
+				state.isFinished = true;
+				spinner.succeed(message || taskTitle);
+			}
+		},
+		fail: (message: string) => {
+			if (!state.isFinished)
+			{
+				state.isFinished = true;
+				spinner.fail(message || taskTitle);
+			}
+		},
+		warn: (message: string) => {
+			if (!state.isFinished)
+			{
+				state.isFinished = true;
+				spinner.warn(message);
+			}
+		},
+		border: (text: string, color?: string, indentBeforeBorder: number = 0) => {
+			const colorFn = color && typeof chalk[color as keyof typeof chalk] === 'function'
+				? (chalk as any)[color]
+				: (str: string) => str;
+
+			const beforeBorderIndent = ' '.repeat(indentBeforeBorder);
+
+			const lines = text.split('\n');
+			const borderedLines = lines.map((line) => {
+				const border = indent ? colorFn(`${beforeBorderIndent}| `) : chalk.bold(colorFn(`${beforeBorderIndent}| `));
+				return border + line;
+			});
+
+			if (indent)
+			{
+				const indentedBorderedLines = borderedLines.map(line => `${indent}${line}`);
+				console.log(indentedBorderedLines.join('\n'));
+			}
+			else
+			{
+				console.log(borderedLines.join('\n'));
+			}
+		},
+	};
+}
+
+function handleTaskError(error: any, taskTitle: string, state: TaskContextState, spinner: Ora, indent: string = ''): void
+{
+	if (!state.isFinished)
+	{
+		state.isFinished = true;
+		spinner.fail(taskTitle);
+	}
+
+	const errorMessage = error.message || 'Unknown error';
+	const indentedMessage = errorMessage
+		.split('\n')
+		.map((line: string) => {
+			return `${indent}  ${chalk.red(`Error: ${line}`)}`;
+		})
+		.join('\n');
+	console.log(indentedMessage);
+
+	if (error.stack)
+	{
+		const stackMessage = error.stack
+			.split('\n')
+			.map((line: string) => {
+				return `${indent}  ${chalk.red(`Stack: ${line}`)}`;
+			})
+			.join('\n');
+		console.log(stackMessage);
+	}
+}
+
 export class TaskRunner
 {
 	static async runTask(task: Task, title?: string): Promise<any>
 	{
-		const taskTitle = title || task.title;
-		const spinner = ora({
-			text: taskTitle,
-			spinner: 'dots',
-		});
-		spinner.start();
-
-		let isFinished = false;
-
-		try
-		{
-			const result = await task.run({
-				get previousResult() {
-					return undefined;
-				},
-				update: (message: string) => {
-					if (!isFinished)
-					{
-						spinner.text = message;
-					}
-				},
-				log: (message: string) => {
-					console.log(message);
-				},
-				succeed: (message: string) => {
-					if (!isFinished)
-					{
-						isFinished = true;
-						spinner.succeed(message || taskTitle);
-					}
-				},
-				fail: (message: string) => {
-					if (!isFinished)
-					{
-						isFinished = true;
-						spinner.fail(message || 'Failed');
-					}
-				},
-				warn: (message: string) => {
-					if (!isFinished)
-					{
-						isFinished = true;
-						spinner.warn(message);
-					}
-				},
-				border: (text: string, color?: string, indentBeforeBorder: number = 0) => {
-					const colorFn = color && typeof chalk[color as keyof typeof chalk] === 'function'
-						? (chalk as any)[color]
-						: (str: string) => str;
-
-					const beforeBorderIndent = ' '.repeat(indentBeforeBorder);
-
-					const lines = text.split('\n');
-					const borderedLines = lines.map((line) => {
-						return chalk.bold(colorFn(`${beforeBorderIndent}| `)) + line
-					});
-					console.log(borderedLines.join('\n'));
-				},
-			});
-
-			if (!isFinished)
-			{
-				spinner.succeed(taskTitle);
-			}
-
-			return result;
-		}
-		catch (error: any)
-		{
-			if (!isFinished)
-			{
-				isFinished = true;
-				spinner.fail(taskTitle);
-			}
-			console.log(chalk.red(`  Error: ${error.message || 'Unknown error'}`));
-			if (error.stack)
-			{
-				console.log(chalk.red(`  Stack: ${error.stack}`));
-			}
-			throw error;
-		}
+		return this.executeTasks([task], 0, undefined, title);
 	}
 
 	static async run(tasks: Task[], options: { indent?: number } = {}): Promise<any>
@@ -115,7 +150,8 @@ export class TaskRunner
 	private static async executeTasks(
 		tasks: Task[],
 		depth: number,
-		initialResult?: any
+		initialResult?: any,
+		overrideTitle?: string
 	): Promise<any>
 	{
 		const indent = '  '.repeat(depth);
@@ -123,106 +159,39 @@ export class TaskRunner
 
 		for (const task of tasks)
 		{
-			const taskTitle = task.title;
+			const taskTitle = overrideTitle || task.title;
 			const spinner = ora({
 				text: taskTitle,
 				spinner: 'dots',
-				prefixText: indent,
+				prefixText: indent || undefined,
 			});
 			spinner.start();
 
-			let isFinished = false;
+			const state: TaskContextState = { isFinished: false };
 
-			const context: TaskContext = {
-				get previousResult() {
-					return previousResult;
+			const context = createTaskContext(
+				{
+					spinner,
+					taskTitle,
+					indent,
+					getPreviousResult: () => previousResult,
 				},
-				update: (message: string) => {
-					if (!isFinished)
-					{
-						spinner.text = message;
-					}
-				},
-				log: (message: string) => {
-					const indentedMessage = message
-						.split('\n')
-						.map(line => `${indent}${line}`)
-						.join('\n');
-					console.log(indentedMessage);
-				},
-				succeed: (message: string) => {
-					if (!isFinished)
-					{
-						isFinished = true;
-						spinner.succeed(message || taskTitle);
-					}
-				},
-				fail: (message: string) => {
-					if (!isFinished)
-					{
-						isFinished = true;
-						spinner.fail(message || taskTitle);
-					}
-				},
-				warn: (message: string) => {
-					if (!isFinished)
-					{
-						isFinished = true;
-						spinner.warn(message);
-					}
-				},
-				border: (text: string, color?: string, indentBeforeBorder: number = 0) => {
-					const colorFn = color && typeof chalk[color as keyof typeof chalk] === 'function'
-						? (chalk as any)[color]
-						: (str: string) => str;
-
-					const beforeBorderIndent = ' '.repeat(indentBeforeBorder);
-
-					const lines = text.split('\n');
-					const borderedLines = lines.map((line) => {
-						return colorFn(`${beforeBorderIndent}| `) + line;
-					});
-					const indentedBorderedLines = borderedLines.map(line => `${indent}${line}`);
-					console.log(indentedBorderedLines.join('\n'));
-				},
-			};
+				state,
+			);
 
 			try
 			{
 				const result = await task.run(context, previousResult);
 				previousResult = result;
 
-				if (!isFinished)
+				if (!state.isFinished)
 				{
 					spinner.succeed(taskTitle);
 				}
 			}
 			catch (error: any)
 			{
-				if (!isFinished)
-				{
-					isFinished = true;
-					spinner.fail(taskTitle);
-				}
-
-				const errorMessage = error.message || 'Unknown error';
-				const indentedMessage = errorMessage
-					.split('\n')
-					.map((line: string) => {
-						return `${indent}  ${chalk.red(`Error: ${line}`)}`;
-					})
-					.join('\n');
-				console.log(indentedMessage);
-				if (error.stack)
-				{
-					const stackMessage = error.stack
-						.split('\n')
-						.map((line: string) => {
-							return `${indent}  ${chalk.red(`Stack: ${line}`)}`;
-						})
-						.join('\n');
-					console.log(stackMessage);
-				}
+				handleTaskError(error, taskTitle, state, spinner, indent);
 				throw error;
 			}
 
