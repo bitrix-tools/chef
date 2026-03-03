@@ -3,7 +3,7 @@ import { parseArgValue } from '../../../utils/cli/parse-arg-value';
 
 const extensionsOption = new Option(
 	'-e, --extensions [extensions,...]',
-	'Specify exact extension names to build',
+	'Build only the specified extensions',
 );
 
 extensionsOption.conflicts([

@@ -3,7 +3,7 @@ import { preparePath } from '../../../utils/cli/prepare-path';
 
 const pathOption = new Option(
 	'-p, --path [path]',
-	'Use a custom directory to scan for extensions instead of the current working directory',
+	'Scan for extensions and stats starting from this directory',
 );
 
 pathOption.conflicts([

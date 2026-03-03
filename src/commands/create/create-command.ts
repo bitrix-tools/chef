@@ -17,10 +17,10 @@ import { toPascalCase } from '../../utils/to.pascal.case';
 export const createCommand = new Command('create');
 
 createCommand
-	.description('Create bitrix extensions')
-	.argument('<name>', 'Extension name')
-	.option('-t, --tech [tech]', 'Extension technology name')
-	.option('-f, --force', 'Force creation')
+	.description('Create a new Bitrix JS extension scaffold')
+	.argument('<name>', 'Extension name (e.g. ui.buttons)')
+	.option('-t, --tech [tech]', 'Source language: "ts" (default) or "js"')
+	.option('-f, --force', 'Overwrite existing directory without asking')
 	.addOption(pathOption)
 	.action(async (extensionName, args) => {
 		const packagePath = resolvePackage(extensionName);

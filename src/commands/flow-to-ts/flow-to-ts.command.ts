@@ -17,10 +17,10 @@ import type { BasePackage } from '../../modules/packages/base-package';
 export const flowToTsCommand = new Command('flow-to-ts');
 
 flowToTsCommand
-	.description('Migrate flow to ts')
+	.description('Migrate Flow-typed JS code to TypeScript in extensions')
 	.addOption(pathOption)
-	.option('--rm-ts', 'Remove TS source files', false)
-	.option('--rm-js', 'Remove JS source files', false)
+	.option('--rm-ts', 'Remove existing .ts sources after migration', false)
+	.option('--rm-js', 'Remove original .js sources after migration', false)
 	.action((args): void => {
 		const packageFactory = PackageFactoryProvider.create();
 		const extensionsStream: NodeJS.ReadableStream = findPackages({

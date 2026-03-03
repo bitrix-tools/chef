@@ -3,7 +3,7 @@ import { parseArgValue } from '../../../utils/cli/parse-arg-value';
 
 const extensionsOption = new Option(
 	'-e, --extensions [extensions,...]',
-	'Show stats only for the specified extension(s)',
+	'Show stats only for the specified extensions',
 );
 
 extensionsOption.conflicts([

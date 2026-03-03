@@ -11,7 +11,7 @@ import { initCommand } from './commands/init/init-command';
 
 program
 	.name('chef')
-	.description('CLI tool for building and testing bitrix extensions.')
+	.description('CLI toolkit for building, testing and maintaining Bitrix JS extensions')
 	.addCommand(buildCommand)
 	.addCommand(statCommand)
 	.addCommand(testCommand)

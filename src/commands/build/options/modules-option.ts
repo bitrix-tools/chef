@@ -3,7 +3,7 @@ import { parseArgValue } from '../../../utils/cli/parse-arg-value';
 
 const modulesOption = new Option(
 	'-m, --modules [modules...]',
-	'Specify Bitrix module names to build extensions from',
+	'Build extensions that belong to the specified Bitrix modules',
 );
 
 modulesOption.conflicts([

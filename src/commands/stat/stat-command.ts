@@ -22,7 +22,7 @@ import { tryBuildTask } from './tasks/try.build.task';
 const statCommand = new Command('stat');
 
 statCommand
-	.description('Display statistics for Bitrix extensions.')
+	.description('Show build, tests and bundle statistics for Bitrix extensions')
 	.addOption(extensionsOption)
 	.addOption(modulesOptions)
 	.addOption(pathOption)

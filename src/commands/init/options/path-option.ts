@@ -3,7 +3,7 @@ import { preparePath } from '../../../utils/cli/prepare-path';
 
 const pathOption = new Option(
 	'-p, --path [path]',
-	'Specify a custom path to configs location',
+	'Project root where configs and helpers will be initialized',
 );
 
 pathOption.conflicts([

@@ -19,8 +19,8 @@ import type { BasePackage } from '../../modules/packages/base-package';
 import { PackageResolver } from '../../modules/packages/package.resolver';
 
 const initTestsCommand = new Command('tests')
-	.description('Initialize tests environment')
-	.option('-f, --force', 'Force initialization')
+	.description('Set up Playwright config and .env.test for browser tests')
+	.option('-f, --force', 'Overwrite existing files without prompting')
 	.addOption(pathOption)
 	.action(async () => {
 		console.log(
@@ -134,7 +134,7 @@ const initTestsCommand = new Command('tests')
 	});
 
 const initTSCommand = new Command('ts')
-	.description('Initialize TypeScript environment')
+	.description('Generate TypeScript configs and path aliases for extensions')
 	.addOption(pathOption)
 	.action(async () => {
 		const packageFactory = PackageFactoryProvider.create();
@@ -355,7 +355,7 @@ const initTSCommand = new Command('ts')
 	});
 
 const initCommand = new Command('init')
-	.description('Initialize environment')
+	.description('Initialize testing and TypeScript tooling for your Bitrix project')
 	.addOption(pathOption)
 	.action(async () => {
 		await initTestsCommand.parseAsync([]);

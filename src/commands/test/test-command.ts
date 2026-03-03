@@ -16,15 +16,15 @@ import type { FSWatcher } from 'chokidar';
 export const testCommand = new Command('test');
 
 testCommand
-	.description('Run extension tests')
-	.option('-w, --watch', 'Watch mode. Run tests by source changes')
-	.option('-e, --extensions <extensions...>', 'Run test from specified extension', parseArgValue)
-	.option('-m, --modules <modules...>', 'Run test from specified modules', parseArgValue)
-	.option('-p, --path [path]', 'Run test from path', preparePath, process.cwd())
-	.option('--headed', 'Run in headed mode')
-	.option('--debug', 'Run in debug mode')
-	.option('--grep <pattern>', 'Filter tests by pattern')
-	.option('--project <projects...>', 'Run tests on different browsers')
+	.description('Run unit and end-to-end tests for extensions')
+	.option('-w, --watch', 'Watch files and rerun tests on changes')
+	.option('-e, --extensions <extensions...>', 'Run tests only for the specified extensions', parseArgValue)
+	.option('-m, --modules <modules...>', 'Run tests only for the specified Bitrix modules', parseArgValue)
+	.option('-p, --path [path]', 'Search for extensions and tests starting from this directory', preparePath, process.cwd())
+	.option('--headed', 'Run browser tests in headed mode')
+	.option('--debug', 'Run tests in debug mode (slower, more logs)')
+	.option('--grep <pattern>', 'Run only tests that match the given pattern')
+	.option('--project <projects...>', 'Run tests in the specified Playwright projects')
 	.action((args): void => {
 		const packageFactory = PackageFactoryProvider.create();
 		const extensionsStream: NodeJS.ReadableStream = findPackages({
