@@ -347,7 +347,12 @@ export abstract class BasePackage
 		const buildResult = await buildService.build(buildOptions);
 
 		const phpConfig = this.getPhpConfig();
-		phpConfig.set('rel', buildResult.dependencies);
+
+		// Filter out dependencies that are already included in the bundle
+		const includes = new Set<string>(phpConfig.get('includes') ?? []);
+		const dependencies = buildResult.dependencies.filter(dep => !includes.has(dep));
+
+		phpConfig.set('rel', dependencies);
 		phpConfig.save(this.getPhpConfigFilePath());
 
 		return buildResult;

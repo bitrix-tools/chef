@@ -40,7 +40,12 @@ export class PhpConfigManager extends ConfigManager<{ [key: string]: any }>
 		}
 
 		const dependencies = this.get('rel');
-		if (!dependencies.includes('main.core') && !dependencies.includes('main.polyfill.core'))
+		const includes = this.get('includes') ?? [];
+		if (
+			!dependencies.includes('main.core')
+			&& !dependencies.includes('main.polyfill.core')
+			&& !includes.includes('main.polyfill.core')
+		)
 		{
 			dependencies.unshift('main.polyfill.core');
 		}
