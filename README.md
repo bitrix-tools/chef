@@ -71,7 +71,7 @@ Create `bundle.config.ts` in your extension directory:
 
 ```ts
 export default {
-  input: './src/index.ts',
+  input: './src/my.extension.ts',
   output: {
     js: './dist/my.extension.bundle.js',
     css: './dist/my.extension.bundle.css',
@@ -103,7 +103,7 @@ local/js/vendor/extension/
 ├── bundle.config.ts           # Build configuration
 ├── config.php                 # Bitrix extension config
 ├── src/
-│   └── index.ts               # Entry point
+│   └── extension.ts           # Entry point (named after extension)
 ├── dist/
 │   ├── extension.bundle.js    # Compiled bundle
 │   └── extension.bundle.css   # Compiled styles
