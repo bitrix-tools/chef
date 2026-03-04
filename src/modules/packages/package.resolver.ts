@@ -2,6 +2,7 @@ import type { BasePackage } from './base-package';
 import { Environment } from '../../environment/environment';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
+import { Readable, Transform, PassThrough } from 'node:stream';
 import fg from 'fast-glob';
 import { PackageFactoryProvider } from './providers/package-factory-provider';
 import { MemoryCache } from '../../utils/memory-cache';
@@ -65,7 +66,6 @@ export class PackageResolver
 
 	static resolveStream(names: string[]): NodeJS.ReadableStream
 	{
-		const { Readable, Transform, PassThrough } = require('node:stream');
 		const root = Environment.getRoot();
 		const packageFactory = PackageFactoryProvider.create();
 		const output = new PassThrough({ objectMode: true });
@@ -89,29 +89,34 @@ export class PackageResolver
 		let count = 0;
 		const seenPaths = new Set<string>();
 
-		// Resolve exact names first
-		for (const name of exactNames)
-		{
-			const extension = this.resolve(name);
-			if (extension)
+		// Resolve exact names asynchronously to allow listeners to attach first
+		process.nextTick(() => {
+			for (const name of exactNames)
 			{
-				const extPath = extension.getPath();
-				if (!seenPaths.has(extPath))
+				const extension = this.resolve(name);
+				if (extension)
 				{
-					seenPaths.add(extPath);
-					count++;
-					output.push({ extension, count });
+					const extPath = extension.getPath();
+					if (!seenPaths.has(extPath))
+					{
+						seenPaths.add(extPath);
+						count++;
+						output.push({ extension, count });
+					}
 				}
 			}
-		}
 
-		// If no patterns, finish immediately
-		if (patterns.length === 0)
-		{
-			process.nextTick(() => {
+			// If no patterns, finish immediately
+			if (patterns.length === 0)
+			{
 				output.emit('done', { count });
 				output.end();
-			});
+			}
+		});
+
+		// If no patterns, return early (processing happens in nextTick above)
+		if (patterns.length === 0)
+		{
 			return output;
 		}
 
