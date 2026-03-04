@@ -87,6 +87,7 @@ export default {
 | `input` | `string` | Entry point file |
 | `output` | `string \| {js, css}` | Output bundle path(s) |
 | `namespace` | `string` | Global namespace for exports |
+| `concat` | `{js?: string[], css?: string[]}` | Concatenate files in specified order |
 | `browserslist` | `boolean \| string[]` | Browser targets for transpilation |
 | `sourceMaps` | `boolean` | Generate source maps |
 | `minification` | `boolean \| object` | Terser minification options |
