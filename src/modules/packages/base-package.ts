@@ -665,24 +665,70 @@ export abstract class BasePackage
 			const testsCodeBundle = await this.getUnitTestsBundle();
 
 			const report = [];
-			page.on('console', async (message) => {
-				const values = [];
-				for (const arg of message.args())
-				{
-					values.push(await arg.jsonValue());
-				}
+			const consoleLogs: Array<{ type: string; text: string }> = [];
 
-				const [key, value] = values;
-				if (key === 'unit_report_token')
+			page.on('console', async (message) => {
+				try
 				{
-					try
+					const values: string[] = [];
+					for (const arg of message.args())
 					{
-						report.push(JSON.parse(value));
+						try
+						{
+							const value = await arg.jsonValue();
+							values.push(typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value));
+						}
+						catch
+						{
+							// For complex objects that can't be serialized, get string representation
+							try
+							{
+								const str = await arg.evaluate((obj: unknown) => {
+									if (obj === null) return 'null';
+									if (obj === undefined) return 'undefined';
+									if (typeof obj === 'object')
+									{
+										try
+										{
+											return JSON.stringify(obj, null, 2);
+										}
+										catch
+										{
+											return String(obj);
+										}
+									}
+									return String(obj);
+								});
+								values.push(str);
+							}
+							catch
+							{
+								values.push('[unserializable]');
+							}
+						}
 					}
-					catch (error)
+
+					const [key, value] = values;
+					if (key === 'unit_report_token')
 					{
-						console.error(error);
+						try
+						{
+							report.push(JSON.parse(value));
+						}
+						catch (error)
+						{
+							console.error(error);
+						}
 					}
+					else
+					{
+						const type = message.type();
+						consoleLogs.push({ type, text: values.join(' ') });
+					}
+				}
+				catch (err)
+				{
+					consoleLogs.push({ type: 'error', text: `[console capture error: ${err}]` });
 				}
 			});
 
@@ -717,10 +763,13 @@ export abstract class BasePackage
 				});
 			});
 
+			// Wait for pending console events to be processed
+			await new Promise(resolve => setTimeout(resolve, 100));
 
 			return {
 				report,
 				stats,
+				consoleLogs,
 				errors: [],
 			};
 		}
@@ -728,6 +777,7 @@ export abstract class BasePackage
 		{
 			return {
 				report: [],
+				consoleLogs: [],
 				errors: [error],
 			};
 		}

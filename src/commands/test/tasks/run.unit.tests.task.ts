@@ -90,6 +90,21 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 				reportLines.push(`  Pending: ${pendingCount}`);
 				reportLines.push(`  Total: ${passedCount + failedCount + pendingCount}`);
 
+				// Add console output if any
+				if (testResult.consoleLogs?.length > 0)
+				{
+					reportLines.push(chalk.bold('\n\n  Console output'));
+					for (const log of testResult.consoleLogs)
+					{
+						const prefix = log.type === 'error' ? chalk.red('error')
+							: log.type === 'warning' ? chalk.yellow('warn')
+							: chalk.gray('log');
+						const indentedText = log.text.split('\n').map(line => `  ${line}`).join('\n') + '\n';
+						reportLines.push(`  [${prefix}]`);
+						reportLines.push(indentedText);
+					}
+				}
+
 				reportLines.push('');
 				const detailedReport = reportLines.join('\n');
 
