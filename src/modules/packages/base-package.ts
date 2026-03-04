@@ -353,7 +353,7 @@ export abstract class BasePackage
 		const dependencies = buildResult.dependencies.filter(dep => !includes.has(dep));
 
 		phpConfig.set('rel', dependencies);
-		phpConfig.save(this.getPhpConfigFilePath());
+		phpConfig.save(this.getPhpConfigFilePath(), this.getName());
 
 		return buildResult;
 	}

@@ -32,7 +32,7 @@ export class PhpConfigManager extends ConfigManager<{ [key: string]: any }>
 		});
 	}
 
-	async save(configPath: string): Promise<any>
+	async save(configPath: string, extensionName?: string): Promise<any>
 	{
 		if (!fs.existsSync(configPath))
 		{
@@ -41,8 +41,14 @@ export class PhpConfigManager extends ConfigManager<{ [key: string]: any }>
 
 		const dependencies = this.get('rel');
 		const includes = this.get('includes') ?? [];
+
+		const isMainCore = extensionName === 'main.core';
+		const dependsOnMainCore = dependencies.includes('main.core') || includes.includes('main.core');
+
+		// Add main.polyfill.core if not main.core and doesn't depend on main.core
 		if (
-			!dependencies.includes('main.core')
+			!isMainCore
+			&& !dependsOnMainCore
 			&& !dependencies.includes('main.polyfill.core')
 			&& !includes.includes('main.polyfill.core')
 		)
@@ -60,18 +66,19 @@ export class PhpConfigManager extends ConfigManager<{ [key: string]: any }>
 			const rel = `[${renderRel(dependencies)}]`;
 			configContent = configContent.replace(result[1], rel);
 
-			// Adjust skip_core
+			// Adjust skip_core: true only if not main.core and doesn't depend on main.core
 			const skipCoreExp = /['"]skip_core['"] => (true|false)(,?)/;
 			const skipCoreResult = configContent.match(skipCoreExp);
-			const skipCoreValue = !dependencies.includes('main.core');
+			const skipCoreValue = !isMainCore && !dependsOnMainCore;
 
 			if (Array.isArray(skipCoreResult) && skipCoreResult[1])
 			{
 				configContent = configContent
 					.replace(skipCoreExp, `'skip_core' => ${skipCoreValue},`);
 			}
-			else
+			else if (!isMainCore)
 			{
+				// Only add skip_core for non-main.core extensions
 				configContent = configContent.replace(
 					relExp,
 					`'rel' => ${rel},\n\t'skip_core' => ${skipCoreValue},`,
