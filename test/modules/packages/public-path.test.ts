@@ -14,7 +14,7 @@ describe('modules/packages/public-path-logic', () => {
 
 		const markers = ['js', 'components', 'templates', 'activities'] as const;
 
-		// Проверяем компонент внутри шаблона
+		// Check for component inside template
 		const templatesIndex = segments.indexOf('templates');
 		const componentsAfterTemplates = templatesIndex !== -1
 			? segments.indexOf('components', templatesIndex)
@@ -25,7 +25,7 @@ describe('modules/packages/public-path-logic', () => {
 			return segments.slice(templatesIndex).join('/');
 		}
 
-		// Ищем первый маркер
+		// Find first marker
 		for (const marker of markers)
 		{
 			const markerIndex = segments.indexOf(marker);
