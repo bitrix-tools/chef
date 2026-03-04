@@ -1,0 +1,23 @@
+<svg width="140" height="140" viewBox="0 0 140 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Chef hat (toque) -->
+  <ellipse cx="70" cy="45" rx="45" ry="20" fill="#18181B"/>
+  <rect x="35" y="45" width="70" height="35" fill="#18181B"/>
+  <ellipse cx="70" cy="30" rx="35" ry="18" fill="#28CF8D"/>
+  <ellipse cx="50" cy="28" rx="12" ry="14" fill="#28CF8D"/>
+  <ellipse cx="90" cy="28" rx="12" ry="14" fill="#28CF8D"/>
+  <ellipse cx="70" cy="22" rx="14" ry="12" fill="#28CF8D"/>
+
+  <!-- Hat band -->
+  <rect x="35" y="72" width="70" height="8" fill="#18181B"/>
+
+  <!-- Spatula / code bracket -->
+  <g transform="translate(45, 88)">
+    <!-- Terminal prompt style -->
+    <text x="0" y="22" font-family="monospace" font-size="28" font-weight="bold" fill="#28CF8D">&gt;_</text>
+  </g>
+
+  <!-- Decorative dots on hat -->
+  <circle cx="55" cy="55" r="3" fill="#1a1a1a" opacity="0.3"/>
+  <circle cx="70" cy="52" r="3" fill="#1a1a1a" opacity="0.3"/>
+  <circle cx="85" cy="55" r="3" fill="#1a1a1a" opacity="0.3"/>
+</svg>
