@@ -298,12 +298,24 @@ export abstract class BasePackage
 
 	getUnitTestsDirectoryPath(): string
 	{
+		const unitDir = path.join(this.getPath(), 'test', 'unit');
+		if (fs.existsSync(unitDir))
+		{
+			return unitDir;
+		}
+
+		// Fallback for legacy structure
 		return path.join(this.getPath(), 'test');
 	}
 
 	getEndToEndTestsDirectoryPath(): string
 	{
 		return path.join(this.getPath(), 'test', 'e2e');
+	}
+
+	#hasNewTestStructure(): boolean
+	{
+		return fs.existsSync(path.join(this.getPath(), 'test', 'unit'));
 	}
 
 	#getBuildOptions(): BuildOptions
@@ -558,8 +570,13 @@ export abstract class BasePackage
 		const patterns = [
 			'**/*.test.js',
 			'**/*.test.ts',
-			'!**/e2e'
 		];
+
+		// Exclude e2e only for legacy test structure (tests in test/ root)
+		if (!this.#hasNewTestStructure())
+		{
+			patterns.push('!**/e2e');
+		}
 
 		return fg.async(
 			patterns,
