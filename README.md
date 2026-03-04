@@ -180,42 +180,63 @@ import { Button } from 'ui.buttons';
 ### Build
 
 ```bash
-chef build [options]
+chef build [extensions...] [options]
+
+Arguments:
+  extensions               Extensions to build (e.g. main.core ui.buttons)
 
 Options:
   -w, --watch              Watch for changes and rebuild
   -p, --path <path>        Build specific directory
-  -m, --modules <names>    Build specific modules (comma-separated)
-  -e, --extensions <names> Build specific extensions (comma-separated)
   -v, --verbose            Show detailed build logs
   -f, --force              Skip safety checks and force rebuild
+
+Examples:
+  chef build main.core ui.buttons    # Build specific extensions
+  chef build main.core -w            # Build and watch for changes
+  chef build ui.bbcode.*             # Build extensions matching pattern
+  chef build ui.* -w                 # Build all ui.* extensions with watch
+  chef build                         # Build all extensions in current directory
+
+Note: In zsh, escape glob patterns to prevent shell expansion: chef build ui.\*
 ```
 
 ### Test
 
 ```bash
-chef test [options]
+chef test [extensions...] [options]
+
+Arguments:
+  extensions               Extensions to test (e.g. main.core ui.buttons)
 
 Options:
   -w, --watch              Watch for changes and rerun tests
   -p, --path <path>        Test specific directory
-  -m, --modules <names>    Test specific modules (comma-separated)
-  -e, --extensions <names> Test specific extensions (comma-separated)
   --headed                 Run browser tests in headed mode
   --debug                  Run tests in debug mode (slower, more logs)
   --grep <pattern>         Run only tests matching the pattern
   --project <names>        Run tests in specific Playwright projects
+
+Examples:
+  chef test main.core ui.buttons     # Test specific extensions
+  chef test ui.* --headed            # Test with visible browser
+  chef test main.core -w             # Test and watch for changes
 ```
 
 ### Stat
 
 ```bash
-chef stat [options]
+chef stat [extensions...] [options]
+
+Arguments:
+  extensions               Extensions to analyze (e.g. main.core ui.buttons)
 
 Options:
   -p, --path <path>        Analyze specific directory
-  -m, --modules <names>    Analyze specific modules (comma-separated)
-  -e, --extensions <names> Analyze specific extensions (comma-separated)
+
+Examples:
+  chef stat main.core ui.buttons     # Analyze specific extensions
+  chef stat ui.*                     # Analyze all ui.* extensions
 ```
 
 <br>
