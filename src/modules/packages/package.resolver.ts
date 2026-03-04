@@ -2,11 +2,16 @@ import type { BasePackage } from './base-package';
 import { Environment } from '../../environment/environment';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
+import fg from 'fast-glob';
 import { PackageFactoryProvider } from './providers/package-factory-provider';
 import { MemoryCache } from '../../utils/memory-cache';
 
 const isExtensionName = (name: string) => {
 	return /^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)+$/.test(name);
+};
+
+const isGlobPattern = (name: string) => {
+	return /[*?!\[\]]/.test(name);
 };
 
 export class PackageResolver
@@ -56,5 +61,157 @@ export class PackageResolver
 
 			return null;
 		});
+	}
+
+	static resolveStream(names: string[]): NodeJS.ReadableStream
+	{
+		const { Readable, Transform, PassThrough } = require('node:stream');
+		const root = Environment.getRoot();
+		const packageFactory = PackageFactoryProvider.create();
+		const output = new PassThrough({ objectMode: true });
+
+		// Separate exact names from glob patterns
+		const exactNames: string[] = [];
+		const patterns: string[] = [];
+
+		for (const name of names)
+		{
+			if (isGlobPattern(name))
+			{
+				patterns.push(name);
+			}
+			else
+			{
+				exactNames.push(name);
+			}
+		}
+
+		let count = 0;
+		const seenPaths = new Set<string>();
+
+		// Resolve exact names first
+		for (const name of exactNames)
+		{
+			const extension = this.resolve(name);
+			if (extension)
+			{
+				const extPath = extension.getPath();
+				if (!seenPaths.has(extPath))
+				{
+					seenPaths.add(extPath);
+					count++;
+					output.push({ extension, count });
+				}
+			}
+		}
+
+		// If no patterns, finish immediately
+		if (patterns.length === 0)
+		{
+			process.nextTick(() => {
+				output.emit('done', { count });
+				output.end();
+			});
+			return output;
+		}
+
+		// Build search directories based on environment
+		const searchDirs: string[] = [];
+
+		if (Environment.getType() === 'source')
+		{
+			const modules = fg.sync('*', {
+				cwd: root,
+				onlyDirectories: true,
+				ignore: ['node_modules', '.git'],
+			});
+
+			for (const moduleName of modules)
+			{
+				const jsDir = path.join(root, moduleName, 'install', 'js');
+				if (fs.existsSync(jsDir))
+				{
+					searchDirs.push(jsDir);
+				}
+			}
+		}
+
+		if (Environment.getType() === 'project')
+		{
+			const localJs = path.join(root, 'local', 'js');
+			const bitrixJs = path.join(root, 'bitrix', 'js');
+
+			if (fs.existsSync(localJs))
+			{
+				searchDirs.push(localJs);
+			}
+			if (fs.existsSync(bitrixJs))
+			{
+				searchDirs.push(bitrixJs);
+			}
+		}
+
+		if (searchDirs.length === 0)
+		{
+			process.nextTick(() => {
+				output.emit('done', { count });
+				output.end();
+			});
+			return output;
+		}
+
+		// Convert patterns to glob file patterns
+		const configPatterns = patterns.flatMap((pattern) => {
+			const pathPattern = pattern.replace(/\./g, '/');
+			return [
+				`${pathPattern}/bundle.config.js`,
+				`${pathPattern}/bundle.config.ts`,
+			];
+		});
+
+		// Search in each directory
+		let pendingDirs = searchDirs.length;
+
+		for (const searchDir of searchDirs)
+		{
+			const fastGlobStream = fg.stream(configPatterns, {
+				cwd: searchDir,
+				absolute: true,
+				onlyFiles: true,
+			});
+
+			const transformStream = new Transform({
+				objectMode: true,
+				transform(chunk: Buffer, encoding: BufferEncoding, callback: () => void)
+				{
+					const extensionDir = path.dirname(chunk.toString(encoding));
+
+					if (!seenPaths.has(extensionDir))
+					{
+						seenPaths.add(extensionDir);
+						count++;
+						const extension = packageFactory.create({ path: extensionDir });
+						this.push({ extension, count });
+					}
+
+					callback();
+				},
+			});
+
+			Readable.from(fastGlobStream)
+				.pipe(transformStream)
+				.on('data', (data: unknown) => output.push(data))
+				.on('end', () => {
+					pendingDirs--;
+					if (pendingDirs === 0)
+					{
+						output.emit('done', { count });
+						output.end();
+					}
+				})
+				.on('error', (err: Error) => output.emit('error', err));
+		}
+
+		return output;
 	}
 }
