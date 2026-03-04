@@ -2,14 +2,13 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 
 import { watchOption } from './options/watch-option';
-import { extensionsOption } from './options/extensions-option';
-import { modulesOption } from './options/modules-option';
 import { pathOption } from './options/path-option';
 import { verboseOption } from './options/verbose-option';
 import { forceOption } from './options/force-option';
 import { buildQueue } from './queue/build-queue';
 
 import { PackageFactoryProvider } from '../../modules/packages/providers/package-factory-provider';
+import { PackageResolver } from '../../modules/packages/package.resolver';
 import { findPackages } from '../../utils/package/find-packages';
 import { createShutdown } from '../../utils/create.shutdown';
 
@@ -22,18 +21,24 @@ const buildCommand = new Command('build');
 
 buildCommand
 	.description('Build JS extensions for Bitrix')
+	.argument('[extensions...]', 'Extensions to build (e.g. main.core ui.buttons)')
 	.addOption(watchOption)
-	.addOption(extensionsOption)
-	.addOption(modulesOption)
 	.addOption(pathOption)
 	.addOption(verboseOption)
 	.addOption(forceOption)
-	.action(async (args) => {
-		const packageFactory = PackageFactoryProvider.create();
-		const extensionsStream: NodeJS.ReadableStream = findPackages({
-			startDirectory: args.startDirectory,
-			packageFactory,
-		});
+	.action(async (extensions: string[], args) => {
+		const extensionsStream: NodeJS.ReadableStream = (() => {
+			if (extensions.length > 0)
+			{
+				return PackageResolver.resolveStream(extensions);
+			}
+
+			const packageFactory = PackageFactoryProvider.create();
+			return findPackages({
+				startDirectory: args.startDirectory,
+				packageFactory,
+			});
+		})();
 
 		const watchers: Array<FSWatcher> = [];
 		const timers = new Map<string, NodeJS.Timeout>();

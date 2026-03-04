@@ -1,8 +1,8 @@
 import chalk from 'chalk';
 import { Command } from 'commander';
-import { parseArgValue } from '../../utils/cli/parse-arg-value';
 import { preparePath } from '../../utils/cli/prepare-path';
 import { PackageFactoryProvider } from '../../modules/packages/providers/package-factory-provider';
+import { PackageResolver } from '../../modules/packages/package.resolver';
 import { findPackages } from '../../utils/package/find-packages';
 import { createShutdown } from '../../utils/create.shutdown';
 import { testQueue } from './queue/test-queue';
@@ -17,20 +17,26 @@ export const testCommand = new Command('test');
 
 testCommand
 	.description('Run unit and end-to-end tests for extensions')
+	.argument('[extensions...]', 'Extensions to test (e.g. main.core ui.buttons)')
 	.option('-w, --watch', 'Watch files and rerun tests on changes')
-	.option('-e, --extensions <extensions...>', 'Run tests only for the specified extensions', parseArgValue)
-	.option('-m, --modules <modules...>', 'Run tests only for the specified Bitrix modules', parseArgValue)
 	.option('-p, --path [path]', 'Search for extensions and tests starting from this directory', preparePath, process.cwd())
 	.option('--headed', 'Run browser tests in headed mode')
 	.option('--debug', 'Run tests in debug mode (slower, more logs)')
 	.option('--grep <pattern>', 'Run only tests that match the given pattern')
 	.option('--project <projects...>', 'Run tests in the specified Playwright projects')
-	.action((args): void => {
-		const packageFactory = PackageFactoryProvider.create();
-		const extensionsStream: NodeJS.ReadableStream = findPackages({
-			startDirectory: args.startDirectory,
-			packageFactory,
-		});
+	.action((extensions: string[], args): void => {
+		const extensionsStream: NodeJS.ReadableStream = (() => {
+			if (extensions.length > 0)
+			{
+				return PackageResolver.resolveStream(extensions);
+			}
+
+			const packageFactory = PackageFactoryProvider.create();
+			return findPackages({
+				startDirectory: args.startDirectory,
+				packageFactory,
+			});
+		})();
 
 		const watchers: Array<FSWatcher> = [];
 

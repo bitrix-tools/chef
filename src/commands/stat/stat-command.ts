@@ -1,10 +1,9 @@
 import { Command } from 'commander';
-import { extensionsOption } from './options/extensions-option';
-import { modulesOptions } from './options/modules-options';
 import { pathOption } from './options/path-option';
 import { statQueue } from './queue/stat-queue';
 import { findPackages } from '../../utils/package/find-packages';
 import { PackageFactory } from '../../modules/packages/package-factory';
+import { PackageResolver } from '../../modules/packages/package.resolver';
 import { Environment } from '../../environment/environment';
 import { sourceStrategies } from '../../modules/packages/strategies/source';
 import { projectStrategies } from '../../modules/packages/strategies/project';
@@ -23,17 +22,23 @@ const statCommand = new Command('stat');
 
 statCommand
 	.description('Show build, tests and bundle statistics for Bitrix extensions')
-	.addOption(extensionsOption)
-	.addOption(modulesOptions)
+	.argument('[extensions...]', 'Extensions to analyze (e.g. main.core ui.buttons)')
 	.addOption(pathOption)
-	.action(async (args) => {
-		const extensionsStream: NodeJS.ReadableStream = findPackages({
-			startDirectory: args.path,
-			packageFactory: new PackageFactory({
-				strategies: Environment.getType() === 'source' ? sourceStrategies : projectStrategies,
-				defaultStrategy: defaultStrategy,
-			})
-		});
+	.action(async (extensions: string[], args) => {
+		const extensionsStream: NodeJS.ReadableStream = (() => {
+			if (extensions.length > 0)
+			{
+				return PackageResolver.resolveStream(extensions);
+			}
+
+			return findPackages({
+				startDirectory: args.path,
+				packageFactory: new PackageFactory({
+					strategies: Environment.getType() === 'source' ? sourceStrategies : projectStrategies,
+					defaultStrategy: defaultStrategy,
+				})
+			});
+		})();
 
 		extensionsStream
 			.on('data', ({ extension }) => {
