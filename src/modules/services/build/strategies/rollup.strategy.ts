@@ -453,9 +453,14 @@ export class RollupBuildStrategy extends BuildStrategy
 						'/',
 					),
 				}),
-				// concatPlugin({
-				//
-				// }),
+				concatPlugin({
+					jsFiles: (options.concat?.js ?? []).map(
+						(filePath) => path.resolve(options.packageRoot, filePath),
+					),
+					cssFiles: (options.concat?.css ?? []).map(
+						(filePath) => path.resolve(options.packageRoot, filePath),
+					),
+				}),
 			],
 			onwarn: onWarn,
 			treeshake: {
