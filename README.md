@@ -149,6 +149,7 @@ import { Button } from 'ui.buttons';
 {
   "compilerOptions": {
     "baseUrl": "/path/to/project",
+    "types": ["./bitrix/js/ui/dev/src/ui.dev.ts"],
     "paths": {
       "main.core": ["./bitrix/js/main/core/src"],
       "ui.buttons": ["./local/js/ui/buttons/src"]
