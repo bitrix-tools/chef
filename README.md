@@ -21,7 +21,7 @@
 
 - **TypeScript First** — Native TypeScript support with automatic transpilation
 - **Build** — Rollup-based bundler with Babel and PostCSS
-- **Test** — Unit tests (Mocha + Chai) and E2E tests (Playwright)
+- **Test** — Unit tests (Mocha + Chai) in real browsers via Playwright, and E2E tests
 - **Lint** — ESLint integration for consistent code quality
 - **Scaffold** — Generate new extensions with `chef create`
 - **Migrate** — Convert Flow.js to TypeScript with `chef flow-to-ts`
