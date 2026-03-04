@@ -12,6 +12,7 @@ import { TaskRunner } from '../../modules/task/task';
 import chalk from 'chalk';
 import { directDependenciesTask } from './tasks/direct.dependencies.task';
 import { dependenciesTreeTask } from './tasks/dependencies.tree.task';
+import { circularDependenciesTask } from './tasks/circular.dependencies.task';
 import { bundleSizeTask } from './tasks/bundle.size.task';
 import { totalTransferredSizeTask } from './tasks/total.transferred.size.task';
 import { unitTestsTask } from './tasks/unit.tests.task';
@@ -57,6 +58,7 @@ statCommand
 								e2eTestsTask(extension),
 								directDependenciesTask(extension, args),
 								dependenciesTreeTask(extension, args),
+								circularDependenciesTask(extension),
 								bundleSizeTask(extension, args),
 								totalTransferredSizeTask(extension),
 							],
