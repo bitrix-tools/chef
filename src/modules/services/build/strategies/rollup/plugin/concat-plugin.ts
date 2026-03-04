@@ -1,6 +1,7 @@
 import Concat from 'concat-with-sourcemaps';
 import path from 'path';
 import { readFileSync, existsSync } from 'fs';
+import type { OutputBundle, OutputChunk, OutputAsset } from 'rollup';
 
 const separator = '\n\n';
 const generateSourceMap = true;
@@ -14,7 +15,7 @@ export default function concatPlugin(options: { jsFiles?: Array<string>; cssFile
 	return {
 		name: 'concat',
 
-		generateBundle(outputOptions, bundle) {
+		generateBundle(outputOptions, bundle: OutputBundle) {
 			// Skip if no concat files specified
 			if (jsFiles.length === 0 && cssFiles.length === 0)
 			{
@@ -143,7 +144,12 @@ export default function concatPlugin(options: { jsFiles?: Array<string>; cssFile
 						fileName: outputJsFileName,
 						type: 'asset',
 						source: resultFileContent,
-					};
+						needsCodeReference: false,
+						name: outputJsFileName,
+						names: [],
+						originalFileName: null,
+						originalFileNames: [],
+					} as OutputAsset;
 
 					if (concatenator.sourceMap)
 					{
@@ -151,7 +157,12 @@ export default function concatPlugin(options: { jsFiles?: Array<string>; cssFile
 							fileName: outputJsSourceMapName,
 							type: 'asset',
 							source: concatenator.sourceMap,
-						};
+							needsCodeReference: false,
+							name: outputJsSourceMapName,
+							names: [],
+							originalFileName: null,
+							originalFileNames: [],
+						} as OutputAsset;
 					}
 				}
 			}
@@ -218,7 +229,12 @@ export default function concatPlugin(options: { jsFiles?: Array<string>; cssFile
 						fileName: outputCssFileName,
 						type: 'asset',
 						source: concatenatedCss.trimEnd(),
-					};
+						needsCodeReference: false,
+						name: outputCssFileName,
+						names: [],
+						originalFileName: null,
+						originalFileNames: [],
+					} as OutputAsset;
 				}
 			}
 		}
