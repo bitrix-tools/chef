@@ -101,7 +101,7 @@ export class PackageResolver
 					{
 						seenPaths.add(extPath);
 						count++;
-						output.push({ extension, count });
+						output.push({ extension, count, explicit: true });
 					}
 				}
 			}
@@ -194,9 +194,17 @@ export class PackageResolver
 					if (!seenPaths.has(extensionDir))
 					{
 						seenPaths.add(extensionDir);
-						count++;
 						const extension = packageFactory.create({ path: extensionDir });
-						this.push({ extension, count });
+
+						// Skip protected extensions when found via glob pattern
+						if (extension.getBundleConfig().get('protected'))
+						{
+							callback();
+							return;
+						}
+
+						count++;
+						this.push({ extension, count, explicit: false });
 					}
 
 					callback();

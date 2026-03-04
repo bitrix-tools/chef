@@ -6,9 +6,10 @@ import { PackageFactory } from '../../modules/packages/package-factory';
 type FindPackageOptions = {
 	startDirectory: string,
 	packageFactory: PackageFactory,
+	skipProtected?: boolean,
 };
 
-export function findPackages({ startDirectory, packageFactory }: FindPackageOptions): NodeJS.ReadableStream
+export function findPackages({ startDirectory, packageFactory, skipProtected = false }: FindPackageOptions): NodeJS.ReadableStream
 {
 	const patterns = [
 		'**/bundle.config.js',
@@ -32,8 +33,6 @@ export function findPackages({ startDirectory, packageFactory }: FindPackageOpti
 	const transformStream = new Transform({
 		objectMode: true,
 		transform(chunk: Buffer, encoding: BufferEncoding, callback: () => void) {
-			count++;
-
 			const extensionDir = path.dirname(
 				chunk.toString(encoding),
 			);
@@ -42,9 +41,22 @@ export function findPackages({ startDirectory, packageFactory }: FindPackageOpti
 				path: extensionDir,
 			});
 
+			// Check if we're in the extension directory
+			const isInExtensionDir = startDirectory === extensionDir ||
+				startDirectory.startsWith(extensionDir + path.sep);
+
+			// Skip protected extensions unless we're in their directory
+			if (skipProtected && extension.getBundleConfig().get('protected') && !isInExtensionDir)
+			{
+				callback();
+				return;
+			}
+
+			count++;
 			this.push({
 				extension,
 				count,
+				explicit: isInExtensionDir,
 			});
 
 			callback();
