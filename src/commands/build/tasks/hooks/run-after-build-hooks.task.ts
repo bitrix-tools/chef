@@ -6,10 +6,15 @@ import { spawn } from 'node:child_process';
 export function runAfterBuildHooksTask(extension: BasePackage, args: Record<string, any>): Task
 {
 	return {
-		title: 'Run hooks...',
+		title: 'After build hooks',
 		run: async (context) => {
 			const hooks = extension.getBundleConfig().get('hooks');
-			if (Array.isArray(hooks?.afterBuild))
+			if (!Array.isArray(hooks?.afterBuild) || hooks.afterBuild.length === 0)
+			{
+				context.succeed('No hooks');
+				return;
+			}
+
 			{
 				for await (const hook of hooks.afterBuild)
 				{

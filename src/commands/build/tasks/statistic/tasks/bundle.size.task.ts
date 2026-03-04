@@ -1,4 +1,4 @@
-import { formatSize } from '../../../../../utils/format.size';
+import { formatSize, formatSizeWithDelta } from '../../../../../utils/format.size';
 import { TASK_STATUS_ICON } from '../../../../../modules/task/icons';
 
 import type { BasePackage } from '../../../../../modules/packages/base-package';
@@ -12,20 +12,17 @@ export function bundleSizeTask(extension: BasePackage, args: Record<string, any>
 			context.succeed('Bundle size');
 
 			const bundleSize = extension.getBundlesSize();
+			const previousSizes = context.previousResult as { previousJsSize: number | null; previousCssSize: number | null } | undefined;
 
 			if (bundleSize.js > 0)
 			{
-				const formattedJsSize = formatSize({
-					size: bundleSize.js,
-				});
+				const formattedJsSize = formatSizeWithDelta(bundleSize.js, previousSizes?.previousJsSize ?? null);
 				context.log(`    ${TASK_STATUS_ICON.arrowRight} JS: ${formattedJsSize}`);
 			}
 
 			if (bundleSize.css > 0)
 			{
-				const formattedCssSize = formatSize({
-					size: bundleSize.css,
-				});
+				const formattedCssSize = formatSizeWithDelta(bundleSize.css, previousSizes?.previousCssSize ?? null);
 				context.log(`    ${TASK_STATUS_ICON.arrowRight} CSS: ${formattedCssSize}`);
 			}
 
@@ -33,10 +30,13 @@ export function bundleSizeTask(extension: BasePackage, args: Record<string, any>
 			{
 				const formattedTotalSize = formatSize({
 					size: bundleSize.js + bundleSize.css,
+					decimals: 1,
 				});
 
-				context.log(`    ${TASK_STATUS_ICON.arrowRight} Total size: ${formattedTotalSize}`);
+				context.log(`    ${TASK_STATUS_ICON.arrowRight} Total: ${formattedTotalSize}`);
 			}
+
+			return previousSizes;
 		},
 	};
 }
