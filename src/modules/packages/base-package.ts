@@ -653,10 +653,10 @@ export abstract class BasePackage
 			};
 		}
 
-		const browserType = args.browserType ?? 'chromium';
+		const browserType = (args.browserType ?? 'chromium') as 'chromium' | 'firefox' | 'webkit';
 		const playwright = await import('playwright');
-		const browserLauncher = playwright[browserType as keyof typeof playwright];
-		if (!browserLauncher || typeof browserLauncher.launch !== 'function')
+		const browserLauncher = playwright[browserType];
+		if (!browserLauncher)
 		{
 			return {
 				report: [],
