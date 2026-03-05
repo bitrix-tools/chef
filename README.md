@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/@bitrix/chef"><img src="https://img.shields.io/npm/v/@bitrix/chef.svg?style=flat-square&colorA=18181B&colorB=28CF8D" alt="npm version"></a>
   <a href="https://www.npmjs.com/package/@bitrix/chef"><img src="https://img.shields.io/npm/dm/@bitrix/chef.svg?style=flat-square&colorA=18181B&colorB=28CF8D" alt="npm downloads"></a>
-  <a href="https://github.com/bitrix-tools/chef/blob/main/LICENSE"><img src="https://img.shields.io/github/license/bitrix-tools/chef.svg?style=flat-square&colorA=18181B&colorB=28CF8D" alt="License"></a>
+  <a href="https://github.com/bitrix-tools/chef/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-28CF8D?style=flat-square&colorA=18181B" alt="License"></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D22-28CF8D?style=flat-square&colorA=18181B" alt="Node.js"></a>
 </p>
 
