@@ -97,6 +97,49 @@ export default {
 
 <br>
 
+## Browserslist
+
+Chef uses [browserslist](https://github.com/browserslist/browserslist) to determine target browsers for Babel transpilation and CSS autoprefixing.
+
+### Setup
+
+Create a `.browserslistrc` file in the project root with the recommended config:
+
+```
+baseline widely available
+```
+
+This targets browsers that have [widely available](https://web-platform-dx.github.io/web-features/) support for modern web features — a good default for most projects.
+
+Then enable it in your `bundle.config.ts`:
+
+```ts
+export default {
+  input: './src/my.extension.ts',
+  output: './dist/my.extension.bundle.js',
+  browserslist: true,
+};
+```
+
+### How it works
+
+When `browserslist` is set to `true`, Chef looks for `.browserslistrc` up the directory tree from the extension. If the file is not found, the setting has no effect.
+
+You can also specify targets directly in the config instead of using a separate file:
+
+```ts
+export default {
+  // ...
+  browserslist: ['last 2 versions', 'not dead'],
+};
+```
+
+If `browserslist` is omitted or set to `false`, the default targets are used (`IE >= 11`, `last 4 version`).
+
+> When you scaffold an extension with `chef create`, the generated config automatically sets `browserslist: true` if a `.browserslistrc` file exists in the project.
+
+<br>
+
 ## Project Structure
 
 ```
@@ -174,6 +217,71 @@ import { Button } from 'ui.buttons';
 ```
 
 > If `tsconfig.json` already exists, the command will ask whether to overwrite it. You can manually add `"extends": "./aliases.tsconfig.json"` to your existing config.
+
+<br>
+
+## Test Setup
+
+To run unit and E2E tests you need to initialize the test environment first:
+
+```bash
+chef init tests
+```
+
+This creates two files in the project root:
+
+| File | Description |
+|------|-------------|
+| `playwright.config.ts` | Playwright config for running unit and E2E tests in browser |
+| `.env.test` | Credentials for automatic authentication during tests |
+
+### Configure `.env.test`
+
+Fill in your local Bitrix installation credentials:
+
+```env
+BASE_URL=http://localhost
+LOGIN=admin
+PASSWORD=your_password
+```
+
+| Variable | Description |
+|----------|-------------|
+| `BASE_URL` | URL of your local Bitrix installation |
+| `LOGIN` | Test user login |
+| `PASSWORD` | Test user password |
+
+> **Security:** Never commit `.env.test` to version control — it contains sensitive credentials.
+
+### Install Playwright browsers
+
+```bash
+npx playwright install
+```
+
+### Run tests
+
+```bash
+chef test main.core                # Test specific extension
+chef test ui.* --headed            # Run with visible browser
+chef test main.core -w             # Watch mode
+chef test --grep "should render"   # Filter by test name
+```
+
+### Test file structure
+
+Place tests in the extension's `test/` directory:
+
+```
+my.extension/
+└── test/
+    ├── unit/              # Unit tests (Mocha + Chai, run in browser)
+    │   └── example.test.ts
+    └── e2e/               # E2E tests (Playwright)
+        └── example.spec.ts
+```
+
+Unit tests run inside a real browser via Playwright — Mocha and Chai are available globally. E2E tests use the standard Playwright Test API.
 
 <br>
 
