@@ -1,6 +1,6 @@
 {
   "name": "@bitrix/chef",
-  "version": "0.0.0-beta.10",
+  "version": "0.0.0-beta.11",
   "description": "Bitrix frontend tool",
   "publishConfig": {
     "access": "public"
