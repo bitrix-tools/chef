@@ -296,7 +296,7 @@ Unit tests run inside a real browser via Playwright — Mocha and Chai are avail
 chef build [extensions...] [options]
 
 Arguments:
-  extensions               Extensions to build (e.g. main.core ui.buttons)
+  extensions               Extension names or glob patterns (e.g. main.core ui.bbcode.*)
 
 Options:
   -w, --watch              Watch for changes and rebuild
@@ -320,7 +320,7 @@ Note: In zsh, escape glob patterns to prevent shell expansion: chef build ui.\*
 chef test [extensions...] [options]
 
 Arguments:
-  extensions               Extensions to test (e.g. main.core ui.buttons)
+  extensions               Extension names or glob patterns (e.g. main.core ui.bbcode.*)
 
 Options:
   -w, --watch              Watch for changes and rerun tests
@@ -344,7 +344,7 @@ Examples:
 chef stat [extensions...] [options]
 
 Arguments:
-  extensions               Extensions to analyze (e.g. main.core ui.buttons)
+  extensions               Extension names or glob patterns (e.g. main.core ui.bbcode.*)
 
 Options:
   -p, --path <path>        Analyze specific directory
