@@ -263,10 +263,12 @@ npx playwright install
 ### Run tests
 
 ```bash
-chef test main.core                # Test specific extension
-chef test ui.* --headed            # Run with visible browser
-chef test main.core -w             # Watch mode
-chef test --grep "should render"   # Filter by test name
+chef test main.core                       # Test specific extension
+chef test ui.* --headed                   # Run with visible browser
+chef test main.core -w                    # Watch mode
+chef test --grep "should render"          # Filter by test name
+chef test main.core --debug               # Open browser with DevTools and sourcemaps
+chef test main.core --project chromium    # Run in specific browser only
 ```
 
 ### Test file structure
@@ -324,14 +326,16 @@ Options:
   -w, --watch              Watch for changes and rerun tests
   -p, --path <path>        Test specific directory
   --headed                 Run browser tests in headed mode
-  --debug                  Run tests in debug mode (slower, more logs)
+  --debug                  Open browser with DevTools and sourcemaps for debugging
   --grep <pattern>         Run only tests matching the pattern
-  --project <names>        Run tests in specific Playwright projects
+  --project <names>        Run tests in specific browsers (chromium, firefox, webkit)
 
 Examples:
   chef test main.core ui.buttons     # Test specific extensions
   chef test ui.* --headed            # Test with visible browser
   chef test main.core -w             # Test and watch for changes
+  chef test main.core --debug        # Debug with DevTools and sourcemaps
+  chef test main.core --project chromium firefox  # Run in specific browsers
 ```
 
 ### Stat

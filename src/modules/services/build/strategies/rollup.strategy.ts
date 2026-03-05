@@ -528,6 +528,7 @@ export class RollupBuildStrategy extends BuildStrategy
 			format: 'iife',
 			banner: '/* eslint-disable */',
 			extend: true,
+			sourcemap: options.sourcemap ? 'inline' : false,
 		};
 	}
 }

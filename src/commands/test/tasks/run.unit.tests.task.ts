@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import boxen from 'boxen';
 import { TASK_STATUS_ICON } from '../../../modules/task/icons';
 
 import type { BasePackage } from '../../../modules/packages/base-package';
@@ -341,6 +342,11 @@ function createBrowserUnitTestTask(extension: BasePackage, args: Record<string, 
 
 			context.log(renderReport(testResult.report, testResult.consoleLogs, wallTime));
 
+			if (testResult.debugCleanup)
+			{
+				await testResult.debugCleanup();
+			}
+
 			return !hasFailed;
 		},
 	};
@@ -360,16 +366,53 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 		return DEFAULT_BROWSERS;
 	})();
 
+	const browserTasks = browsers.map(
+		(browserType) => createBrowserUnitTestTask(extension, args, browserType),
+	);
+
+	if (args.debug)
+	{
+		const browserNames = browsers.map((b) => BROWSER_LABEL[b] ?? b);
+		const browserList = browserNames.length === 1
+			? browserNames[0]
+			: browserNames.slice(0, -1).join(', ') + ' and ' + browserNames.at(-1);
+
+		const debugMessage = [
+			`${browserList} will open with ${chalk.bold('DevTools')} enabled.`,
+			'',
+			`${chalk.bold('What you can do:')}`,
+			`  • Set breakpoints in source code and test files`,
+			`  • Inspect DOM, network requests, and console output`,
+			`  • Step through code using the ${chalk.bold('Sources')} panel`,
+			`  • Sourcemaps are enabled — debug the original code, not the bundle`,
+			'',
+			`${chalk.bold('To finish:')} close the browser window or press ${chalk.bold('Ctrl+C')}`,
+		].join('\n');
+
+		return {
+			title: 'Unit tests',
+			run: async (context) => {
+				context.succeed('Unit tests');
+				console.log('');
+				console.log(boxen(debugMessage, {
+					padding: 1,
+					borderStyle: 'round',
+					borderColor: 'cyan',
+					title: chalk.bold.cyan('Debug Mode'),
+				}));
+			},
+			subtasks: browserTasks,
+		};
+	}
+
 	if (browsers.length === 1)
 	{
-		return createBrowserUnitTestTask(extension, args, browsers[0]);
+		return browserTasks[0];
 	}
 
 	return {
 		title: 'Unit tests',
 		run: async () => {},
-		subtasks: browsers.map(
-			(browserType) => createBrowserUnitTestTask(extension, args, browserType),
-		),
+		subtasks: browserTasks,
 	};
 }

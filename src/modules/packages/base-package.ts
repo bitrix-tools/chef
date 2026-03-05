@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import fg from 'fast-glob';
+import chalk from 'chalk';
 import { spawn } from 'node:child_process';
 
 import browserslist from 'browserslist';
@@ -595,7 +596,7 @@ export abstract class BasePackage
 		);
 	}
 
-	async getUnitTestsBundle(): Promise<string>
+	async getUnitTestsBundle(options: { sourcemap?: boolean } = {}): Promise<string>
 	{
 		const sourceTestsCode = (await this.getUnitTests())
 			.map((filePath) => {
@@ -611,6 +612,7 @@ export abstract class BasePackage
 			publicPath: this.getPublicPath(),
 			typescript: this.isTypeScriptMode(),
 			namespace: 'BX.TestsBundle',
+			sourcemap: options.sourcemap,
 		});
 
 		return buildResult.code;
@@ -665,8 +667,14 @@ export abstract class BasePackage
 			};
 		}
 
+		const isDebug = !!args.debug;
 		const browser = await browserLauncher.launch({
-			headless: !args.headed,
+			headless: isDebug ? false : !args.headed,
+			...(isDebug ? {
+				slowMo: 250,
+				devtools: true,
+				args: ['--auto-open-devtools-for-tabs'],
+			} : {}),
 		});
 		const context = await browser.newContext();
 		const page = await context.newPage();
@@ -680,7 +688,9 @@ export abstract class BasePackage
 
 			await page.goto(testsPage);
 
-			const testsCodeBundle = await this.getUnitTestsBundle();
+			const testsCodeBundle = await this.getUnitTestsBundle({
+				sourcemap: isDebug,
+			});
 
 			const report = [];
 			const consoleLogs: Array<{ type: string; text: string }> = [];
@@ -750,18 +760,22 @@ export abstract class BasePackage
 				}
 			});
 
-			await page.evaluate(() => {
+			const grep = args.grep ?? null;
+			const timeout = args.debug ? 60000 : 10000;
+
+			await page.evaluate(({ grep, timeout }) => {
 				// @ts-ignore
 				globalThis.mocha.setup({
 					ui: 'bdd',
 					// @ts-ignore
 					reporter: ProxyReporter,
 					checkLeaks: true,
-					timeout: 10000,
+					timeout,
 					inlineDiffs: true,
 					color: true,
+					...(grep ? { grep } : {}),
 				});
-			});
+			}, { grep, timeout });
 
 			await page.addScriptTag({
 				content: testsCodeBundle,
@@ -784,15 +798,35 @@ export abstract class BasePackage
 			// Wait for pending console events to be processed
 			await new Promise(resolve => setTimeout(resolve, 100));
 
+			if (!isDebug)
+			{
+				await browser.close();
+			}
+
+			const debugCleanup = isDebug
+				? async () => {
+					await new Promise<void>((resolve) => {
+						page.on('close', () => resolve());
+						process.on('SIGINT', async () => {
+							await browser.close();
+							resolve();
+						});
+					});
+				}
+				: null;
+
 			return {
 				report,
 				stats,
 				consoleLogs,
 				errors: [],
+				debugCleanup,
 			};
 		}
 		catch (error)
 		{
+			await browser.close().catch(() => {});
+
 			return {
 				report: [],
 				consoleLogs: [],
