@@ -22,7 +22,10 @@
     "prebuild": "mkdir dist/ && cp -r src/commands/create/templates dist/ && cp -r src/commands/init/templates dist/",
     "build": "tsup-node ./src/cli.ts --format esm --splitting=false",
     "test": "tsx --import=tsx/esm ./node_modules/.bin/mocha ./test/**/*.test.ts --inline-diffs --color=true",
-    "test:watch": "tsx watch --import=tsx/esm ./node_modules/.bin/mocha ./test/**/*.test.ts --inline-diffs --color=true"
+    "test:watch": "tsx watch --import=tsx/esm ./node_modules/.bin/mocha ./test/**/*.test.ts --inline-diffs --color=true",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
   },
   "bin": {
     "chef": "./bin/chef"
@@ -43,14 +46,15 @@
     "@babel/traverse": "^7.29.0",
     "@babel/types": "^7.29.0",
     "@types/babel__core": "^7.20.5",
+    "@types/chai": "^5.2.3",
     "@types/eslint": "^9.6.1",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^24.0.12",
     "@types/sinon": "^21.0.0",
-    "@types/chai": "^5.2.3",
-    "@types/mocha": "^10.0.10",
     "sinon": "^21.0.1",
     "tsup": "^8.5.0",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitepress": "^1.6.4"
   },
   "dependencies": {
     "@babel/core": "^7.28.3",
