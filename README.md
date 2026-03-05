@@ -35,10 +35,10 @@
 npm install -g @bitrix/chef
 ```
 
-Initialize TypeScript environment:
+Initialize build environment:
 
 ```bash
-chef init ts
+chef init build
 ```
 
 Create and build your first extension:
@@ -58,8 +58,8 @@ chef build my.extension
 | `chef test` | Run unit and E2E tests |
 | `chef stat` | Analyze bundle size and dependencies |
 | `chef create <name>` | Scaffold a new extension |
-| `chef init` | Initialize TypeScript and test environment |
-| `chef init ts` | Initialize TypeScript only |
+| `chef init` | Initialize build and test environment |
+| `chef init build` | Initialize TypeScript, aliases, and browserslist |
 | `chef init tests` | Initialize test environment only |
 | `chef flow-to-ts` | Migrate Flow.js to TypeScript |
 
@@ -158,7 +158,7 @@ local/js/vendor/extension/
         └── example.spec.ts
 ```
 
-TypeScript configuration (`tsconfig.json`) is placed in the project root and shared across all extensions. Use `chef init ts` to set it up.
+TypeScript configuration (`tsconfig.json`) is placed in the project root and shared across all extensions. Use `chef init build` to set it up.
 
 > JavaScript extensions (`.js` entry points) are also supported.
 
@@ -166,10 +166,10 @@ TypeScript configuration (`tsconfig.json`) is placed in the project root and sha
 
 ## TypeScript Setup
 
-Initialize TypeScript environment for your project:
+Initialize build environment for your project:
 
 ```bash
-chef init ts
+chef init build
 ```
 
 This command:
@@ -177,6 +177,7 @@ This command:
 1. **Scans all extensions** in the project
 2. **Generates `aliases.tsconfig.json`** with path aliases for every extension
 3. **Creates `tsconfig.json`** with recommended settings
+4. **Creates `.browserslistrc`** with recommended browser targets
 
 After initialization, you can import extensions by name:
 

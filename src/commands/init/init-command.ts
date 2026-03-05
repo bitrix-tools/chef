@@ -133,8 +133,8 @@ const initTestsCommand = new Command('tests')
 		);
 	});
 
-const initTSCommand = new Command('ts')
-	.description('Generate TypeScript configs and path aliases for extensions')
+const initBuildCommand = new Command('build')
+	.description('Generate TypeScript configs, path aliases, and browserslist for extensions')
 	.addOption(pathOption)
 	.action(async () => {
 		const packageFactory = PackageFactoryProvider.create();
@@ -166,11 +166,12 @@ const initTSCommand = new Command('ts')
 		let aliasesCount = 0;
 
 		const leadMessage = multiline`
-			Preparing TypeScript environment in ${Environment.getRoot()}
+			Preparing build environment in ${Environment.getRoot()}
 
 			${chalk.bold('The following files will be added/updated:')}
 			  • ${chalk.cyan('aliases.tsconfig.json')} — Contains path aliases for all extensions
 			  • ${chalk.cyan('tsconfig.json')} — Main TypeScript config that extends aliases
+			  • ${chalk.cyan('.browserslistrc')} — Target browsers for transpilation and autoprefixing
 		`;
 
 		console.log(leadMessage);
@@ -219,13 +220,25 @@ const initTSCommand = new Command('ts')
 						);
 
 						const tsConfigPath = path.join(Environment.getRoot(), 'tsconfig.json');
-						const tsConfigContent = templateService.get('tsconfig.json.txt');
+						const tsConfigContent = await templateService.get('tsconfig.json.txt');
 						const tsConfigStatus = await safeFileWrite({
 							filePath: tsConfigPath,
 							theme: {
 								prefix: `  ${chalk.green(logSymbols.success)}`,
 							},
 							data: tsConfigContent,
+						});
+
+						console.log('');
+						console.log(chalk.bold('Preparing .browserslistrc'));
+						const browserslistPath = path.join(Environment.getRoot(), '.browserslistrc');
+						const browserslistContent = await templateService.get('.browserslistrc.txt');
+						const browserslistStatus = await safeFileWrite({
+							filePath: browserslistPath,
+							theme: {
+								prefix: `  ${chalk.green(logSymbols.success)}`,
+							},
+							data: browserslistContent,
 						});
 
 						const results = [
@@ -236,6 +249,10 @@ const initTSCommand = new Command('ts')
 							{
 								file: 'tsconfig.json',
 								status: tsConfigStatus,
+							},
+							{
+								file: '.browserslistrc',
+								status: browserslistStatus,
 							}
 						];
 
@@ -263,6 +280,11 @@ const initTSCommand = new Command('ts')
 									if (file === 'tsconfig.json')
 									{
 										acc += `  • ${chalk.yellow(file)} — Main config that extends aliases for TypeScript compilation\n`;
+									}
+
+									if (file === '.browserslistrc')
+									{
+										acc += `  • ${chalk.yellow(file)} — Target browsers for transpilation and autoprefixing\n`;
 									}
 								}
 							}
@@ -331,7 +353,7 @@ const initTSCommand = new Command('ts')
 							boxen(
 								message,
 								{
-									title: chalk.bold.green(`✓ TypeScript Environment ${titleStatus} Configured!`),
+									title: chalk.bold.green(`✓ Build Environment ${titleStatus} Configured!`),
 									padding: 1,
 									borderStyle: 'round',
 									borderColor: 'yellow',
@@ -355,16 +377,16 @@ const initTSCommand = new Command('ts')
 	});
 
 const initCommand = new Command('init')
-	.description('Initialize testing and TypeScript tooling for your Bitrix project')
+	.description('Initialize testing and build tooling for your Bitrix project')
 	.addOption(pathOption)
 	.action(async () => {
 		await initTestsCommand.parseAsync([]);
 		console.log('\n');
-		await initTSCommand.parseAsync([]);
+		await initBuildCommand.parseAsync([]);
 	});
 
 initCommand
-	.addCommand(initTSCommand)
+	.addCommand(initBuildCommand)
 	.addCommand(initTestsCommand);
 
 export { initCommand };
