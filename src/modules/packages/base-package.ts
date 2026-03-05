@@ -651,9 +651,22 @@ export abstract class BasePackage
 			};
 		}
 
+		const browserType = args.browserType ?? 'chromium';
 		const playwright = await import('playwright');
-		const browser = await playwright.chromium.launch({
-			headless: args.headed !== true,
+		const browserLauncher = playwright[browserType as keyof typeof playwright];
+		if (!browserLauncher || typeof browserLauncher.launch !== 'function')
+		{
+			return {
+				report: [],
+				stats: [],
+				errors: [
+					new Error(`Unknown browser type: ${browserType}`),
+				],
+			};
+		}
+
+		const browser = await browserLauncher.launch({
+			headless: !args.headed,
 		});
 		const context = await browser.newContext();
 		const page = await context.newPage();

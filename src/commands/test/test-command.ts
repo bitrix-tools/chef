@@ -33,7 +33,7 @@ testCommand
 
 			const packageFactory = PackageFactoryProvider.create();
 			return findPackages({
-				startDirectory: args.startDirectory,
+				startDirectory: args.path,
 				packageFactory,
 			});
 		})();
