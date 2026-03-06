@@ -35,6 +35,7 @@ import { isExternalDependencyName } from '../../../../utils/is.external.dependen
 import { BuildStrategy } from './build.strategy';
 import { FileFinder } from '../../../../utils/file.finder';
 import concatPlugin from './rollup/plugin/concat-plugin';
+import terserPlugin from '@rollup/plugin-terser';
 
 import type {
 	BuildResult,
@@ -333,7 +334,6 @@ export class RollupBuildStrategy extends BuildStrategy
 			target: 'esnext',
 			paths: tsConfig.options.paths,
 			include: [
-				...(tsConfig?.raw?.include ?? []),
 				`${packageRoot}/src/**`,
 			],
 			types: [
@@ -346,6 +346,22 @@ export class RollupBuildStrategy extends BuildStrategy
 				'bundle.config.ts',
 			]
 		});
+	}
+
+	async #createVuePlugin(options: BuildOptions): Promise<Plugin[]>
+	{
+		const { default: vuePlugin } = await import('unplugin-vue');
+		const { default: esbuild } = await import('rollup-plugin-esbuild');
+
+		return [
+			vuePlugin.rollup({
+				isProduction: options.production ?? false,
+			}) as Plugin,
+			esbuild({
+				include: /\.vue\?.*&lang\.ts/,
+				sourceMap: false,
+			}),
+		];
 	}
 
 	async #buildRollupInputOptions(options: BuildOptions, onWarn: WarningHandlerWithDefault): Promise<InputOptions>
@@ -361,6 +377,14 @@ export class RollupBuildStrategy extends BuildStrategy
 
 					return [];
 				})(),
+				...(await (async () => {
+					if (options.vue)
+					{
+						return this.#createVuePlugin(options);
+					}
+
+					return [];
+				})()),
 				await (async () => {
 					if (options.typescript)
 					{
@@ -462,6 +486,7 @@ export class RollupBuildStrategy extends BuildStrategy
 					),
 				}),
 				...(options.customPlugins ?? []),
+				...(options.minify ? [terserPlugin(typeof options.minify === 'object' ? options.minify : {})] : []),
 			],
 			onwarn: onWarn,
 			treeshake: {

@@ -51,9 +51,11 @@
     "@types/mocha": "^10.0.10",
     "@types/node": "^24.0.12",
     "@types/sinon": "^21.0.0",
+    "rollup-plugin-esbuild": "^6.2.1",
     "sinon": "^21.0.1",
     "tsup": "^8.5.0",
     "typescript": "^5.8.3",
+    "unplugin-vue": "^7.1.1",
     "vitepress": "^1.6.4"
   },
   "dependencies": {
@@ -68,8 +70,10 @@
     "@rollup/plugin-image": "^3.0.3",
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.1",
+    "@rollup/plugin-terser": "^1.0.0",
     "@rollup/plugin-typescript": "^12.3.0",
     "@rollup/plugin-url": "^8.0.2",
+    "@vue/compiler-sfc": "^3.5.29",
     "autoprefixer": "^10.4.27",
     "boxen": "^8.0.1",
     "browserslist": "^4.28.1",
