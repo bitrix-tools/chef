@@ -87,7 +87,7 @@ export function buildTask(extension: BasePackage, args: Record<string, any>): Ta
 	return {
 		title: 'Building code...',
 		run: async (context) => {
-			const result = await extension.build();
+			const result = await extension.build({ production: args.production });
 
 			if (result.errors.length > 0)
 			{

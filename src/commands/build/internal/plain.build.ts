@@ -35,7 +35,7 @@ export function plainBuild(extension: BasePackage, args: Record<string, any>): P
 	return TaskRunner.runTask({
 		title: chalk.bold(name),
 		run: async (context) => {
-			const result = await extension.build();
+			const result = await extension.build({ production: args.production });
 
 			if (result.errors.length > 0)
 			{

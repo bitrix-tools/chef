@@ -5,6 +5,7 @@ import { watchOption } from './options/watch-option';
 import { pathOption } from './options/path-option';
 import { verboseOption } from './options/verbose-option';
 import { forceOption } from './options/force-option';
+import { productionOption } from './options/production-option';
 import { buildQueue } from './queue/build-queue';
 
 import { PackageFactoryProvider } from '../../modules/packages/providers/package-factory-provider';
@@ -26,6 +27,7 @@ buildCommand
 	.addOption(pathOption)
 	.addOption(verboseOption)
 	.addOption(forceOption)
+	.addOption(productionOption)
 	.action(async (extensions: string[], args) => {
 		const extensionsStream: NodeJS.ReadableStream = (() => {
 			if (extensions.length > 0)

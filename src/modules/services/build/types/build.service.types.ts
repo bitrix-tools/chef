@@ -38,7 +38,9 @@ export type BuildOptions = {
 	},
 	minify?: boolean | MinifyOptions,
 	sourceMaps?: boolean,
+	vue?: boolean,
 	customPlugins?: any[],
+	production?: boolean,
 };
 
 export type BuildCodeOptions = {

@@ -319,8 +319,11 @@ export abstract class BasePackage
 		return fs.existsSync(path.join(this.getPath(), 'test', 'unit'));
 	}
 
-	#getBuildOptions(): BuildOptions
+	#getBuildOptions(options: { production?: boolean } = {}): BuildOptions
 	{
+		const production = options.production ?? false;
+		const bundleConfig = this.getBundleConfig();
+
 		return {
 			input: this.getInputPath(),
 			output: {
@@ -330,21 +333,32 @@ export abstract class BasePackage
 			packageRoot: this.getPath(),
 			publicPath: this.getPublicPath(),
 			targets: this.getTargets(),
-			namespace: this.getBundleConfig().get('namespace'),
+			namespace: bundleConfig.get('namespace'),
 			typescript: this.isTypeScriptMode(),
-			concat: this.getBundleConfig().get('concat'),
-			cssImages: this.getBundleConfig().get('cssImages'),
-			resolveFiles: this.getBundleConfig().get('resolveFilesImport'),
-			minify: this.getBundleConfig().get('minification'),
-			sourceMaps: this.getBundleConfig().get('sourceMaps'),
-			customPlugins: this.getBundleConfig().get('plugins')?.custom,
+			vue: this.#hasVueFiles(),
+			concat: bundleConfig.get('concat'),
+			cssImages: bundleConfig.get('cssImages'),
+			resolveFiles: bundleConfig.get('resolveFilesImport'),
+			minify: bundleConfig.has('minification')
+				? bundleConfig.get('minification')
+				: production,
+			sourceMaps: bundleConfig.has('sourceMaps')
+				? bundleConfig.get('sourceMaps')
+				: !production,
+			customPlugins: bundleConfig.get('plugins')?.custom,
+			production,
 		};
 	}
 
-	async build(): Promise<BuildResult>
+	#hasVueFiles(): boolean
+	{
+		return fg.sync('src/**/*.vue', { cwd: this.getPath() }).length > 0;
+	}
+
+	async build(options: { production?: boolean } = {}): Promise<BuildResult>
 	{
 		const buildService = await this.#getBuildService();
-		const buildOptions = this.#getBuildOptions();
+		const buildOptions = this.#getBuildOptions(options);
 
 		const buildResult = await buildService.build(buildOptions);
 
@@ -360,10 +374,10 @@ export abstract class BasePackage
 		return buildResult;
 	}
 
-	async generate(): Promise<BuildResult>
+	async generate(options: { production?: boolean } = {}): Promise<BuildResult>
 	{
 		const buildService = await this.#getBuildService();
-		const buildOptions = this.#getBuildOptions();
+		const buildOptions = this.#getBuildOptions(options);
 
 		return buildService.generate(buildOptions);
 	}
