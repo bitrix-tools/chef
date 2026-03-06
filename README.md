@@ -56,7 +56,7 @@ chef build my.extension
 | Command | Description |
 |---------|-------------|
 | `chef build` | Build extensions (TypeScript, Babel, PostCSS) |
-| `chef test` | Run unit and E2E tests |
+| `chef test` | Run unit and E2E tests (use `unit`/`e2e` subcommands to run separately) |
 | `chef stat` | Analyze bundle size and dependencies |
 | `chef create <name>` | Scaffold a new extension |
 | `chef init` | Initialize build and test environment |
@@ -318,10 +318,13 @@ Note: In zsh, escape glob patterns to prevent shell expansion: chef build ui.\*
 ### Test
 
 ```bash
-chef test [extensions...] [options]
+chef test [extensions...] [options]        # unit + e2e
+chef test unit [extensions...] [file?]     # unit only
+chef test e2e [extensions...] [file?]      # e2e only
 
 Arguments:
   extensions               Extension names or glob patterns (e.g. main.core ui.bbcode.*)
+  file                     unit/e2e only — test file name (e.g. dom.test.ts)
 
 Options:
   -w, --watch              Watch for changes and rerun tests
@@ -332,10 +335,14 @@ Options:
   --project <names>        Run tests in specific browsers (chromium, firefox, webkit)
 
 Examples:
-  chef test main.core ui.buttons     # Test specific extensions
-  chef test ui.* --headed            # Test with visible browser
-  chef test main.core -w             # Test and watch for changes
-  chef test main.core --debug        # Debug with DevTools and sourcemaps
+  chef test main.core ui.buttons              # Test specific extensions
+  chef test unit main.core                           # Unit tests only
+  chef test unit main.core ./render-tag.test.ts      # Unit tests, specific file
+  chef test e2e ui.buttons                           # E2E tests only
+  chef test e2e ui.buttons ./render-buttons.spec.ts  # E2E tests, specific file
+  chef test ui.* --headed                     # Test with visible browser
+  chef test main.core -w                      # Test and watch for changes
+  chef test main.core --debug                 # Debug with DevTools and sourcemaps
   chef test main.core --project chromium firefox  # Run in specific browsers
 ```
 

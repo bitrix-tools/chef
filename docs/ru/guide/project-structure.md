@@ -214,7 +214,10 @@ PASSWORD=your_password
 Запуск тестов:
 
 ```bash
-chef test ui.buttons            # Запустить все тесты
-chef test ui.buttons --headed   # С видимым браузером
-chef test ui.buttons --debug    # С DevTools и sourcemaps
+chef test ui.buttons                    # Запустить все тесты
+chef test unit ui.buttons                        # Только unit-тесты
+chef test unit ui.buttons ./render-button.test.ts # Конкретный файл
+chef test e2e ui.buttons                # Только e2e-тесты
+chef test ui.buttons --headed           # С видимым браузером
+chef test ui.buttons --debug            # С DevTools и sourcemaps
 ```

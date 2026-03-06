@@ -3,14 +3,25 @@
 Run unit and E2E tests using Playwright.
 
 ```bash
-chef test [extensions...] [options]
+chef test [extensions...] [options]        # unit + e2e
+chef test unit [extensions...] [file?]     # unit only
+chef test e2e [extensions...] [file?]      # e2e only
 ```
+
+## Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `chef test` | Run unit and e2e tests |
+| `chef test unit` | Run only unit tests |
+| `chef test e2e` | Run only e2e tests |
 
 ## Arguments
 
 | Argument | Description |
 |----------|-------------|
 | `extensions` | Extension names or glob patterns (e.g. `main.core`, `ui.bbcode.*`) |
+| `file` | `unit`/`e2e` only — test file name to run (e.g. `dom.test.ts`) |
 
 ## Options
 
@@ -26,9 +37,20 @@ chef test [extensions...] [options]
 ## Examples
 
 ```bash
-chef test main.core ui.buttons                  # Test specific extensions
-chef test ui.* --headed                         # Test with visible browser
-chef test main.core -w                          # Test and watch for changes
+# Run all tests
+chef test main.core ui.buttons
+
+# Unit tests only
+chef test unit main.core
+chef test unit main.core ./render-tag.test.ts        # Specific file
+
+# E2E tests only
+chef test e2e ui.buttons
+chef test e2e ui.buttons ./render-buttons.spec.ts    # Specific file
+
+# Options
+chef test ui.* --headed                         # With visible browser
+chef test main.core -w                          # Watch mode
 chef test main.core --debug                     # Debug with DevTools and sourcemaps
 chef test --grep "should render"                # Filter by test name
 chef test main.core --project chromium firefox  # Run in specific browsers

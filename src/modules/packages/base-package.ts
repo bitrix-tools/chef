@@ -600,7 +600,7 @@ export abstract class BasePackage
 	{
 		const allTests = await this.getUnitTests();
 		const filteredTests = options.file
-			? allTests.filter((filePath) => filePath.includes(options.file))
+			? allTests.filter((filePath) => filePath.includes(path.basename(options.file)))
 			: allTests;
 
 		const sourceTestsCode = filteredTests

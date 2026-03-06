@@ -214,7 +214,10 @@ PASSWORD=your_password
 Run tests:
 
 ```bash
-chef test ui.buttons            # Run all tests
-chef test ui.buttons --headed   # With visible browser
-chef test ui.buttons --debug    # With DevTools and sourcemaps
+chef test ui.buttons                    # Run all tests
+chef test unit ui.buttons                        # Unit tests only
+chef test unit ui.buttons ./render-button.test.ts # Specific file
+chef test e2e ui.buttons                # E2E tests only
+chef test ui.buttons --headed           # With visible browser
+chef test ui.buttons --debug            # With DevTools and sourcemaps
 ```
