@@ -74,6 +74,26 @@ export class RollupBuildStrategy extends BuildStrategy
 		}, {})
 	}
 
+	static readonly #npmToBitrixMap: Record<string, string> = {
+		'vue': 'ui.vue3',
+	};
+
+	protected static createNpmRemapPlugin(): Plugin
+	{
+		return {
+			name: 'npm-to-bitrix-remap',
+			resolveId(id)
+			{
+				if (id in RollupBuildStrategy.#npmToBitrixMap)
+				{
+					return { id: RollupBuildStrategy.#npmToBitrixMap[id], external: true };
+				}
+
+				return null;
+			},
+		};
+	}
+
 	protected static createOnWarningHandler(): {
 		warningsRef: RollupLog[],
 		dependenciesRef: string[],
@@ -318,7 +338,8 @@ export class RollupBuildStrategy extends BuildStrategy
 
 	async #createTypeScriptPlugin(tsConfig: ParsedCommandLine, packageRoot: string): Promise<Plugin>
 	{
-		const { default: typescriptPlugin } = await import('@rollup/plugin-typescript');
+		const { default: bitrixTypescriptPlugin } = await import('./rollup/plugin/typescript-plugin');
+
 		const typesPath = (() => {
 			const devExtension = PackageResolver.resolve('ui.dev');
 			if (devExtension)
@@ -329,39 +350,29 @@ export class RollupBuildStrategy extends BuildStrategy
 			return '';
 		})();
 
-		return typescriptPlugin({
-			tsconfig: false,
-			target: 'esnext',
-			paths: tsConfig.options.paths,
-			include: [
-				`${packageRoot}/src/**`,
-			],
-			types: [
-				typesPath,
-			],
+		return bitrixTypescriptPlugin({
+			packageRoot,
+			compilerOptions: {
+				paths: tsConfig.options.paths,
+				baseUrl: tsConfig.options.baseUrl,
+				types: typesPath ? [typesPath] : [],
+			},
+			include: [`${packageRoot}/src/**`],
 			exclude: [
 				...(tsConfig?.raw?.exclude ?? []),
 				`${packageRoot}/dist/**`,
 				`${packageRoot}/test/**`,
-				'bundle.config.ts',
-			]
+			],
 		});
 	}
 
-	async #createVuePlugin(options: BuildOptions): Promise<Plugin[]>
+	async #createVuePlugin(options: BuildOptions): Promise<Plugin>
 	{
 		const { default: vuePlugin } = await import('unplugin-vue');
-		const { default: esbuild } = await import('rollup-plugin-esbuild');
 
-		return [
-			vuePlugin.rollup({
-				isProduction: options.production ?? false,
-			}) as Plugin,
-			esbuild({
-				include: /\.vue\?.*&lang\.ts/,
-				sourceMap: false,
-			}),
-		];
+		return vuePlugin.rollup({
+			isProduction: options.production ?? false,
+		}) as Plugin;
 	}
 
 	async #buildRollupInputOptions(options: BuildOptions, onWarn: WarningHandlerWithDefault): Promise<InputOptions>
@@ -369,6 +380,7 @@ export class RollupBuildStrategy extends BuildStrategy
 		return {
 			input: options.input,
 			plugins: [
+				RollupBuildStrategy.createNpmRemapPlugin(),
 				...(() => {
 					if (options.standalone)
 					{
@@ -377,14 +389,14 @@ export class RollupBuildStrategy extends BuildStrategy
 
 					return [];
 				})(),
-				...(await (async () => {
+				await (async () => {
 					if (options.vue)
 					{
 						return this.#createVuePlugin(options);
 					}
 
-					return [];
-				})()),
+					return null;
+				})(),
 				await (async () => {
 					if (options.typescript)
 					{
