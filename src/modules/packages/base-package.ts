@@ -596,9 +596,14 @@ export abstract class BasePackage
 		);
 	}
 
-	async getUnitTestsBundle(options: { sourcemap?: boolean } = {}): Promise<string>
+	async getUnitTestsBundle(options: { sourcemap?: boolean; file?: string } = {}): Promise<string>
 	{
-		const sourceTestsCode = (await this.getUnitTests())
+		const allTests = await this.getUnitTests();
+		const filteredTests = options.file
+			? allTests.filter((filePath) => filePath.includes(options.file))
+			: allTests;
+
+		const sourceTestsCode = filteredTests
 			.map((filePath) => {
 				return `import '${filePath}';`;
 			})
@@ -690,6 +695,7 @@ export abstract class BasePackage
 
 			const testsCodeBundle = await this.getUnitTestsBundle({
 				sourcemap: isDebug,
+				file: args.file,
 			});
 
 			const report = [];
@@ -877,6 +883,11 @@ export abstract class BasePackage
 		if (Object.hasOwn(sourceArgs, 'project'))
 		{
 			args.push(`--project=${sourceArgs.project}`);
+		}
+
+		if (sourceArgs.file)
+		{
+			args.push(sourceArgs.file);
 		}
 
 		const process = spawn('npx', args, {
