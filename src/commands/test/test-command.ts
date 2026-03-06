@@ -24,6 +24,7 @@ testCommand
 	.option('--debug', 'Run tests in debug mode (slower, more logs)')
 	.option('--grep <pattern>', 'Run only tests that match the given pattern')
 	.option('--project <projects...>', 'Run tests in the specified Playwright projects')
+	.option('--type <type>', 'Run only "unit" or "e2e" tests')
 	.action((extensions: string[], args): void => {
 		const extensionsStream: NodeJS.ReadableStream = (() => {
 			if (extensions.length > 0)
@@ -42,6 +43,11 @@ testCommand
 
 		extensionsStream
 			.on('data', async ({ extension }: { extension: BasePackage }) => {
+				const subtasks = [
+					...(args.type !== 'e2e' ? [runUnitTestsTask(extension, args)] : []),
+					...(args.type !== 'unit' ? [runEndToEndTestsTask(extension, args)] : []),
+				];
+
 				await testQueue.add(async () => {
 					const name = extension.getName();
 					await TaskRunner.run([
@@ -50,10 +56,7 @@ testCommand
 							run: () => {
 								return Promise.resolve();
 							},
-							subtasks: [
-								runUnitTestsTask(extension, args),
-								runEndToEndTestsTask(extension, args),
-							],
+							subtasks,
 						},
 					]);
 				});
@@ -63,12 +66,11 @@ testCommand
 					await testQueue.add(async () => {
 						const name = extension.getName();
 						const chokidar = await import('chokidar');
-						const watcher = chokidar.watch(
-							[
-								extension.getUnitTestsDirectoryPath(),
-								extension.getEndToEndTestsDirectoryPath(),
-							],
-						);
+						const watchDirs = [
+							...(args.type !== 'e2e' ? [extension.getUnitTestsDirectoryPath()] : []),
+							...(args.type !== 'unit' ? [extension.getEndToEndTestsDirectoryPath()] : []),
+						];
+						const watcher = chokidar.watch(watchDirs);
 
 						watchers.push(watcher);
 
@@ -80,10 +82,7 @@ testCommand
 										run: () => {
 											return Promise.resolve();
 										},
-										subtasks: [
-											runUnitTestsTask(extension, args),
-											runEndToEndTestsTask(extension, args),
-										],
+										subtasks,
 									},
 								]);
 							});
