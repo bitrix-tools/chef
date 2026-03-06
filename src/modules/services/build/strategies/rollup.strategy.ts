@@ -461,6 +461,7 @@ export class RollupBuildStrategy extends BuildStrategy
 						(filePath) => path.resolve(options.packageRoot, filePath),
 					),
 				}),
+				...(options.customPlugins ?? []),
 			],
 			onwarn: onWarn,
 			treeshake: {

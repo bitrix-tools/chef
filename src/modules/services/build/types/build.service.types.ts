@@ -38,6 +38,7 @@ export type BuildOptions = {
 	},
 	minify?: boolean | MinifyOptions,
 	sourceMaps?: boolean,
+	customPlugins?: any[],
 };
 
 export type BuildCodeOptions = {

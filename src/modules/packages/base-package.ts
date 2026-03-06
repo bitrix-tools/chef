@@ -337,6 +337,7 @@ export abstract class BasePackage
 			resolveFiles: this.getBundleConfig().get('resolveFilesImport'),
 			minify: this.getBundleConfig().get('minification'),
 			sourceMaps: this.getBundleConfig().get('sourceMaps'),
+			customPlugins: this.getBundleConfig().get('plugins')?.custom,
 		};
 	}
 
