@@ -445,7 +445,7 @@ export class RollupBuildStrategy extends BuildStrategy
 						],
 					],
 					plugins: [
-						flowStripTypesPlugin,
+						...(options.typescript ? [] : [flowStripTypesPlugin]),
 						externalHelpersPlugin,
 						...(options.transformClasses ? [transformClassesPlugin] : []),
 					],
@@ -525,32 +525,64 @@ export class RollupBuildStrategy extends BuildStrategy
 
 	async #buildRollupBuildCodeInputOptions(options: BuildCodeOptions, onWarning: WarningHandlerWithDefault): Promise<InputOptions>
 	{
-		const sourceRollupInputOptions: InputOptions = await this.#buildRollupInputOptions(
-			{
-				input: 'source-code.js',
-				output: {
-					js: 'source-code.bundle.js',
-					css: 'source-code.bundle.css',
-				},
-				packageRoot: options.packageRoot,
-				publicPath: options.publicPath,
-				typescript: options.typescript,
-				targets: options.targets,
-				namespace: options.namespace,
-				resolve: true,
-			},
-			onWarning,
-		);
-
 		return {
-			...sourceRollupInputOptions,
+			input: 'source-code.js',
 			plugins: [
 				RollupBuildStrategy.createVirtualEntryPlugin({
 					'source-code.js': options.code,
 				}),
-				// @ts-ignore
-				...sourceRollupInputOptions.plugins,
+				RollupBuildStrategy.createNpmRemapPlugin(),
+				...(options.standalone ? [RollupBuildStrategy.createStandalonePlugin()] : []),
+				await (async () => {
+					if (options.typescript)
+					{
+						const tsConfigPath = FileFinder.findUpFile({
+							fileName: 'tsconfig.json',
+							fromDir: options.packageRoot,
+							rootDir: Environment.getRoot(),
+						});
+
+						if (typeof tsConfigPath === 'string' && tsConfigPath.length > 0)
+						{
+							const tsConfig = await this.#loadTsConfig(
+								tsConfigPath,
+								options.packageRoot,
+							);
+
+							return await this.#createTypeScriptPlugin(
+								tsConfig,
+								options.packageRoot,
+							);
+						}
+					}
+
+					return null;
+				})(),
+				nodeResolve({
+					browser: true,
+				}),
+				babelPlugin({
+					babelHelpers: 'external',
+					presets: [
+						[
+							presetEnv,
+							{
+								targets: options.targets,
+								modules: false,
+							},
+						],
+					],
+					plugins: [
+						...(options.typescript ? [] : [flowStripTypesPlugin]),
+						externalHelpersPlugin,
+					],
+				}),
+				jsonPlugin(),
+				commonjs({
+					sourceMap: false,
+				}),
 			],
+			onwarn: onWarning,
 			treeshake: false,
 			external: [
 				'mocha',
