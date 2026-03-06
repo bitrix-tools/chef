@@ -1,0 +1,42 @@
+/* Animated gradient background for home page */
+.VPHome {
+  position: relative;
+  overflow: hidden;
+}
+
+.VPHome::before {
+  content: '';
+  position: fixed;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(
+    from 0deg at 50% 50%,
+    #7c3aed,
+    #2563eb,
+    #0891b2,
+    #059669,
+    #2563eb,
+    #7c3aed
+  );
+  animation: rotate-gradient 8s linear infinite;
+  opacity: 0.15;
+  z-index: 0;
+  filter: blur(60px);
+  pointer-events: none;
+}
+
+.VPHome > * {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes rotate-gradient {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.dark .VPHome::before {
+  opacity: 0.25;
+}

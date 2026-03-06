@@ -3,30 +3,77 @@ layout: home
 
 hero:
   name: Chef
-  text: CLI-инструмент для расширений Bitrix
-  tagline: Сборка, тестирование и поддержка фронтенд-расширений Bitrix
+  text: Инструментарий для фронтенда на Bitrix
+  tagline: Пишите современный TypeScript, собирайте, тестируйте и анализируйте расширения — одним инструментом.
   image:
     src: /logo.svg
     alt: Chef
   actions:
     - theme: brand
-      text: Начать
+      text: Начало работы
       link: /ru/guide/getting-started
     - theme: alt
-      text: Команды
-      link: /ru/commands/build
+      text: Документация
+      link: /ru/guide/overview
 
 features:
-  - title: TypeScript First
-    details: Нативная поддержка TypeScript с автоматической транспиляцией и алиасами путей для всех расширений.
-  - title: Сборка
-    details: Бандлер на основе Rollup с Babel, PostCSS и автоматическим обновлением зависимостей в config.php.
-  - title: Тесты
-    details: Unit-тесты (Mocha + Chai) в реальном браузере через Playwright и E2E-тесты.
-  - title: Линтинг
-    details: Интеграция с ESLint для единообразного качества кода во всех расширениях.
-  - title: Шаблоны
-    details: Генерация новых расширений одной командой через chef create.
-  - title: Аналитика
-    details: Статистика размеров бандлов и визуализация дерева зависимостей через chef stat.
+  - icon:
+      src: /rollup.svg
+    title: Быстрая сборка
+    details: Rollup + Babel + PostCSS под капотом. Параллельная сборка до 4 расширений одновременно. Watch-режим с горячей перезагрузкой.
+  - icon:
+      src: /typescript.svg
+    title: TypeScript из коробки
+    details: Создайте расширение командой chef create — и сразу получите готовый tsconfig, алиасы путей для всех расширений проекта и типизированный конфиг сборки.
+  - icon:
+      src: /playwright.svg
+    title: Тесты в браузере
+    details: Unit-тесты на Mocha + Chai запускаются в реальном браузере через Playwright. E2E-тесты с автоматической авторизацией — без лишних настроек.
+  - icon: 📦
+    title: Автоматические зависимости
+    details: Chef анализирует импорты при сборке и сам обновляет rel в config.php. Никакого ручного управления зависимостями.
+  - icon: 🔍
+    title: Аналитика бандлов
+    details: Размеры бандлов, дерево зависимостей и дубликаты — chef stat покажет всё по одному расширению или сразу по группе.
+  - icon: 🚀
+    title: Scaffold за секунду
+    details: chef create ui.buttons создаст расширение с правильной структурой, конфигом, точкой входа и шаблонами тестов.
 ---
+
+<div class="home-code">
+
+## Попробуйте прямо сейчас
+
+```bash
+# Установка
+npm install -g @bitrix/chef
+
+# Инициализация проекта
+chef init
+
+# Создать новое расширение
+chef create ui.my-feature
+
+# Собрать
+chef build ui.my-feature
+
+# Тесты
+chef test ui.my-feature
+```
+
+</div>
+
+<style>
+.home-code {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 48px 24px 96px;
+}
+
+.home-code h2 {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 24px;
+  text-align: center;
+}
+</style>

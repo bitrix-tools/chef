@@ -1,10 +1,10 @@
 import { defineConfig } from 'vitepress'
 
 const guideSidebar = [
+  { text: 'Overview', link: '/guide/overview' },
   { text: 'Getting Started', link: '/guide/getting-started' },
-  { text: 'Project Structure', link: '/guide/project-structure' },
-  { text: 'Configuration', link: '/guide/configuration' },
-  { text: 'TypeScript Setup', link: '/guide/typescript' },
+  { text: 'JS Extension', link: '/guide/project-structure' },
+  { text: 'TypeScript', link: '/guide/typescript' },
   { text: 'Browserslist', link: '/guide/browserslist' },
   { text: 'Test Setup', link: '/guide/test-setup' },
 ]
@@ -19,10 +19,11 @@ const commandsSidebar = [
 ]
 
 const guideSidebarRu = [
+  { text: 'Обзор', link: '/ru/guide/overview' },
   { text: 'Начало работы', link: '/ru/guide/getting-started' },
-  { text: 'Структура проекта', link: '/ru/guide/project-structure' },
-  { text: 'Конфигурация', link: '/ru/guide/configuration' },
-  { text: 'Настройка TypeScript', link: '/ru/guide/typescript' },
+  { text: 'JS-расширение', link: '/ru/guide/project-structure' },
+
+  { text: 'TypeScript', link: '/ru/guide/typescript' },
   { text: 'Browserslist', link: '/ru/guide/browserslist' },
   { text: 'Настройка тестов', link: '/ru/guide/test-setup' },
 ]
@@ -52,7 +53,8 @@ export default defineConfig({
       description: 'CLI-инструмент для сборки, тестирования и поддержки расширений Bitrix',
       themeConfig: {
         nav: [
-          { text: 'Руководство', link: '/ru/guide/getting-started' },
+          { text: 'Начало работы', link: '/ru/guide/getting-started' },
+          { text: 'Документация', link: '/ru/guide/overview' },
           { text: 'Команды', link: '/ru/commands/build' },
         ],
         sidebar: [
@@ -68,11 +70,12 @@ export default defineConfig({
   },
 
   themeConfig: {
-    logo: '/logo.svg',
+    logo: '/logo-nav.svg',
     siteTitle: 'Chef',
 
     nav: [
-      { text: 'Guide', link: '/guide/getting-started' },
+      { text: 'Getting Started', link: '/guide/getting-started' },
+      { text: 'Documentation', link: '/guide/overview' },
       { text: 'Commands', link: '/commands/build' },
     ],
 
@@ -82,6 +85,7 @@ export default defineConfig({
     ],
 
     socialLinks: [
+      { icon: 'github', link: 'https://github.com/bitrix-tools/chef' },
       { icon: 'npm', link: 'https://www.npmjs.com/package/@bitrix/chef' },
     ],
 
