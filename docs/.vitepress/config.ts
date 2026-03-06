@@ -48,6 +48,9 @@ export default defineConfig({
   title: 'Chef',
   description: 'CLI toolkit for building, testing and maintaining Bitrix extensions',
   base: '/chef/',
+  head: [
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/chef/logo-nav.svg' }],
+  ],
 
   locales: {
     root: {
