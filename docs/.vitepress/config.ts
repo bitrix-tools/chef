@@ -10,6 +10,7 @@ const guideSidebar = [
   { text: 'Browserslist', link: '/guide/browserslist' },
   { text: 'Test Setup', link: '/guide/test-setup' },
   { text: 'Production Mode', link: '/guide/production' },
+  { text: 'Standalone', link: '/guide/standalone' },
 ]
 
 const commandsSidebar = [
@@ -31,6 +32,7 @@ const guideSidebarRu = [
   { text: 'Browserslist', link: '/ru/guide/browserslist' },
   { text: 'Настройка тестов', link: '/ru/guide/test-setup' },
   { text: 'Production-режим', link: '/ru/guide/production' },
+  { text: 'Standalone', link: '/ru/guide/standalone' },
 ]
 
 const commandsSidebarRu = [
