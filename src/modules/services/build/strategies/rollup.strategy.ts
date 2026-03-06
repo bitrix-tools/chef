@@ -28,6 +28,7 @@ import autoprefixer from 'autoprefixer';
 import presetEnv from '@babel/preset-env';
 import flowStripTypesPlugin from '@babel/plugin-transform-flow-strip-types';
 import externalHelpersPlugin from '@babel/plugin-external-helpers';
+import transformClassesPlugin from '@babel/plugin-transform-classes';
 
 import { Environment } from '../../../../environment/environment';
 import { PackageResolver } from '../../../packages/package.resolver';
@@ -446,6 +447,7 @@ export class RollupBuildStrategy extends BuildStrategy
 					plugins: [
 						flowStripTypesPlugin,
 						externalHelpersPlugin,
+						...(options.transformClasses ? [transformClassesPlugin] : []),
 					],
 				}),
 				jsonPlugin(),

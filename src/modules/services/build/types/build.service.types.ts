@@ -39,6 +39,7 @@ export type BuildOptions = {
 	minify?: boolean | MinifyOptions,
 	sourceMaps?: boolean,
 	vue?: boolean,
+	transformClasses?: boolean,
 	customPlugins?: any[],
 	production?: boolean,
 };
