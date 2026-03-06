@@ -13,15 +13,15 @@ export function e2eTestsTask(extension: BasePackage): Task
 			}
 			else
 			{
-				const testsResult = await extension.runUnitTests();
-				if (testsResult.code === 'TESTS_PASSED')
+				const { status } = await extension.runEndToEndTests();
+				if (status === 'TESTS_PASSED')
 				{
-					context.succeed('Unit tests passed');
+					context.succeed('E2E tests passed');
 				}
 
-				if (testsResult.code === 'TESTS_FAILED')
+				if (status === 'TESTS_FAILED')
 				{
-					context.succeed('Unit tests passed');
+					context.fail('E2E tests failed');
 				}
 			}
 		},
