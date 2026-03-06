@@ -1,6 +1,6 @@
 # Standalone Build
 
-By default Chef builds extensions as IIFE modules: dependencies on other Bitrix extensions are declared as `external` and loaded via the dependency system (`rel` in `config.php`). In standalone mode all dependencies are inlined directly into the bundle — the output is a single self-contained file.
+By default Chef builds extensions as [IIFE](https://developer.mozilla.org/en-US/docs/Glossary/IIFE) modules: dependencies on other Bitrix extensions are declared as `external` and loaded via the dependency system (`rel` in `config.php`). In standalone mode all dependencies are inlined directly into the bundle — the output is a single self-contained file.
 
 ## When to Use
 

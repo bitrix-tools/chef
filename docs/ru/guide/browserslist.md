@@ -1,6 +1,6 @@
 # Browserslist
 
-Chef использует [browserslist](https://github.com/browserslist/browserslist) для определения целевых браузеров при транспиляции через Babel и автопрефиксинге CSS.
+Chef использует [browserslist](https://github.com/browserslist/browserslist) для определения целевых браузеров при транспиляции через [Babel](https://babeljs.io/) и автопрефиксинге CSS через [PostCSS](https://postcss.org/).
 
 ## Настройка
 

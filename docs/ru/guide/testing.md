@@ -1,6 +1,6 @@
 # Тестирование
 
-Chef запускает тесты в реальном браузере через Playwright. Поддерживаются два вида тестов: unit-тесты (Mocha + Chai) и E2E-тесты (Playwright Test API).
+Chef запускает тесты в реальном браузере через [Playwright](https://playwright.dev/). Поддерживаются два вида тестов: unit-тесты ([Mocha](https://mochajs.org/) + [Chai](https://www.chaijs.com/)) и E2E-тесты (Playwright Test API).
 
 ## Подготовка
 
@@ -174,7 +174,7 @@ npm install --save-dev @types/mocha @types/chai
 
 ## E2E-тесты
 
-E2E-тесты используют Playwright Test API и запускаются в реальном браузере на реальной странице Bitrix.
+E2E-тесты используют [Playwright Test API](https://playwright.dev/docs/api/class-test) и запускаются в реальном браузере на реальной странице Bitrix.
 
 ### Структура
 

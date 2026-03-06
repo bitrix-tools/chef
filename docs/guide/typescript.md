@@ -1,6 +1,6 @@
 # TypeScript
 
-Chef supports TypeScript out of the box — `.ts` file compilation is built into the build pipeline. No additional setup is needed for building.
+Chef supports [TypeScript](https://www.typescriptlang.org/) out of the box — `.ts` file compilation is built into the build pipeline. No additional setup is needed for building.
 
 ## Initialization
 

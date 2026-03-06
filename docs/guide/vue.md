@@ -1,6 +1,6 @@
 # Vue 3
 
-Chef supports building Vue 3 components. Vue and all its APIs are imported from the Bitrix extension `ui.vue3`.
+Chef supports building [Vue 3](https://vuejs.org/) components. Vue and all its APIs are imported from the Bitrix extension `ui.vue3`.
 
 ## Quick Start
 

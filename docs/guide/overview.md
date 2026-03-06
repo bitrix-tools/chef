@@ -1,6 +1,6 @@
 # Overview
 
-Chef is a CLI tool for building, testing and maintaining Bitrix frontend extensions. It finds `bundle.config.js` or `bundle.config.ts` in the project structure and runs a Rollup build for each discovered package.
+Chef is a CLI tool for building, testing and maintaining Bitrix frontend extensions. It finds `bundle.config.js` or `bundle.config.ts` in the project structure and runs a [Rollup](https://rollupjs.org/) build for each discovered package.
 
 ## JS Extensions
 
@@ -240,10 +240,10 @@ When running `chef build`, for each package:
 
 1. **Read configuration** — parse `bundle.config.ts`
 2. **Build the bundle** via Rollup:
-   - **TypeScript** — compile `.ts` files
-   - **Babel** — transpile to target browsers
-   - **PostCSS** — autoprefixes, SVG optimization, inline images
-   - **Terser** — minification (if enabled)
+   - [TypeScript](https://www.typescriptlang.org/) — compile `.ts` files
+   - [Babel](https://babeljs.io/) — transpile to target browsers
+   - [PostCSS](https://postcss.org/) — autoprefixes, SVG optimization, inline images
+   - [Terser](https://terser.org/) — minification (if enabled)
 3. **Update `config.php`** — analyze imports and write dependencies to `rel`
 4. **Source maps** — generate source maps (if enabled)
 

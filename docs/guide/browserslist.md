@@ -1,6 +1,6 @@
 # Browserslist
 
-Chef uses [browserslist](https://github.com/browserslist/browserslist) to determine target browsers for Babel transpilation and CSS autoprefixing.
+Chef uses [browserslist](https://github.com/browserslist/browserslist) to determine target browsers for [Babel](https://babeljs.io/) transpilation and [PostCSS](https://postcss.org/) autoprefixing.
 
 ## Setup
 
