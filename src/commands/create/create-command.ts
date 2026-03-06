@@ -160,6 +160,28 @@ createCommand
 
 		console.log(`${chalk.green('✔')} ${extensionName} created successfully`);
 		console.log(`  file://${packagePath}`);
+
+		if (useTS)
+		{
+			const root = Environment.getRoot();
+			const aliasesPath = path.join(root, 'aliases.tsconfig.json');
+			try
+			{
+				const aliasesRaw = await fs.readFile(aliasesPath, 'utf8');
+				const aliases = JSON.parse(aliasesRaw);
+				const srcPath = path.join(packagePath, 'src');
+				const relPath = `./${path.relative(root, srcPath)}`;
+				aliases.compilerOptions ??= {};
+				aliases.compilerOptions.paths ??= {};
+				aliases.compilerOptions.paths[extensionName] = [relPath];
+				await fs.writeFile(aliasesPath, JSON.stringify(aliases, null, 4));
+				console.log(`${chalk.green('✔')} aliases.tsconfig.json updated`);
+			}
+			catch
+			{
+				// aliases.tsconfig.json doesn't exist yet — skip silently
+			}
+		}
 	});
 
 
