@@ -5,6 +5,10 @@ import { Environment } from '../environment/environment';
 export function adjustCwdPreAction(thisCommand: Command, actionCommand: Command)
 {
 	const sourceCwd = actionCommand.getOptionValue('path');
+	if (!sourceCwd)
+	{
+		return;
+	}
 	const envType = Environment.getType();
 	const root = Environment.getRoot();
 

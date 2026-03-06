@@ -1,5 +1,5 @@
 import type { RollupLog } from 'rollup';
-import { MinifyOptions } from 'terser';
+import type { MinifyOptions } from 'terser';
 
 export interface BundleFileInfo {
 	fileName: string;

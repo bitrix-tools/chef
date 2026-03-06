@@ -1,7 +1,7 @@
 import { LintResult } from '../../linter/lint.result';
 import chalk from 'chalk';
 import table from 'text-table';
-import { ESLint } from 'eslint';
+import type { ESLint } from 'eslint';
 
 function truncateWords(str: string, maxLength: number): string
 {

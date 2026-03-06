@@ -1,4 +1,4 @@
-import { ESLint } from 'eslint';
+import type { ESLint } from 'eslint';
 
 type LintOptions = {
 	results?: Array<ESLint.LintResult>,

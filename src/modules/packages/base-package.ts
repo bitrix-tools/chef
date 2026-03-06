@@ -14,7 +14,6 @@ import { LintResult } from '../linter/lint.result';
 import { Environment } from '../../environment/environment';
 import { flattenTree } from '../../utils/flatten.tree';
 import { buildDependenciesTree } from '../../utils/package/build.dependencies.tree';
-import { RollupBuildStrategy } from '../services/build/strategies/rollup.strategy';
 import { FileFinder } from '../../utils/file.finder';
 
 import type { PlaywrightTestConfig } from '@playwright/test';
@@ -46,7 +45,13 @@ export abstract class BasePackage
 	#getBuildService(): Promise<BuildService>
 	{
 		return this.#cache.remember('buildService', async () => {
-			const { BuildService } = await import('../services/build/build.service');
+			const [
+				{ BuildService },
+				{ RollupBuildStrategy },
+			] = await Promise.all([
+				import('../services/build/build.service'),
+				import('../services/build/strategies/rollup.strategy'),
+			]);
 
 			return new BuildService(
 				new RollupBuildStrategy(),
