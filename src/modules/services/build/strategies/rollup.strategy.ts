@@ -423,7 +423,7 @@ export class RollupBuildStrategy extends BuildStrategy
 					return Promise.resolve();
 				})(),
 				(() => {
-					if (options.resolve)
+					if (options.resolve || options.standalone)
 					{
 						return nodeResolve({
 							browser: true,

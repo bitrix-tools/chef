@@ -345,6 +345,7 @@ export abstract class BasePackage
 			sourceMaps: bundleConfig.has('sourceMaps')
 				? bundleConfig.get('sourceMaps')
 				: !production,
+			standalone: bundleConfig.get('standalone'),
 			customPlugins: bundleConfig.get('plugins')?.custom,
 			production,
 		};

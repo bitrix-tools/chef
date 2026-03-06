@@ -42,6 +42,7 @@ export interface BundleConfig {
 	browserslist?: boolean | string | string[];
 	minification?: boolean | MinifyOptions;
 	transformClasses?: boolean;
+	standalone?: boolean;
 	sourceMaps?: boolean;
 	tests?: {
 		localization?: {
