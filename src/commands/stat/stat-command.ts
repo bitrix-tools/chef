@@ -18,6 +18,7 @@ import { totalTransferredSizeTask } from './tasks/total.transferred.size.task';
 import { unitTestsTask } from './tasks/unit.tests.task';
 import { e2eTestsTask } from './tasks/e2e.tests.task';
 import { tryBuildTask } from './tasks/try.build.task';
+import { lintTask } from './tasks/lint.task';
 
 const statCommand = new Command('stat');
 
@@ -53,6 +54,7 @@ statCommand
 								return Promise.resolve();
 							},
 							subtasks: [
+								lintTask(extension),
 								tryBuildTask(extension),
 								unitTestsTask(extension),
 								e2eTestsTask(extension),
