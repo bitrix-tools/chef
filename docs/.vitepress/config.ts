@@ -5,8 +5,11 @@ const guideSidebar = [
   { text: 'Getting Started', link: '/guide/getting-started' },
   { text: 'JS Extension', link: '/guide/project-structure' },
   { text: 'TypeScript', link: '/guide/typescript' },
+  { text: 'Vue 3', link: '/guide/vue' },
+  { text: 'Testing', link: '/guide/testing' },
   { text: 'Browserslist', link: '/guide/browserslist' },
   { text: 'Test Setup', link: '/guide/test-setup' },
+  { text: 'Production Mode', link: '/guide/production' },
 ]
 
 const commandsSidebar = [
@@ -22,10 +25,12 @@ const guideSidebarRu = [
   { text: 'Обзор', link: '/ru/guide/overview' },
   { text: 'Начало работы', link: '/ru/guide/getting-started' },
   { text: 'JS-расширение', link: '/ru/guide/project-structure' },
-
   { text: 'TypeScript', link: '/ru/guide/typescript' },
+  { text: 'Vue 3', link: '/ru/guide/vue' },
+  { text: 'Тестирование', link: '/ru/guide/testing' },
   { text: 'Browserslist', link: '/ru/guide/browserslist' },
   { text: 'Настройка тестов', link: '/ru/guide/test-setup' },
+  { text: 'Production-режим', link: '/ru/guide/production' },
 ]
 
 const commandsSidebarRu = [

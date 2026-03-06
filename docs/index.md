@@ -20,18 +20,19 @@ features:
   - icon:
       src: /rollup.svg
     title: Fast Builds
-    details: Rollup + Babel + PostCSS under the hood. Parallel builds for up to 4 extensions at once. Watch mode with hot reload.
+    details: Rollup + Babel + PostCSS under the hood. Vue 3 SFC out of the box. Parallel builds for up to 4 extensions at once. Watch mode with hot reload.
   - icon:
       src: /typescript.svg
     title: TypeScript Out of the Box
     details: Run chef create and get a ready tsconfig, path aliases for all project extensions, and a typed build config.
   - icon:
+      src: /vue.svg
+    title: Vue 3 Out of the Box
+    details: Write Single File Components with TypeScript — Chef compiles templates, styles and scripts. import 'vue' automatically maps to ui.vue3.
+  - icon:
       src: /playwright.svg
     title: Browser Testing
     details: Unit tests with Mocha + Chai run in a real browser via Playwright. E2E tests with automatic authentication — no extra setup.
-  - icon: 📦
-    title: Automatic Dependencies
-    details: Chef analyzes imports during build and updates rel in config.php automatically. No manual dependency management.
   - icon: 🔍
     title: Bundle Analytics
     details: Bundle sizes, dependency tree and duplicates — chef stat shows everything for one extension or a whole group.

@@ -20,18 +20,19 @@ features:
   - icon:
       src: /rollup.svg
     title: Быстрая сборка
-    details: Rollup + Babel + PostCSS под капотом. Параллельная сборка до 4 расширений одновременно. Watch-режим с горячей перезагрузкой.
+    details: Rollup + Babel + PostCSS под капотом. Vue 3 SFC из коробки. Параллельная сборка до 4 расширений одновременно. Watch-режим с горячей перезагрузкой.
   - icon:
       src: /typescript.svg
     title: TypeScript из коробки
     details: Создайте расширение командой chef create — и сразу получите готовый tsconfig, алиасы путей для всех расширений проекта и типизированный конфиг сборки.
   - icon:
+      src: /vue.svg
+    title: Vue 3 из коробки
+    details: Пишите Single File Components с TypeScript — Chef скомпилирует шаблоны, стили и скрипты. import 'vue' автоматически маппится на ui.vue3.
+  - icon:
       src: /playwright.svg
     title: Тесты в браузере
     details: Unit-тесты на Mocha + Chai запускаются в реальном браузере через Playwright. E2E-тесты с автоматической авторизацией — без лишних настроек.
-  - icon: 📦
-    title: Автоматические зависимости
-    details: Chef анализирует импорты при сборке и сам обновляет rel в config.php. Никакого ручного управления зависимостями.
   - icon: 🔍
     title: Аналитика бандлов
     details: Размеры бандлов, дерево зависимостей и дубликаты — chef stat покажет всё по одному расширению или сразу по группе.
