@@ -38,6 +38,12 @@ export abstract class ConfigManager<T>
 		}
 	}
 
+	has(key: string): boolean
+	{
+		return Object.hasOwn(this.#virtualConfig, key)
+			|| Object.hasOwn(this.#externalConfig, key);
+	}
+
 	get(key: string): any
 	{
 		const strategy = this.#registry.get(key);
