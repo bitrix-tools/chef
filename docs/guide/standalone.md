@@ -39,10 +39,10 @@ export default {
 src/index.ts
 ├── import { Loc } from 'main.core'      → external (rel in config.php)
 ├── import { Button } from 'ui.buttons'   → external (rel in config.php)
-└── import { parse } from 'linkifyjs'     → ❌ error (npm package not resolved)
+└── import { parse } from 'linkifyjs'     → requires plugins: { resolve: true }
 ```
 
-Result: the bundle contains only the extension code, dependencies are loaded separately.
+Result: the bundle contains only the extension code, Bitrix dependencies are loaded separately. npm packages are inlined when `plugins: { resolve: true }` is enabled.
 
 ### Standalone Mode
 
@@ -71,13 +71,12 @@ export class LinkParser
 }
 ```
 
-Normal build:
+Normal build (with `plugins: { resolve: true }`):
 
 ```
 ✔ vendor.link-parser
-  └─ link-parser.bundle.js  1.2 KB
-  rel: main.core
-  ❌ linkifyjs — not found
+  └─ link-parser.bundle.js  48.2 KB
+  rel: main.core   ← Bitrix dependencies remain external
 ```
 
 Standalone build:
@@ -93,7 +92,7 @@ Standalone build:
 | | Normal | Standalone |
 |---|---|---|
 | Bitrix extensions | external (`rel`) | inlined |
-| npm packages | not supported | inlined from `node_modules` |
+| npm packages | inlined with `plugins: { resolve: true }` | inlined automatically |
 | Bundle size | minimal | maximal |
 | Dependencies in `config.php` | populated automatically | empty |
 | Code duplication | none | possible |
@@ -124,4 +123,4 @@ In this case the standalone bundle will also be minified.
 
 - **Bundle size** — in standalone mode all dependencies end up in one file. If the extension depends on large libraries (main.core, ui.vue3), the bundle size can grow significantly.
 - **Duplication** — if both a standalone bundle and regular extensions with shared dependencies are loaded on the same page, the dependency code will be loaded twice.
-- **npm packages** — in normal mode npm packages are not resolved (no `node_modules` at runtime). Standalone solves this by inlining them into the bundle.
+- **npm packages** — in normal mode npm packages are only resolved with `plugins: { resolve: true }`, while Bitrix dependencies remain external. In standalone mode both npm packages and Bitrix dependencies are inlined automatically.

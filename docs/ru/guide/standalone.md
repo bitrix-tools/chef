@@ -39,10 +39,10 @@ export default {
 src/index.ts
 ├── import { Loc } from 'main.core'      → external (rel в config.php)
 ├── import { Button } from 'ui.buttons'   → external (rel в config.php)
-└── import { parse } from 'linkifyjs'     → ❌ ошибка (npm-пакет не резолвится)
+└── import { parse } from 'linkifyjs'     → требует plugins: { resolve: true }
 ```
 
-Результат: бандл содержит только код расширения, зависимости загружаются отдельно.
+Результат: бандл содержит только код расширения, Bitrix-зависимости загружаются отдельно. npm-пакеты инлайнятся при включённом `plugins: { resolve: true }`.
 
 ### Standalone-режим
 
@@ -71,13 +71,12 @@ export class LinkParser
 }
 ```
 
-Обычная сборка:
+Обычная сборка (с `plugins: { resolve: true }`):
 
 ```
 ✔ vendor.link-parser
-  └─ link-parser.bundle.js  1.2 KB
-  rel: main.core
-  ❌ linkifyjs — не найден
+  └─ link-parser.bundle.js  48.2 KB
+  rel: main.core   ← Bitrix-зависимости остаются external
 ```
 
 Standalone-сборка:
@@ -93,7 +92,7 @@ Standalone-сборка:
 | | Обычный | Standalone |
 |---|---|---|
 | Bitrix-расширения | external (`rel`) | инлайнятся |
-| npm-пакеты | не поддерживаются | инлайнятся из `node_modules` |
+| npm-пакеты | инлайнятся с `plugins: { resolve: true }` | инлайнятся автоматически |
 | Размер бандла | минимальный | максимальный |
 | Зависимости в `config.php` | заполняются автоматически | пустые |
 | Дублирование кода | нет | возможно |
@@ -124,4 +123,4 @@ chef build vendor.my-app --production
 
 - **Размер бандла** — в standalone все зависимости попадают в один файл. Если расширение зависит от крупных библиотек (main.core, ui.vue3), размер бандла может значительно вырасти.
 - **Дублирование** — если на странице подключены и standalone-бандл, и обычные расширения с общими зависимостями, код зависимостей загрузится дважды.
-- **npm-пакеты** — в обычном режиме npm-пакеты не резолвятся (нет `node_modules` в runtime). Standalone решает эту проблему, инлайня их в бандл.
+- **npm-пакеты** — в обычном режиме npm-пакеты резолвятся только при `plugins: { resolve: true }`, при этом Bitrix-зависимости остаются external. В standalone npm-пакеты и Bitrix-зависимости инлайнятся автоматически.
