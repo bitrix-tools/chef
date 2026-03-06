@@ -29,6 +29,9 @@ import presetEnv from '@babel/preset-env';
 import flowStripTypesPlugin from '@babel/plugin-transform-flow-strip-types';
 import externalHelpersPlugin from '@babel/plugin-external-helpers';
 import transformClassesPlugin from '@babel/plugin-transform-classes';
+import transformClassPropertiesPlugin from '@babel/plugin-transform-class-properties';
+import transformPrivateMethodsPlugin from '@babel/plugin-transform-private-methods';
+import transformPrivatePropertyInObjectPlugin from '@babel/plugin-transform-private-property-in-object';
 
 import { Environment } from '../../../../environment/environment';
 import { PackageResolver } from '../../../packages/package.resolver';
@@ -447,7 +450,7 @@ export class RollupBuildStrategy extends BuildStrategy
 					plugins: [
 						...(options.typescript ? [] : [flowStripTypesPlugin]),
 						externalHelpersPlugin,
-						...(options.transformClasses ? [transformClassesPlugin] : []),
+						...(options.transformClasses ? [transformClassPropertiesPlugin, transformPrivateMethodsPlugin, transformPrivatePropertyInObjectPlugin, transformClassesPlugin] : []),
 					],
 				}),
 				jsonPlugin(),
