@@ -1,21 +1,21 @@
 # chef flow-to-ts
 
-Migrate Flow.js typed code to TypeScript.
+Миграция кода с типизацией Flow.js в TypeScript.
 
 ```bash
 chef flow-to-ts [options]
 ```
 
-## Options
+## Параметры
 
-| Option | Description |
-|--------|-------------|
-| `-p, --path [path]` | Migrate specific directory |
-| `--rm-ts` | Remove existing `.ts` sources after migration |
-| `--rm-js` | Remove original `.js` sources after migration |
+| Параметр | Описание |
+|----------|----------|
+| `-p, --path [path]` | Мигрировать конкретную директорию |
+| `--rm-ts` | Удалить существующие `.ts` файлы после миграции |
+| `--rm-js` | Удалить оригинальные `.js` файлы после миграции |
 
-## What it does
+## Что делает
 
-- Strips Flow type annotations
-- Renames `.js` files to `.ts`
-- Converts Flow syntax to TypeScript equivalents
+- Удаляет аннотации типов Flow
+- Переименовывает `.js` файлы в `.ts`
+- Конвертирует синтаксис Flow в эквиваленты TypeScript

@@ -1,61 +1,61 @@
 # chef test
 
-Run unit and E2E tests using Playwright.
+Запуск unit и E2E тестов через Playwright.
 
 ```bash
 chef test [extensions...] [options]        # unit + e2e
-chef test unit [extensions...] [file?]     # unit only
-chef test e2e [extensions...] [file?]      # e2e only
+chef test unit [extensions...] [file?]     # только unit
+chef test e2e [extensions...] [file?]      # только e2e
 ```
 
-## Subcommands
+## Подкоманды
 
-| Subcommand | Description |
-|------------|-------------|
-| `chef test` | Run unit and e2e tests |
-| `chef test unit` | Run only unit tests |
-| `chef test e2e` | Run only e2e tests |
+| Подкоманда | Описание |
+|------------|----------|
+| `chef test` | Запустить unit и e2e тесты |
+| `chef test unit` | Запустить только unit-тесты |
+| `chef test e2e` | Запустить только e2e-тесты |
 
-## Arguments
+## Аргументы
 
-| Argument | Description |
-|----------|-------------|
-| `extensions` | Extension names or glob patterns (e.g. `main.core`, `ui.bbcode.*`) |
-| `file` | `unit`/`e2e` only — test file name to run (e.g. `dom.test.ts`) |
+| Аргумент | Описание |
+|----------|----------|
+| `extensions` | Имена расширений или glob-паттерны (например `main.core`, `ui.bbcode.*`) |
+| `file` | Только для `unit`/`e2e` — имя файла с тестами (например `dom.test.ts`) |
 
-## Options
+## Параметры
 
-| Option | Description |
-|--------|-------------|
-| `-w, --watch` | Watch for changes and rerun tests |
-| `-p, --path [path]` | Test specific directory |
-| `--headed` | Run browser tests in headed mode |
-| `--debug` | Open browser with DevTools and sourcemaps for debugging |
-| `--grep <pattern>` | Run only tests matching the pattern |
-| `--project <names>` | Run tests in specific browsers (chromium, firefox, webkit) |
+| Параметр | Описание |
+|----------|----------|
+| `-w, --watch` | Отслеживать изменения и перезапускать тесты |
+| `-p, --path [path]` | Тестировать конкретную директорию |
+| `--headed` | Запускать браузерные тесты с видимым окном |
+| `--debug` | Открыть браузер с DevTools и sourcemaps для отладки |
+| `--grep <pattern>` | Запускать только тесты, соответствующие паттерну |
+| `--project <names>` | Запускать тесты в конкретных браузерах (chromium, firefox, webkit) |
 
-## Examples
+## Примеры
 
 ```bash
-# Run all tests
+# Запуск всех тестов
 chef test main.core ui.buttons
 
-# Unit tests only
+# Только unit-тесты
 chef test unit main.core
-chef test unit main.core ./render-tag.test.ts        # Specific file
+chef test unit main.core ./render-tag.test.ts        # Конкретный файл
 
-# E2E tests only
+# Только e2e-тесты
 chef test e2e ui.buttons
-chef test e2e ui.buttons ./render-buttons.spec.ts    # Specific file
+chef test e2e ui.buttons ./render-buttons.spec.ts    # Конкретный файл
 
-# Options
-chef test ui.* --headed                         # With visible browser
-chef test main.core -w                          # Watch mode
-chef test main.core --debug                     # Debug with DevTools and sourcemaps
-chef test --grep "should render"                # Filter by test name
-chef test main.core --project chromium firefox  # Run in specific browsers
+# Опции
+chef test ui.* --headed                         # С видимым браузером
+chef test main.core -w                          # Watch-режим
+chef test main.core --debug                     # Отладка с DevTools и sourcemaps
+chef test --grep "should render"                # Фильтрация по имени теста
+chef test main.core --project chromium firefox  # Запуск в конкретных браузерах
 ```
 
-## See also
+## См. также
 
-- [Test Setup](/guide/test-setup) — how to initialize the test environment
+- [Настройка тестов](/guide/test-setup) — как инициализировать тестовое окружение

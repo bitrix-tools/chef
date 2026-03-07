@@ -1,21 +1,21 @@
-# Test Setup
+# Настройка тестов
 
-To run unit and E2E tests you need to initialize the test environment first:
+Для запуска unit и E2E тестов сначала нужно инициализировать тестовое окружение:
 
 ```bash
 chef init tests
 ```
 
-This creates two files in the project root:
+Команда создаёт два файла в корне проекта:
 
-| File | Description |
-|------|-------------|
-| `playwright.config.ts` | Playwright config for running unit and E2E tests in browser |
-| `.env.test` | Credentials for automatic authentication during tests |
+| Файл | Описание |
+|------|----------|
+| `playwright.config.ts` | Конфиг Playwright для запуска unit и E2E тестов в браузере |
+| `.env.test` | Учётные данные для автоматической аутентификации при тестировании |
 
-## Configure `.env.test`
+## Настройка `.env.test`
 
-Fill in your local Bitrix installation credentials:
+Заполните учётные данные вашей локальной установки Bitrix:
 
 ```env
 BASE_URL=http://localhost
@@ -23,31 +23,31 @@ LOGIN=admin
 PASSWORD=your_password
 ```
 
-| Variable | Description |
-|----------|-------------|
-| `BASE_URL` | URL of your local Bitrix installation |
-| `LOGIN` | Test user login |
-| `PASSWORD` | Test user password |
+| Переменная | Описание |
+|------------|----------|
+| `BASE_URL` | URL локальной установки Bitrix |
+| `LOGIN` | Логин тестового пользователя |
+| `PASSWORD` | Пароль тестового пользователя |
 
-> **Security:** Never commit `.env.test` to version control — it contains sensitive credentials.
+> **Безопасность:** Никогда не коммитьте `.env.test` в систему контроля версий — он содержит конфиденциальные данные.
 
-## Install Playwright browsers
+## Установка браузеров Playwright
 
 ```bash
 npx playwright install
 ```
 
-## Test file structure
+## Структура файлов тестов
 
-Place tests in the extension's `test/` directory:
+Размещайте тесты в директории `test/` расширения:
 
 ```
 my.extension/
 └── test/
-    ├── unit/              # Unit tests (Mocha + Chai, run in browser)
+    ├── unit/              # Unit-тесты (Mocha + Chai, запускаются в браузере)
     │   └── example.test.ts
-    └── e2e/               # E2E tests (Playwright)
+    └── e2e/               # E2E-тесты (Playwright)
         └── example.spec.ts
 ```
 
-Unit tests run inside a real browser via Playwright — Mocha and Chai are available globally. E2E tests use the standard Playwright Test API.
+Unit-тесты запускаются в реальном браузере через Playwright — Mocha и Chai доступны глобально. E2E-тесты используют стандартный Playwright Test API.

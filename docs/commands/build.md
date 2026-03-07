@@ -1,48 +1,48 @@
 # chef build
 
-Build extensions using Rollup with Babel and PostCSS.
+Сборка расширений с помощью Rollup, Babel и PostCSS.
 
 ```bash
 chef build [extensions...] [options]
 ```
 
-## Arguments
+## Аргументы
 
-| Argument | Description |
-|----------|-------------|
-| `extensions` | Extension names or glob patterns (e.g. `main.core`, `ui.bbcode.*`) |
+| Аргумент | Описание |
+|----------|----------|
+| `extensions` | Имена расширений или glob-паттерны (например `main.core`, `ui.bbcode.*`) |
 
-## Options
+## Параметры
 
-| Option | Description |
-|--------|-------------|
-| `-w, --watch` | Watch for changes and rebuild |
-| `-p, --path [path]` | Build specific directory |
-| `-v, --verbose` | Show detailed build logs |
-| `-f, --force` | Skip safety checks and force rebuild |
-| `--production` | Build in production mode (minified, no source maps) |
+| Параметр | Описание |
+|----------|----------|
+| `-w, --watch` | Отслеживать изменения и пересобирать |
+| `-p, --path [path]` | Собрать конкретную директорию |
+| `-v, --verbose` | Подробный вывод сборки |
+| `-f, --force` | Пропустить проверки и принудительно пересобрать |
+| `--production` | Сборка в production-режиме (минификация, без source maps) |
 
-## Examples
+## Примеры
 
 ```bash
-chef build main.core ui.buttons    # Build specific extensions
-chef build main.core -w            # Build and watch for changes
-chef build ui.bbcode.*             # Build extensions matching pattern
-chef build ui.* -w                 # Build all ui.* extensions with watch
-chef build                         # Build all extensions in current directory
-chef build ui.buttons --production # Production build
+chef build main.core ui.buttons    # Собрать конкретные расширения
+chef build main.core -w            # Собрать и отслеживать изменения
+chef build ui.bbcode.*             # Собрать расширения по паттерну
+chef build ui.* -w                 # Собрать все ui.* с отслеживанием
+chef build                         # Собрать все расширения в текущей директории
+chef build ui.buttons --production # Production-сборка
 ```
 
-> **Note:** In zsh, escape glob patterns to prevent shell expansion: `chef build ui.\*`
+## Production-режим
 
-## Production Mode
+Флаг `--production` переключает сборку в production-режим:
 
-The `--production` flag switches to production mode:
-
-| | Dev (default) | Production |
+| | Dev (по умолчанию) | Production |
 |---|---|---|
-| Source maps | enabled | disabled |
-| Minification | disabled | enabled (Terser) |
-| Vue `__file` | included | removed |
+| Source maps | включены | отключены |
+| Минификация | отключена | включена (Terser) |
+| Vue `__file` | добавляется | удаляется |
 
-If `sourceMaps` or `minification` are explicitly set in `bundle.config`, the config value takes priority over the mode.
+Если `sourceMaps` или `minification` явно заданы в `bundle.config` — значение из конфига имеет приоритет над режимом.
+
+> **Примечание:** В zsh экранируйте glob-паттерны, чтобы предотвратить раскрытие оболочкой: `chef build ui.\*`

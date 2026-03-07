@@ -1,10 +1,10 @@
 # Vue 3
 
-Chef supports building [Vue 3](https://vuejs.org/) components. Vue and all its APIs are imported from the Bitrix extension `ui.vue3`.
+Chef поддерживает сборку компонентов [Vue 3](https://vuejs.org/). Vue и все его API импортируются из Bitrix-расширения `ui.vue3`.
 
-## Quick Start
+## Быстрый старт
 
-### Extension Structure
+### Структура расширения
 
 ```
 local/js/vendor/my-widget/
@@ -20,7 +20,7 @@ local/js/vendor/my-widget/
 
 ### bundle.config.ts
 
-Standard config — nothing special for Vue:
+Стандартный конфиг — ничего специального для Vue добавлять не нужно:
 
 ```ts
 export default {
@@ -33,7 +33,7 @@ export default {
 };
 ```
 
-### Entry Point
+### Точка входа
 
 ```ts
 // src/index.ts
@@ -46,11 +46,11 @@ BitrixVue.component('vendor-my-widget', MyWidget);
 BitrixVue.component('vendor-user-card', UserCard);
 ```
 
-`BitrixVue.component()` registers the component globally in the Bitrix Vue application. After that it can be used in any Vue app on the page.
+`BitrixVue.component()` регистрирует компонент глобально в приложении Bitrix Vue. После этого его можно использовать в любом Vue-приложении на странице.
 
-## Components
+## Компоненты
 
-Vue components in Bitrix are regular JS/TS files exporting a component object. The template is specified in the `template` property:
+Vue-компоненты в Bitrix — обычные JS/TS-файлы, экспортирующие объект компонента. Шаблон указывается в свойстве `template`:
 
 ```ts
 // src/components/user-card.ts
@@ -90,9 +90,9 @@ export const UserCard = {
 };
 ```
 
-The `// @vue/component` comment before the component object helps IDEs (WebStorm, VS Code with Volar) recognize the Vue component and enable autocompletion for `template`, `props`, `computed` and other options.
+Комментарий `// @vue/component` перед объектом компонента позволяет IDE (WebStorm, VS Code с Volar) распознавать Vue-компонент и включать автодополнение для `template`, `props`, `computed` и других опций.
 
-### Nested Components
+### Вложенные компоненты
 
 ```ts
 // src/components/my-widget.ts
@@ -128,9 +128,9 @@ export const MyWidget = {
 };
 ```
 
-### Importing Bitrix Extensions
+### Импорт Bitrix-расширений
 
-Components use standard imports from Bitrix extensions — dependencies are resolved automatically during build:
+В компонентах используются стандартные импорты из расширений Bitrix — зависимости определяются автоматически при сборке:
 
 ```ts
 import { Type, Loc, Event } from 'main.core';
@@ -138,7 +138,7 @@ import { EventEmitter } from 'main.core.events';
 import { DateTimeFormat } from 'main.date';
 ```
 
-## Using on a Page
+## Подключение на страницу
 
 ```php
 <?php
@@ -156,21 +156,21 @@ BX.Vue3.BitrixVue.createApp({
 </script>
 ```
 
-## Production Mode
+## Production-режим
 
 ```bash
 chef build vendor.my-widget --production
 ```
 
-In production mode the Vue compiler runs with the `isProduction` flag:
-- **Dev** — components include `__file` with the source path (for Vue Devtools)
-- **Production** — `__file` is removed, the bundle is minified, source maps are disabled
+В production-режиме Vue-компилятор работает с флагом `isProduction`:
+- **Dev** — в компонентах добавляется `__file` с путём к исходнику (для Vue Devtools)
+- **Production** — `__file` удаляется, бандл минифицируется, source maps отключаются
 
 ## Single File Components (SFC)
 
-In addition to the primary approach with JS/TS files, Chef supports building Single File Components — `.vue` files where template, logic and styles are combined in a single file. Chef automatically detects `.vue` files in `src/` and enables the Vue compiler.
+Помимо основного подхода с JS/TS-файлами, Chef поддерживает сборку Single File Components — `.vue` файлов, где шаблон, логика и стили объединены в одном файле. Chef автоматически обнаруживает `.vue` файлы в `src/` и подключает Vue-компилятор.
 
-### SFC Example
+### Пример SFC
 
 ```vue
 <!-- src/components/Counter.vue -->
@@ -208,7 +208,7 @@ export default {
 </style>
 ```
 
-### Entry Point with SFC
+### Точка входа с SFC
 
 ```ts
 // src/index.ts
@@ -218,9 +218,9 @@ import Counter from './components/Counter.vue';
 BitrixVue.component('ui-counter', Counter);
 ```
 
-### `<script lang="ts">` Block
+### Блок `<script lang="ts">`
 
-TypeScript in SFC is supported via the `lang="ts"` attribute:
+TypeScript в SFC поддерживается через атрибут `lang="ts"`:
 
 ```vue
 <script lang="ts">
@@ -244,9 +244,9 @@ export default defineComponent({
 </script>
 ```
 
-### `<style>` Block
+### Блок `<style>`
 
-Styles from `<style>` are extracted into the CSS bundle:
+Стили из `<style>` извлекаются в CSS-бандл:
 
 ```vue
 <style>
@@ -258,19 +258,19 @@ Styles from `<style>` are extracted into the CSS bundle:
 </style>
 ```
 
-::: tip Scoped styles
-`<style scoped>` is also supported — Vue will add unique `data-v-*` attributes for style isolation.
+::: tip Scoped стили
+`<style scoped>` тоже поддерживается — Vue добавит уникальные `data-v-*` атрибуты для изоляции стилей.
 :::
 
-### Typing .vue Files
+### Типизация .vue файлов
 
-For TypeScript to work correctly with `.vue` imports, a module declaration is needed. Chef provides it through the `ui.dev` extension — if `tsconfig.json` is configured in your project (via `chef init build`), `.vue` file typing works out of the box.
+Для корректной работы TypeScript с `.vue` импортами нужна декларация модуля. Chef предоставляет её через расширение `ui.dev` — если в проекте настроен `tsconfig.json` (через `chef init build`), типизация `.vue` файлов работает из коробки.
 
-If your IDE shows an error on `import Component from './Component.vue'`, make sure:
+Если IDE подсвечивает ошибку на `import Component from './Component.vue'`, убедитесь что:
 
-1. You have run `chef init build`
-2. Your `tsconfig.json` includes `types` pointing to `ui.dev`
+1. Выполнена команда `chef init build`
+2. В `tsconfig.json` указан `types` на `ui.dev`
 
-### When to Use SFC
+### Когда использовать SFC
 
-SFC are convenient when the template and styles are tightly coupled with the component and it makes sense to keep them together. However, most Bitrix extensions use the approach with JS/TS files and inline `template` — it's simpler for integration, doesn't require additional type support, and such components are easier to debug.
+SFC удобны когда шаблон и стили тесно связаны с компонентом, и их удобнее хранить рядом. Однако в большинстве Bitrix-расширений используется подход с JS/TS-файлами и `template` в строке — это проще для интеграции, не требует дополнительной поддержки типов, и такие компоненты легче отлаживать.

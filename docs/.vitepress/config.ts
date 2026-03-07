@@ -1,20 +1,20 @@
 import { defineConfig } from 'vitepress'
 
-const guideSidebar = [
-  { text: 'Overview', link: '/guide/overview' },
-  { text: 'Getting Started', link: '/guide/getting-started' },
-  { text: 'JS Extension', link: '/guide/project-structure' },
+const guideSidebarRu = [
+  { text: 'Обзор', link: '/guide/overview' },
+  { text: 'Начало работы', link: '/guide/getting-started' },
+  { text: 'JS-расширение', link: '/guide/project-structure' },
   { text: 'TypeScript', link: '/guide/typescript' },
   { text: 'Vue 3', link: '/guide/vue' },
-  { text: 'Testing', link: '/guide/testing' },
+  { text: 'Тестирование', link: '/guide/testing' },
   { text: 'Browserslist', link: '/guide/browserslist' },
-  { text: 'Test Setup', link: '/guide/test-setup' },
-  { text: 'Production Mode', link: '/guide/production' },
+  { text: 'Настройка тестов', link: '/guide/test-setup' },
+  { text: 'Production-режим', link: '/guide/production' },
   { text: 'Standalone', link: '/guide/standalone' },
-  { text: 'Migration from CLI', link: '/guide/migration' },
+  { text: 'Миграция с CLI', link: '/guide/migration' },
 ]
 
-const commandsSidebar = [
+const commandsSidebarRu = [
   { text: 'build', link: '/commands/build' },
   { text: 'test', link: '/commands/test' },
   { text: 'stat', link: '/commands/stat' },
@@ -23,32 +23,32 @@ const commandsSidebar = [
   { text: 'flow-to-ts', link: '/commands/flow-to-ts' },
 ]
 
-const guideSidebarRu = [
-  { text: 'Обзор', link: '/ru/guide/overview' },
-  { text: 'Начало работы', link: '/ru/guide/getting-started' },
-  { text: 'JS-расширение', link: '/ru/guide/project-structure' },
-  { text: 'TypeScript', link: '/ru/guide/typescript' },
-  { text: 'Vue 3', link: '/ru/guide/vue' },
-  { text: 'Тестирование', link: '/ru/guide/testing' },
-  { text: 'Browserslist', link: '/ru/guide/browserslist' },
-  { text: 'Настройка тестов', link: '/ru/guide/test-setup' },
-  { text: 'Production-режим', link: '/ru/guide/production' },
-  { text: 'Standalone', link: '/ru/guide/standalone' },
-  { text: 'Миграция с CLI', link: '/ru/guide/migration' },
+const guideSidebarEn = [
+  { text: 'Overview', link: '/en/guide/overview' },
+  { text: 'Getting Started', link: '/en/guide/getting-started' },
+  { text: 'JS Extension', link: '/en/guide/project-structure' },
+  { text: 'TypeScript', link: '/en/guide/typescript' },
+  { text: 'Vue 3', link: '/en/guide/vue' },
+  { text: 'Testing', link: '/en/guide/testing' },
+  { text: 'Browserslist', link: '/en/guide/browserslist' },
+  { text: 'Test Setup', link: '/en/guide/test-setup' },
+  { text: 'Production Mode', link: '/en/guide/production' },
+  { text: 'Standalone', link: '/en/guide/standalone' },
+  { text: 'Migration from CLI', link: '/en/guide/migration' },
 ]
 
-const commandsSidebarRu = [
-  { text: 'build', link: '/ru/commands/build' },
-  { text: 'test', link: '/ru/commands/test' },
-  { text: 'stat', link: '/ru/commands/stat' },
-  { text: 'create', link: '/ru/commands/create' },
-  { text: 'init', link: '/ru/commands/init' },
-  { text: 'flow-to-ts', link: '/ru/commands/flow-to-ts' },
+const commandsSidebarEn = [
+  { text: 'build', link: '/en/commands/build' },
+  { text: 'test', link: '/en/commands/test' },
+  { text: 'stat', link: '/en/commands/stat' },
+  { text: 'create', link: '/en/commands/create' },
+  { text: 'init', link: '/en/commands/init' },
+  { text: 'flow-to-ts', link: '/en/commands/flow-to-ts' },
 ]
 
 export default defineConfig({
   title: 'Chef',
-  description: 'CLI toolkit for building, testing and maintaining Bitrix extensions',
+  description: 'CLI-инструмент для сборки, тестирования и поддержки расширений Bitrix',
   base: '/chef/',
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: '/chef/logo-nav.svg' }],
@@ -56,26 +56,26 @@ export default defineConfig({
 
   locales: {
     root: {
-      label: 'English',
-      lang: 'en-US',
-    },
-    ru: {
       label: 'Русский',
       lang: 'ru-RU',
-      description: 'CLI-инструмент для сборки, тестирования и поддержки расширений Bitrix',
+    },
+    en: {
+      label: 'English',
+      lang: 'en-US',
+      description: 'CLI toolkit for building, testing and maintaining Bitrix extensions',
       themeConfig: {
         nav: [
-          { text: 'Начало работы', link: '/ru/guide/getting-started' },
-          { text: 'Документация', link: '/ru/guide/overview' },
-          { text: 'Команды', link: '/ru/commands/build' },
+          { text: 'Getting Started', link: '/en/guide/getting-started' },
+          { text: 'Documentation', link: '/en/guide/overview' },
+          { text: 'Commands', link: '/en/commands/build' },
         ],
         sidebar: [
-          { text: 'Руководство', items: guideSidebarRu },
-          { text: 'Команды', items: commandsSidebarRu },
+          { text: 'Guide', items: guideSidebarEn },
+          { text: 'Commands', items: commandsSidebarEn },
         ],
         footer: {
-          message: 'Распространяется под лицензией MIT.',
-          copyright: 'Создано для разработчиков Bitrix',
+          message: 'Released under the MIT License.',
+          copyright: 'Made for Bitrix developers',
         },
       },
     },
@@ -86,14 +86,14 @@ export default defineConfig({
     siteTitle: 'Chef',
 
     nav: [
-      { text: 'Getting Started', link: '/guide/getting-started' },
-      { text: 'Documentation', link: '/guide/overview' },
-      { text: 'Commands', link: '/commands/build' },
+      { text: 'Начало работы', link: '/guide/getting-started' },
+      { text: 'Документация', link: '/guide/overview' },
+      { text: 'Команды', link: '/commands/build' },
     ],
 
     sidebar: [
-      { text: 'Guide', items: guideSidebar },
-      { text: 'Commands', items: commandsSidebar },
+      { text: 'Руководство', items: guideSidebarRu },
+      { text: 'Команды', items: commandsSidebarRu },
     ],
 
     socialLinks: [
@@ -102,8 +102,8 @@ export default defineConfig({
     ],
 
     footer: {
-      message: 'Released under the MIT License.',
-      copyright: 'Made for Bitrix developers',
+      message: 'Распространяется под лицензией MIT.',
+      copyright: 'Создано для разработчиков Bitrix',
     },
   },
 })

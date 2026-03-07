@@ -1,65 +1,65 @@
-# Migration from @bitrix/cli
+# Миграция с @bitrix/cli
 
-This guide helps you migrate from `@bitrix/cli` to `@bitrix/chef`. Chef is a rewritten tool with the same purpose: building, testing, and maintaining Bitrix JS extensions.
+Это руководство поможет перейти с `@bitrix/cli` на `@bitrix/chef`. Chef — это переработанный с нуля инструмент с тем же назначением: сборка, тестирование и поддержка JS-расширений Bitrix.
 
-## Why migrate
+## Зачем переходить
 
-- **Speed** — significantly faster builds thanks to an optimized pipeline
-- **TypeScript** — native TypeScript support out of the box, including configs (`bundle.config.ts`)
-- **Modern targets** — defaults to `baseline widely available` instead of `IE >= 11`
-- **E2E tests** — Playwright support for end-to-end testing
-- **New commands** — `chef stat` for dependency analysis, `chef flow-to-ts` for Flow migration
-- **Node.js 22+** — leverages modern platform features
+- **Скорость** — сборка значительно быстрее за счёт оптимизированного пайплайна
+- **TypeScript** — нативная поддержка TypeScript из коробки, включая конфиги (`bundle.config.ts`)
+- **Современные цели** — по умолчанию `baseline widely available` вместо `IE >= 11`
+- **E2E-тесты** — поддержка Playwright для end-to-end тестирования
+- **Новые команды** — `chef stat` для анализа зависимостей, `chef flow-to-ts` для миграции с Flow
+- **Node.js 22+** — использует современные возможности платформы
 
-## Installation
+## Установка
 
 ```bash
-# Remove old CLI
+# Удалить старый CLI
 npm uninstall -g @bitrix/cli
 
-# Install Chef
+# Установить Chef
 npm install -g @bitrix/chef
 ```
 
-After installation, the `chef` command is available globally. The old `bitrix` command is no longer used.
+После установки команда `chef` доступна глобально. Старая команда `bitrix` больше не используется.
 
-## Commands
+## Команды
 
-| @bitrix/cli | @bitrix/chef | Notes |
-|-------------|-------------|-------|
-| `bitrix build` | `chef build` | Fully compatible |
-| `bitrix build -w` | `chef build -w` | Watch mode |
-| `bitrix build -p ./path` | `chef build -p ./path` | Build by path |
-| `bitrix test` | `chef test` | Fully reworked (Playwright) |
-| `bitrix create name` | `chef create name` | Fully compatible |
-| — | `chef init` | **New.** Project initialization |
-| — | `chef stat` | **New.** Dependency and size analysis |
-| — | `chef flow-to-ts` | **New.** Flow.js → TypeScript migration |
-| — | `chef test unit` | **New.** Run unit tests only |
-| — | `chef test e2e` | **New.** Run e2e tests only |
+| @bitrix/cli | @bitrix/chef | Примечание |
+|-------------|-------------|------------|
+| `bitrix build` | `chef build` | Полностью совместимы |
+| `bitrix build -w` | `chef build -w` | Watch-режим |
+| `bitrix build -p ./path` | `chef build -p ./path` | Сборка по пути |
+| `bitrix test` | `chef test` | Полностью переработано (Playwright) |
+| `bitrix create name` | `chef create name` | Полностью совместимы |
+| — | `chef init` | **Новое.** Инициализация проекта |
+| — | `chef stat` | **Новое.** Анализ зависимостей и размеров |
+| — | `chef flow-to-ts` | **Новое.** Миграция Flow.js → TypeScript |
+| — | `chef test unit` | **Новое.** Запуск только unit-тестов |
+| — | `chef test e2e` | **Новое.** Запуск только e2e-тестов |
 
-### Building by name
+### Сборка по имени
 
-In CLI, building only worked by path. In Chef, you can build by extension name and use glob patterns:
+В CLI сборка работала только по пути. В Chef можно собирать по имени расширения и использовать glob-паттерны:
 
 ```bash
-# Build specific extensions
+# Сборка конкретных расширений
 chef build main.core ui.buttons
 
-# Build by pattern
+# Сборка по паттерну
 chef build ui.bbcode.*
 
-# Build all extensions in current directory (as before)
+# Сборка всех расширений в текущей директории (как раньше)
 chef build
 ```
 
 ## bundle.config
 
-Configs are fully compatible — existing `bundle.config.js` files work without changes. But there are a few differences to be aware of.
+Конфиги полностью совместимы — существующие `bundle.config.js` работают без изменений. Но есть несколько отличий, которые стоит учесть.
 
-### TypeScript support
+### Поддержка TypeScript
 
-Chef supports `bundle.config.ts`:
+Chef поддерживает `bundle.config.ts`:
 
 ```ts
 import type { BundleConfig } from '@bitrix/chef';
@@ -71,32 +71,32 @@ export default {
 } as BundleConfig;
 ```
 
-The `BundleConfig` type provides autocompletion and type checking in the IDE.
+Тип `BundleConfig` обеспечивает автодополнение и проверку типов в IDE.
 
 ### browserslist → targets
 
-The `browserslist` option has been renamed to `targets`:
+Параметр `browserslist` переименован в `targets`:
 
 ```ts
-// Before (@bitrix/cli)
+// Было (@bitrix/cli)
 export default {
-  browserslist: true,        // read from .browserslistrc
-  browserslist: ['last 2 versions'],  // or directly
+  browserslist: true,        // читать из .browserslistrc
+  browserslist: ['last 2 versions'],  // или напрямую
 };
 
-// After (@bitrix/chef)
+// Стало (@bitrix/chef)
 export default {
-  targets: ['last 2 versions'],  // if you need custom targets
+  targets: ['last 2 versions'],  // если нужны кастомные цели
 };
 ```
 
-**Key difference:** in Chef, you don't need to specify `browserslist: true`. Chef automatically looks for `.browserslistrc` up the directory tree. If no file is found, it defaults to `baseline widely available`.
+**Важное отличие:** в Chef не нужно указывать `browserslist: true`. Chef автоматически ищет `.browserslistrc` вверх по дереву директорий. Если файл не найден, используется `baseline widely available`.
 
-The old `browserslist` option continues to work for backwards compatibility.
+Старый параметр `browserslist` продолжает работать для обратной совместимости.
 
-### New: rebuild
+### Новое: rebuild
 
-Chef supports the `rebuild` option — automatic rebuilding of dependent extensions:
+Chef поддерживает параметр `rebuild` — автоматическая пересборка зависимых расширений:
 
 ```ts
 export default {
@@ -104,16 +104,16 @@ export default {
 };
 ```
 
-`rebuild` accepts an array of extension names. Chef will rebuild them automatically after building the current extension and show the status of each in the report.
+`rebuild` принимает массив имён расширений. Chef пересоберёт их автоматически после сборки текущего расширения и покажет статус каждого в отчёте.
 
-### Default browser targets
+### Целевые браузеры по умолчанию
 
 | | @bitrix/cli | @bitrix/chef |
 |---|-------------|--------------|
-| **Default** | `IE >= 11, last 4 version` | `baseline widely available` |
-| **Resolution** | `browserslist` in config | `.browserslistrc` file → fallback to default |
+| **По умолчанию** | `IE >= 11, last 4 version` | `baseline widely available` |
+| **Определение** | Параметр `browserslist` в конфиге | Файл `.browserslistrc` → fallback на дефолт |
 
-If your project needs to support older browsers, specify targets explicitly:
+Если ваш проект должен поддерживать старые браузеры, укажите цели явно:
 
 ```ts
 export default {
@@ -121,50 +121,50 @@ export default {
 };
 ```
 
-Or create a `.browserslistrc` in the project root:
+Или создайте `.browserslistrc` в корне проекта:
 
 ```
 IE >= 11
 last 4 version
 ```
 
-## Testing
+## Тестирование
 
-Testing in Chef has been completely reworked.
+Тестирование в Chef полностью переработано.
 
 | | @bitrix/cli | @bitrix/chef |
 |---|-------------|--------------|
-| **Framework** | Mocha + JSDom | Playwright + Mocha |
-| **Environment** | JSDom (emulation) | Real browsers (Chromium, Firefox, WebKit) |
-| **E2E tests** | — | Playwright Test |
-| **TypeScript** | — | Native support |
-| **Debug** | — | `--debug` with DevTools |
+| **Фреймворк** | Mocha + JSDom | Playwright + Mocha |
+| **Среда** | JSDom (эмуляция) | Реальные браузеры (Chromium, Firefox, WebKit) |
+| **E2E-тесты** | — | Playwright Test |
+| **TypeScript** | — | Нативная поддержка |
+| **Debug** | — | `--debug` с DevTools |
 
-### Initialization
+### Инициализация
 
 ```bash
 chef init tests
 ```
 
-Creates `playwright.config.ts` and `.env.test` in the project root.
+Создаёт `playwright.config.ts` и `.env.test` в корне проекта.
 
-### Install browsers
+### Установка браузеров
 
 ```bash
 npx playwright install
 ```
 
-### Test structure
+### Структура тестов
 
-Tests moved from `test/` to subdirectories:
+Тесты переехали из `test/` в подкаталоги:
 
 ```
-# Before (@bitrix/cli)
+# Было (@bitrix/cli)
 my.extension/
 └── test/
     └── example.test.js
 
-# After (@bitrix/chef)
+# Стало (@bitrix/chef)
 my.extension/
 └── test/
     ├── unit/
@@ -173,9 +173,9 @@ my.extension/
         └── example.spec.ts
 ```
 
-### Test syntax
+### Синтаксис тестов
 
-Unit tests still use Mocha + Chai, the syntax hasn't changed:
+Unit-тесты по-прежнему используют Mocha + Chai, синтаксис не изменился:
 
 ```ts
 import { describe, it } from 'mocha';
@@ -190,55 +190,55 @@ describe('MyFeature', () => {
 
 ## TypeScript
 
-Chef has native TypeScript support. To set up the project:
+Chef имеет нативную поддержку TypeScript. Для настройки проекта:
 
 ```bash
 chef init build
 ```
 
-This creates `tsconfig.json`, `aliases.tsconfig.json`, and `.browserslistrc`.
+Команда создаст `tsconfig.json`, `aliases.tsconfig.json` и `.browserslistrc`.
 
-After that, you can write extensions in TypeScript and import by name:
+После этого расширения можно писать на TypeScript и импортировать по имени:
 
 ```ts
 import { Loc, Tag } from 'main.core';
 import { Button } from 'ui.buttons';
 ```
 
-See [TypeScript](/guide/typescript) for details.
+Подробнее — в разделе [TypeScript](/guide/typescript).
 
-## Step-by-step migration plan
+## Пошаговый план миграции
 
-1. **Install Chef**
+1. **Установить Chef**
    ```bash
    npm uninstall -g @bitrix/cli
    npm install -g @bitrix/chef
    ```
 
-2. **Initialize the project**
+2. **Инициализировать проект**
    ```bash
    cd /path/to/project
    chef init
    ```
 
-3. **Verify the build**
+3. **Проверить сборку**
    ```bash
    chef build my.extension
    ```
-   Existing `bundle.config.js` files work without changes.
+   Существующие `bundle.config.js` работают без изменений.
 
-4. **Update configs** (optional)
-   - Rename `bundle.config.js` → `bundle.config.ts`
-   - Replace `browserslist` → `targets`
+4. **Обновить конфиги** (опционально)
+   - Переименовать `bundle.config.js` → `bundle.config.ts`
+   - Заменить `browserslist` → `targets`
 
-5. **Set up tests** (if used)
+5. **Настроить тесты** (если используются)
    ```bash
    chef init tests
    npx playwright install
    ```
-   Move tests to `test/unit/`.
+   Перенести тесты в `test/unit/`.
 
-6. **Update CI/CD**
-   - Replace `bitrix build` → `chef build`
-   - Replace `bitrix test` → `chef test`
-   - Ensure Node.js >= 22
+6. **Обновить CI/CD**
+   - Заменить `bitrix build` → `chef build`
+   - Заменить `bitrix test` → `chef test`
+   - Убедиться что Node.js >= 22

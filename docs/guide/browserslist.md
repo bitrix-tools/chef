@@ -1,18 +1,18 @@
 # Browserslist
 
-Chef uses [browserslist](https://github.com/browserslist/browserslist) to determine target browsers for [Babel](https://babeljs.io/) transpilation and [PostCSS](https://postcss.org/) autoprefixing.
+Chef использует [browserslist](https://github.com/browserslist/browserslist) для определения целевых браузеров при транспиляции через [Babel](https://babeljs.io/) и автопрефиксинге CSS через [PostCSS](https://postcss.org/).
 
-By default, Chef targets `baseline widely available` — browsers with [widely available](https://web-platform-dx.github.io/web-features/) support for modern web features.
+По умолчанию Chef нацеливается на `baseline widely available` — браузеры с [широкой поддержкой](https://web-platform-dx.github.io/web-features/) современных веб-возможностей.
 
-## How it works
+## Как это работает
 
-1. If `targets` is specified in `bundle.config.ts`, Chef uses it directly
-2. Otherwise, Chef looks for a `.browserslistrc` file up the directory tree from the extension
-3. If no file is found, the default `baseline widely available` is used
+1. Если в `bundle.config.ts` указан параметр `targets` — используется он
+2. Иначе Chef ищет файл `.browserslistrc` вверх по дереву директорий от расширения
+3. Если файл не найден — используется `baseline widely available`
 
-## Custom targets
+## Кастомные цели
 
-Specify targets directly in the config:
+Указать цели напрямую в конфиге:
 
 ```ts
 export default {
@@ -21,26 +21,26 @@ export default {
 };
 ```
 
-Or create a `.browserslistrc` file in the project root (use `chef init build` to generate one):
+Или создать файл `.browserslistrc` в корне проекта (команда `chef init build` создаст его автоматически):
 
 ```
 baseline widely available
 ```
 
-## Migrating from `browserslist`
+## Миграция с `browserslist`
 
-The `browserslist` option in `bundle.config` is deprecated. Use `targets` instead:
+Параметр `browserslist` в `bundle.config` объявлен устаревшим. Используйте `targets` вместо него:
 
 ```ts
-// Before
+// Было
 export default {
   browserslist: ['last 2 versions'],
 };
 
-// After
+// Стало
 export default {
   targets: ['last 2 versions'],
 };
 ```
 
-The old `browserslist` option continues to work for backwards compatibility.
+Старый параметр `browserslist` продолжает работать для обратной совместимости.

@@ -1,26 +1,26 @@
 # chef stat
 
-Analyze bundle size and dependency tree for extensions.
+Анализ размера бандла и дерева зависимостей расширений.
 
 ```bash
 chef stat [extensions...] [options]
 ```
 
-## Arguments
+## Аргументы
 
-| Argument | Description |
-|----------|-------------|
-| `extensions` | Extension names or glob patterns (e.g. `main.core`, `ui.bbcode.*`) |
+| Аргумент | Описание |
+|----------|----------|
+| `extensions` | Имена расширений или glob-паттерны (например `main.core`, `ui.bbcode.*`) |
 
-## Options
+## Параметры
 
-| Option | Description |
-|--------|-------------|
-| `-p, --path [path]` | Analyze specific directory |
+| Параметр | Описание |
+|----------|----------|
+| `-p, --path [path]` | Анализировать конкретную директорию |
 
-## Examples
+## Примеры
 
 ```bash
-chef stat main.core ui.buttons     # Analyze specific extensions
-chef stat ui.*                     # Analyze all ui.* extensions
+chef stat main.core ui.buttons     # Анализ конкретных расширений
+chef stat ui.*                     # Анализ всех ui.* расширений
 ```

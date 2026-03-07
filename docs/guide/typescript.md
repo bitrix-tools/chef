@@ -1,34 +1,34 @@
 # TypeScript
 
-Chef supports [TypeScript](https://www.typescriptlang.org/) out of the box — `.ts` file compilation is built into the build pipeline. No additional setup is needed for building.
+Chef поддерживает [TypeScript](https://www.typescriptlang.org/) из коробки — компиляция `.ts` файлов встроена в конвейер сборки. Никаких дополнительных настроек для сборки не требуется.
 
-## Initialization
+## Инициализация
 
-For TypeScript to work in the IDE and for correct type checking, initialize the configuration:
+Для работы TypeScript в IDE и корректной проверки типов нужно инициализировать конфигурацию:
 
 ```bash
 chef init build
 ```
 
-The command creates three files in the project root:
+Команда создаёт три файла в корне проекта:
 
-| File | Description |
-|------|-------------|
-| `aliases.tsconfig.json` | Path aliases for all extensions in the project |
-| `tsconfig.json` | Main TypeScript config, extends aliases |
-| `.browserslistrc` | Target browsers for Babel and PostCSS |
+| Файл | Описание |
+|------|----------|
+| `aliases.tsconfig.json` | Алиасы путей для всех расширений в проекте |
+| `tsconfig.json` | Основной конфиг TypeScript, расширяет алиасы |
+| `.browserslistrc` | Целевые браузеры для Babel и PostCSS |
 
-After initialization, TypeScript extensions are created automatically:
+После инициализации TypeScript-расширения создаются автоматически:
 
 ```bash
-chef create ui.buttons    # will create bundle.config.ts and src/ui.buttons.ts
+chef create ui.buttons    # создаст bundle.config.ts и src/ui.buttons.ts
 ```
 
-## Configuration
+## Конфигурация
 
 ### tsconfig.json
 
-Generated with recommended settings:
+Генерируется с рекомендованными настройками:
 
 ```json
 {
@@ -49,18 +49,18 @@ Generated with recommended settings:
 }
 ```
 
-If `tsconfig.json` already existed, Chef will not overwrite it. Add the line manually:
+Если `tsconfig.json` уже существовал, Chef не перезапишет его. Добавьте строку вручную:
 
 ```json
 {
   "extends": "./aliases.tsconfig.json",
-  // your settings...
+  // ваши настройки...
 }
 ```
 
 ### aliases.tsconfig.json
 
-Auto-generated based on all extensions in the project:
+Автоматически генерируется на основе всех расширений в проекте:
 
 ```json
 {
@@ -75,39 +75,39 @@ Auto-generated based on all extensions in the project:
 }
 ```
 
-This makes extension imports by name work both in the editor and during type checking:
+Благодаря этому импорты расширений по имени работают и в редакторе, и при проверке типов:
 
 ```ts
 import { Loc, Tag } from 'main.core';
 import { Button } from 'ui.buttons';
 ```
 
-### Updating aliases
+### Обновление алиасов
 
-When adding new extensions to the project, regenerate aliases:
+При добавлении новых расширений в проект алиасы нужно регенерировать:
 
 ```bash
 chef init build
 ```
 
-The command rescans all extensions and updates `aliases.tsconfig.json`. `tsconfig.json` is not overwritten.
+Команда пересканирует все расширения и обновит `aliases.tsconfig.json`. `tsconfig.json` при этом не перезаписывается.
 
-## Bitrix API Types
+## Типизация Bitrix API
 
-The `ui.dev` extension provides types for the global `BX` object and other Bitrix APIs. Chef automatically includes it in `aliases.tsconfig.json` via the `types` field if the extension is found in the project.
+Расширение `ui.dev` предоставляет типы для глобального объекта `BX` и других API Bitrix. Chef автоматически подключает его в `aliases.tsconfig.json` через поле `types`, если расширение найдено в проекте.
 
-After that, typed access is available in code:
+После этого в коде доступна типизация:
 
 ```ts
-BX.message('hello');          // type string
-BX.ready(() => { /* ... */ }); // callback
+BX.message('hello');          // тип string
+BX.ready(() => { /* ... */ }); // колбэк
 ```
 
-## Writing Extensions
+## Написание расширений
 
-### Entry Point
+### Точка входа
 
-All public classes and functions are exported from the entry point:
+Все публичные классы и функции экспортируются из точки входа:
 
 ```ts
 // src/ui.buttons.ts
@@ -134,9 +134,9 @@ export class ButtonGroup {
 }
 ```
 
-### Importing Dependencies
+### Импорт зависимостей
 
-Other extensions are imported by name — like npm packages:
+Другие расширения импортируются по имени — как npm-пакеты:
 
 ```ts
 import { Tag, Loc } from 'main.core';
@@ -144,11 +144,11 @@ import { Button } from 'ui.buttons';
 import { Popup } from 'main.popup';
 ```
 
-During build, Chef replaces these imports with references to global dependency namespaces and writes the dependencies to `config.php`.
+При сборке Chef подменяет эти импорты на обращения к глобальным неймспейсам зависимостей, а сами зависимости записывает в `config.php`.
 
 ### bundle.config.ts
 
-The build config is also typed — import `BundleConfig` from `@bitrix/chef`:
+Конфиг сборки тоже типизирован — импортируйте `BundleConfig` из `@bitrix/chef`:
 
 ```ts
 import type { BundleConfig } from '@bitrix/chef';
@@ -163,9 +163,9 @@ export default {
 } as BundleConfig;
 ```
 
-## Tests in TypeScript
+## Тесты на TypeScript
 
-### Unit Tests
+### Unit-тесты
 
 ```ts
 // test/unit/ui.buttons.test.ts
@@ -187,13 +187,13 @@ describe('Button', () => {
 });
 ```
 
-For IDE type support, install locally:
+Для работы типов в IDE установите локально:
 
 ```bash
 npm install --save-dev @types/mocha @types/chai
 ```
 
-### E2E Tests
+### E2E-тесты
 
 ```ts
 // test/e2e/ui.buttons.spec.ts
@@ -205,15 +205,15 @@ test('button renders on page', async ({ page }) => {
 });
 ```
 
-For Playwright types in the IDE:
+Для работы типов Playwright в IDE:
 
 ```bash
 npm install --save-dev @playwright/test
 ```
 
-## Type Checking
+## Проверка типов
 
-Chef does not run `tsc --noEmit` automatically during build — it only compiles `.ts` to `.js` via Rollup. For explicit type checking, run manually:
+Chef не запускает `tsc --noEmit` автоматически при сборке — он только компилирует `.ts` в `.js` через Rollup. Для явной проверки типов запустите вручную:
 
 ```bash
 npx tsc --noEmit

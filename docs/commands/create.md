@@ -1,35 +1,35 @@
 # chef create
 
-Scaffold a new Bitrix extension with the standard file structure.
+Создание нового расширения Bitrix со стандартной структурой файлов.
 
 ```bash
 chef create <name> [options]
 ```
 
-## Arguments
+## Аргументы
 
-| Argument | Description |
-|----------|-------------|
-| `name` | Extension name (e.g. `my.extension`) |
+| Аргумент | Описание |
+|----------|----------|
+| `name` | Имя расширения (например `my.extension`) |
 
-## Options
+## Параметры
 
-| Option | Description |
-|--------|-------------|
-| `-p, --path [path]` | Create extension in specific directory |
-| `-t, --tech [tech]` | Technology: `ts` (default) or `js` |
-| `-f, --force` | Overwrite existing directory without asking |
+| Параметр | Описание |
+|----------|----------|
+| `-p, --path [path]` | Создать расширение в указанной директории |
+| `-t, --tech [tech]` | Технология: `ts` (по умолчанию) или `js` |
+| `-f, --force` | Перезаписать существующую директорию без подтверждения |
 
-## Examples
+## Примеры
 
 ```bash
-chef create my.extension                          # Create TypeScript extension
-chef create my.extension --tech js                # Create JavaScript extension
-chef create my.extension -p ./local/js/vendor     # Create in specific directory
-chef create my.extension -f                       # Overwrite without confirmation
+chef create my.extension                          # Создать TypeScript-расширение
+chef create my.extension --tech js                # Создать JavaScript-расширение
+chef create my.extension -p ./local/js/vendor     # Создать в конкретной директории
+chef create my.extension -f                       # Перезаписать без подтверждения
 ```
 
-## Generated files
+## Сгенерированные файлы
 
 ```
 my.extension/

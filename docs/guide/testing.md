@@ -1,28 +1,28 @@
-# Testing
+# Тестирование
 
-Chef runs tests in a real browser via [Playwright](https://playwright.dev/). Two types of tests are supported: unit tests ([Mocha](https://mochajs.org/) + [Chai](https://www.chaijs.com/)) and E2E tests (Playwright Test API).
+Chef запускает тесты в реальном браузере через [Playwright](https://playwright.dev/). Поддерживаются два вида тестов: unit-тесты ([Mocha](https://mochajs.org/) + [Chai](https://www.chaijs.com/)) и E2E-тесты (Playwright Test API).
 
-## Setup
+## Подготовка
 
-Initialize the test environment:
+Инициализируйте тестовое окружение:
 
 ```bash
 chef init tests
 ```
 
-This creates `playwright.config.ts` and `.env.test` in the project root. See [Test Setup](/guide/test-setup) for details.
+Команда создаёт `playwright.config.ts` и `.env.test` в корне проекта. Подробнее — в разделе [Настройка тестов](/guide/test-setup).
 
-Install Playwright browsers:
+Установите браузеры Playwright:
 
 ```bash
 npx playwright install
 ```
 
-## Unit Tests
+## Unit-тесты
 
-Unit tests are written with Mocha + Chai and run in a real browser. The extension source code is compiled and loaded on the page alongside the tests — the actual bundle is tested as it would work in the browser.
+Unit-тесты пишутся на Mocha + Chai и запускаются в реальном браузере. Исходный код расширения компилируется и загружается на страницу вместе с тестами — тестируется настоящий бандл, как он будет работать в браузере.
 
-### Structure
+### Структура
 
 ```
 local/js/vendor/my-extension/
@@ -32,7 +32,7 @@ local/js/vendor/my-extension/
         └── utils.test.ts
 ```
 
-### Basic Test
+### Базовый тест
 
 ```ts
 // test/unit/my-extension.test.ts
@@ -60,9 +60,9 @@ describe('MyExtension', () => {
 });
 ```
 
-### DOM Testing
+### Тестирование DOM
 
-Tests run in the browser, so you have full DOM access:
+Тесты запускаются в браузере, поэтому доступен полноценный DOM:
 
 ```ts
 import { describe, it, afterEach } from 'mocha';
@@ -106,7 +106,7 @@ describe('Button', () => {
 });
 ```
 
-### Async Testing
+### Тестирование асинхронного кода
 
 ```ts
 import { describe, it } from 'mocha';
@@ -139,7 +139,7 @@ describe('DataLoader', () => {
 });
 ```
 
-### EventEmitter Testing
+### Тестирование EventEmitter
 
 ```ts
 import { describe, it } from 'mocha';
@@ -164,19 +164,19 @@ describe('Chat', () => {
 });
 ```
 
-### Test Types
+### Типы для тестов
 
-`mocha`, `chai` and their types are included in Chef and used when running `chef test`. For IDE autocompletion, install the types locally:
+`mocha`, `chai` и их типы включены в Chef и используются при запуске `chef test`. Для работы автодополнения в IDE установите типы локально:
 
 ```bash
 npm install --save-dev @types/mocha @types/chai
 ```
 
-## E2E Tests
+## E2E-тесты
 
-E2E tests use the [Playwright Test API](https://playwright.dev/docs/api/class-test) and run in a real browser on an actual Bitrix page.
+E2E-тесты используют [Playwright Test API](https://playwright.dev/docs/api/class-test) и запускаются в реальном браузере на реальной странице Bitrix.
 
-### Structure
+### Структура
 
 ```
 local/js/vendor/my-extension/
@@ -186,7 +186,7 @@ local/js/vendor/my-extension/
         └── navigation.spec.ts
 ```
 
-### Basic Test
+### Базовый тест
 
 ```ts
 // test/e2e/my-extension.spec.ts
@@ -206,26 +206,26 @@ test('button click shows popup', async ({ page }) => {
 
   const popup = page.locator('.popup-window');
   await expect(popup).toBeVisible();
-  await expect(popup).toContainText('Settings');
+  await expect(popup).toContainText('Настройки');
 });
 ```
 
-### Authenticated Tests
+### Тесты с авторизацией
 
-For pages that require authentication, import `test` from `ui.test.e2e.auth`. Before each test, automatic login will be performed using credentials from `.env.test`:
+Для страниц, требующих авторизации, импортируйте `test` из `ui.test.e2e.auth`. Перед каждым тестом будет выполнен автоматический вход с учётными данными из `.env.test`:
 
 ```ts
 import { test, expect } from 'ui.test.e2e.auth';
 
 test('admin panel is accessible', async ({ page }) => {
-  // page is already authenticated
+  // page уже авторизован
   await page.goto('/bitrix/admin/');
 
   await expect(page.locator('.adm-header')).toBeVisible();
 });
 ```
 
-### Working with Forms
+### Работа с формами
 
 ```ts
 import { test, expect } from 'ui.test.e2e.auth';
@@ -233,7 +233,7 @@ import { test, expect } from 'ui.test.e2e.auth';
 test('should save form data', async ({ page }) => {
   await page.goto('/settings/');
 
-  await page.fill('input[name="title"]', 'New Title');
+  await page.fill('input[name="title"]', 'Новый заголовок');
   await page.selectOption('select[name="category"]', 'news');
   await page.click('button[type="submit"]');
 
@@ -241,7 +241,7 @@ test('should save form data', async ({ page }) => {
 });
 ```
 
-### Waiting for AJAX Requests
+### Ожидание AJAX-запросов
 
 ```ts
 import { test, expect } from 'ui.test.e2e.auth';
@@ -249,7 +249,7 @@ import { test, expect } from 'ui.test.e2e.auth';
 test('should load items via ajax', async ({ page }) => {
   await page.goto('/items/');
 
-  // Wait for AJAX request to complete
+  // Ждём завершения AJAX-запроса
   const response = page.waitForResponse('**/ajax/**');
   await page.click('.load-more');
   await response;
@@ -259,48 +259,48 @@ test('should load items via ajax', async ({ page }) => {
 });
 ```
 
-## Running Tests
+## Запуск тестов
 
 ```bash
-# All tests for an extension
+# Все тесты расширения
 chef test vendor.my-extension
 
-# Unit tests only
+# Только unit-тесты
 chef test unit vendor.my-extension
 
-# E2E tests only
+# Только e2e-тесты
 chef test e2e vendor.my-extension
 
-# Specific file
+# Конкретный файл
 chef test unit vendor.my-extension ./utils.test.ts
 
-# Tests matching pattern
+# Тесты по паттерну
 chef test vendor.* --grep "should render"
 
-# Watch mode — rerun on changes
+# Watch-режим — перезапуск при изменениях
 chef test vendor.my-extension -w
 ```
 
-### Debugging
+### Отладка
 
 ```bash
-# Open browser with DevTools
+# Открыть браузер с DevTools
 chef test vendor.my-extension --debug
 
-# With visible browser window
+# С видимым окном браузера
 chef test vendor.my-extension --headed
 
-# In a specific browser
+# В конкретном браузере
 chef test vendor.my-extension --project chromium
 ```
 
-In `--debug` mode, source maps are enabled and DevTools are opened — you can set breakpoints directly in your TypeScript source code.
+В режиме `--debug` включаются source maps и открываются DevTools — можно ставить breakpoints прямо в исходном TypeScript-коде.
 
-## Tips
+## Советы
 
-### Test Isolation
+### Изоляция тестов
 
-Each test should be independent. Use `beforeEach`/`afterEach` for setup and cleanup:
+Каждый тест должен быть независимым. Используйте `beforeEach`/`afterEach` для настройки и очистки:
 
 ```ts
 describe('TodoList', () => {
@@ -320,15 +320,15 @@ describe('TodoList', () => {
   });
 
   it('should start empty', () => {
-    // Does not depend on the previous test
+    // Не зависит от предыдущего теста
     assert.equal(list.getCount(), 0);
   });
 });
 ```
 
-### Test Organization
+### Организация тестов
 
-Group tests by functionality:
+Группируйте тесты по функциональности:
 
 ```ts
 describe('UserService', () => {

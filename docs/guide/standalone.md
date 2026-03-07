@@ -1,16 +1,16 @@
-# Standalone Build
+# Standalone-сборка
 
-By default Chef builds extensions as [IIFE](https://developer.mozilla.org/en-US/docs/Glossary/IIFE) modules: dependencies on other Bitrix extensions are declared as `external` and loaded via the dependency system (`rel` in `config.php`). In standalone mode all dependencies are inlined directly into the bundle — the output is a single self-contained file.
+По умолчанию Chef собирает расширение в формате [IIFE](https://developer.mozilla.org/en-US/docs/Glossary/IIFE)-модуля: зависимости от других Bitrix-расширений объявляются как `external` и подключаются через систему зависимостей (`rel` в `config.php`). В standalone-режиме все зависимости инлайнятся прямо в бандл — на выходе получается один самодостаточный файл.
 
-## When to Use
+## Когда использовать
 
-- The extension must work without the Bitrix dependency system
-- You need a single file with no external dependencies (e.g. for embedding on external sites)
-- You use npm packages that should be included in the bundle
+- Расширение должно работать без системы зависимостей Bitrix
+- Нужен один файл без внешних зависимостей (например, для встраивания на внешние сайты)
+- Используются npm-пакеты, которые должны быть включены в бандл
 
-## Configuration
+## Настройка
 
-Add `standalone: true` to `bundle.config.js`:
+Добавьте `standalone: true` в `bundle.config.js`:
 
 ```js
 export default {
@@ -20,7 +20,7 @@ export default {
 };
 ```
 
-Or in TypeScript:
+Или в TypeScript:
 
 ```ts
 // bundle.config.ts
@@ -31,31 +31,31 @@ export default {
 };
 ```
 
-## What Happens During Build
+## Что происходит при сборке
 
-### Normal Mode (default)
-
-```
-src/index.ts
-├── import { Loc } from 'main.core'      → external (rel in config.php)
-├── import { Button } from 'ui.buttons'   → external (rel in config.php)
-└── import { parse } from 'linkifyjs'     → requires plugins: { resolve: true }
-```
-
-Result: the bundle contains only the extension code, Bitrix dependencies are loaded separately. npm packages are inlined when `plugins: { resolve: true }` is enabled.
-
-### Standalone Mode
+### Обычный режим (по умолчанию)
 
 ```
 src/index.ts
-├── import { Loc } from 'main.core'      → inlined into bundle
-├── import { Button } from 'ui.buttons'   → inlined into bundle
-└── import { parse } from 'linkifyjs'     → inlined from node_modules
+├── import { Loc } from 'main.core'      → external (rel в config.php)
+├── import { Button } from 'ui.buttons'   → external (rel в config.php)
+└── import { parse } from 'linkifyjs'     → требует plugins: { resolve: true }
 ```
 
-Result: the bundle contains everything — Bitrix extensions and npm packages alike.
+Результат: бандл содержит только код расширения, Bitrix-зависимости загружаются отдельно. npm-пакеты инлайнятся при включённом `plugins: { resolve: true }`.
 
-## Example
+### Standalone-режим
+
+```
+src/index.ts
+├── import { Loc } from 'main.core'      → инлайнится в бандл
+├── import { Button } from 'ui.buttons'   → инлайнится в бандл
+└── import { parse } from 'linkifyjs'     → инлайнится из node_modules
+```
+
+Результат: бандл содержит весь код — и расширения Bitrix, и npm-пакеты.
+
+## Пример
 
 ```ts
 // src/index.ts
@@ -71,35 +71,35 @@ export class LinkParser
 }
 ```
 
-Normal build (with `plugins: { resolve: true }`):
+Обычная сборка (с `plugins: { resolve: true }`):
 
 ```
 ✔ vendor.link-parser
   └─ link-parser.bundle.js  48.2 KB
-  rel: main.core   ← Bitrix dependencies remain external
+  rel: main.core   ← Bitrix-зависимости остаются external
 ```
 
-Standalone build:
+Standalone-сборка:
 
 ```
 ✔ vendor.link-parser
   └─ link-parser.bundle.js  48.5 KB
-  rel: (empty — all dependencies inside)
+  rel: (пусто — все зависимости внутри)
 ```
 
-## Mode Comparison
+## Сравнение режимов
 
-| | Normal | Standalone |
+| | Обычный | Standalone |
 |---|---|---|
-| Bitrix extensions | external (`rel`) | inlined |
-| npm packages | inlined with `plugins: { resolve: true }` | inlined automatically |
-| Bundle size | minimal | maximal |
-| Dependencies in `config.php` | populated automatically | empty |
-| Code duplication | none | possible |
+| Bitrix-расширения | external (`rel`) | инлайнятся |
+| npm-пакеты | инлайнятся с `plugins: { resolve: true }` | инлайнятся автоматически |
+| Размер бандла | минимальный | максимальный |
+| Зависимости в `config.php` | заполняются автоматически | пустые |
+| Дублирование кода | нет | возможно |
 
-## Combining with Other Options
+## Совмещение с другими опциями
 
-Standalone works with all other `bundle.config` options:
+Standalone работает со всеми остальными опциями `bundle.config`:
 
 ```js
 export default {
@@ -110,16 +110,16 @@ export default {
 };
 ```
 
-It is also compatible with `--production`:
+Также совместим с `--production`:
 
 ```bash
 chef build vendor.my-app --production
 ```
 
-In this case the standalone bundle will also be minified.
+В этом случае standalone-бандл будет ещё и минифицирован.
 
-## Important
+## Важно
 
-- **Bundle size** — in standalone mode all dependencies end up in one file. If the extension depends on large libraries (main.core, ui.vue3), the bundle size can grow significantly.
-- **Duplication** — if both a standalone bundle and regular extensions with shared dependencies are loaded on the same page, the dependency code will be loaded twice.
-- **npm packages** — in normal mode npm packages are only resolved with `plugins: { resolve: true }`, while Bitrix dependencies remain external. In standalone mode both npm packages and Bitrix dependencies are inlined automatically.
+- **Размер бандла** — в standalone все зависимости попадают в один файл. Если расширение зависит от крупных библиотек (main.core, ui.vue3), размер бандла может значительно вырасти.
+- **Дублирование** — если на странице подключены и standalone-бандл, и обычные расширения с общими зависимостями, код зависимостей загрузится дважды.
+- **npm-пакеты** — в обычном режиме npm-пакеты резолвятся только при `plugins: { resolve: true }`, при этом Bitrix-зависимости остаются external. В standalone npm-пакеты и Bitrix-зависимости инлайнятся автоматически.

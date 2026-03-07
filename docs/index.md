@@ -3,62 +3,62 @@ layout: home
 
 hero:
   name: Chef
-  text: Frontend toolkit for Bitrix
-  tagline: Write modern TypeScript, build, test and analyze extensions — with one tool.
+  text: Инструментарий для фронтенда на Bitrix
+  tagline: Пишите современный TypeScript, собирайте, тестируйте и анализируйте расширения — одним инструментом.
   image:
     src: /logo.svg
     alt: Chef
   actions:
     - theme: brand
-      text: Getting Started
+      text: Начало работы
       link: /guide/getting-started
     - theme: alt
-      text: Documentation
+      text: Документация
       link: /guide/overview
 
 features:
   - icon:
       src: /rollup.svg
-    title: Fast Builds
-    details: Rollup + Babel + PostCSS under the hood. Vue 3 SFC out of the box. Parallel builds for up to 4 extensions at once. Watch mode with hot reload.
+    title: Быстрая сборка
+    details: Rollup + Babel + PostCSS под капотом. Vue 3 SFC из коробки. Параллельная сборка до 4 расширений одновременно. Watch-режим с горячей перезагрузкой.
   - icon:
       src: /typescript.svg
-    title: TypeScript Out of the Box
-    details: Run chef create and get a ready tsconfig, path aliases for all project extensions, and a typed build config.
+    title: TypeScript из коробки
+    details: Создайте расширение командой chef create — и сразу получите готовый tsconfig, алиасы путей для всех расширений проекта и типизированный конфиг сборки.
   - icon:
       src: /vue.svg
-    title: Vue 3 Out of the Box
-    details: Write Single File Components with TypeScript — Chef compiles templates, styles and scripts. import 'vue' automatically maps to ui.vue3.
+    title: Vue 3 из коробки
+    details: Пишите Single File Components с TypeScript — Chef скомпилирует шаблоны, стили и скрипты. import 'vue' автоматически маппится на ui.vue3.
   - icon:
       src: /playwright.svg
-    title: Browser Testing
-    details: Unit tests with Mocha + Chai run in a real browser via Playwright. E2E tests with automatic authentication — no extra setup.
+    title: Тесты в браузере
+    details: Unit-тесты на Mocha + Chai запускаются в реальном браузере через Playwright. E2E-тесты с автоматической авторизацией — без лишних настроек.
   - icon: 🔍
-    title: Bundle Analytics
-    details: Bundle sizes, dependency tree and duplicates — chef stat shows everything for one extension or a whole group.
+    title: Аналитика бандлов
+    details: Размеры бандлов, дерево зависимостей и дубликаты — chef stat покажет всё по одному расширению или сразу по группе.
   - icon: 🚀
-    title: Scaffold in Seconds
-    details: chef create ui.buttons will create an extension with the right structure, config, entry point and test templates.
+    title: Scaffold за секунду
+    details: chef create ui.buttons создаст расширение с правильной структурой, конфигом, точкой входа и шаблонами тестов.
 ---
 
 <div class="home-code">
 
-## Try it now
+## Попробуйте прямо сейчас
 
 ```bash
-# Install
+# Установка
 npm install -g @bitrix/chef
 
-# Initialize project
+# Инициализация проекта
 chef init
 
-# Create a new extension
+# Создать новое расширение
 chef create ui.my-feature
 
-# Build
+# Собрать
 chef build ui.my-feature
 
-# Test
+# Тесты
 chef test ui.my-feature
 ```
 

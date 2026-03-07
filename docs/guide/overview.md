@@ -1,47 +1,47 @@
-# Overview
+# Обзор
 
-Chef is a CLI tool for building, testing and maintaining Bitrix frontend extensions. It finds `bundle.config.js` or `bundle.config.ts` in the project structure and runs a [Rollup](https://rollupjs.org/) build for each discovered package.
+Chef — CLI-инструмент для сборки, тестирования и поддержки фронтенд-расширений Bitrix. Он находит `bundle.config.js` или `bundle.config.ts` в структуре проекта и запускает [Rollup](https://rollupjs.org/)-сборку для каждого найденного пакета.
 
-## JS Extensions
+## JS-расширения
 
-The recommended way to organize frontend code in Bitrix is JS extensions. These are standalone modules with an entry point, build configuration and a PHP manifest. Chef is primarily designed to work with them.
+Рекомендуемый способ организации фронтенд-кода в Bitrix — JS-расширения. Это самостоятельные модули с точкой входа, конфигурацией сборки и PHP-манифестом. Именно с ними в первую очередь предназначен работать Chef.
 
-A JS extension is loaded on a page via `\Bitrix\Main\UI\Extension::load('vendor.name')`, supports a dependency system and can be imported in other extensions.
+JS-расширение подключается на страницу через `\Bitrix\Main\UI\Extension::load('vendor.name')`, поддерживает систему зависимостей и может импортироваться в коде других расширений.
 
 ```
 local/js/ui/buttons/
-├── bundle.config.ts       # Build configuration
-├── config.php             # PHP manifest (dependencies, assets)
+├── bundle.config.ts       # Конфигурация сборки
+├── config.php             # PHP-манифест (зависимости, ресурсы)
 ├── src/
-│   └── buttons.ts         # Entry point
+│   └── buttons.ts         # Точка входа
 ├── dist/
-│   ├── buttons.bundle.js  # Compiled JS
-│   └── buttons.bundle.css # Compiled styles
+│   ├── buttons.bundle.js  # Скомпилированный JS
+│   └── buttons.bundle.css # Скомпилированные стили
 └── test/
-    ├── unit/              # Unit tests (Mocha + Chai)
+    ├── unit/              # Unit-тесты (Mocha + Chai)
     │   └── buttons.test.ts
-    └── e2e/               # E2E tests (Playwright)
+    └── e2e/               # E2E-тесты (Playwright)
         └── buttons.spec.ts
 ```
 
-The extension name is derived from its path: `local/js/ui/buttons/` → `ui.buttons`.
+Имя расширения формируется из пути: `local/js/ui/buttons/` → `ui.buttons`.
 
-Only JS extensions support the dependency system — they can be imported in other extensions and listed as dependencies in `config.php`.
+Только JS-расширения поддерживают систему зависимостей — их можно импортировать в коде других расширений и указывать как зависимости в `config.php`.
 
-Create a new extension with:
+Новое расширение можно создать командой:
 
 ```bash
-chef create ui.buttons              # TypeScript (default)
+chef create ui.buttons              # TypeScript (по умолчанию)
 chef create ui.buttons --tech js    # JavaScript
 ```
 
-## Other Entities
+## Другие сущности
 
-Besides JS extensions, Chef can build frontend code in other Bitrix entities: components, templates and activities. However, this approach is considered deprecated — such entities do not support the dependency system, and in upcoming versions their build will trigger a console warning.
+Помимо JS-расширений, Chef может собирать фронтенд-код в других сущностях Bitrix: компонентах, шаблонах и активити. Однако этот подход считается устаревшим — такие сущности не поддерживают систему зависимостей, и в ближайших версиях их сборка начнёт вызывать предупреждение в консоли.
 
-### Components <Badge type="warning" text="deprecated" />
+### Компоненты <Badge type="warning" text="deprecated" />
 
-Visual page blocks with server and client logic.
+Визуальные блоки страницы с серверной и клиентской логикой.
 
 ```
 local/components/vendor/news.list/
@@ -53,9 +53,9 @@ local/components/vendor/news.list/
     └── index.bundle.js
 ```
 
-### Component Templates <Badge type="warning" text="deprecated" />
+### Шаблоны компонентов <Badge type="warning" text="deprecated" />
 
-Responsible for rendering component data. Nested inside the component directory.
+Отвечают за отображение данных компонента. Вложены внутрь директории компонента.
 
 ```
 local/components/vendor/news.list/templates/custom/
@@ -67,9 +67,9 @@ local/components/vendor/news.list/templates/custom/
     └── index.bundle.js
 ```
 
-### Site Templates <Badge type="warning" text="deprecated" />
+### Шаблоны сайтов <Badge type="warning" text="deprecated" />
 
-Define the overall design and layout of pages.
+Определяют общий дизайн и разметку страниц.
 
 ```
 local/templates/my_template/
@@ -82,9 +82,9 @@ local/templates/my_template/
     └── index.bundle.js
 ```
 
-### Components in Site Templates <Badge type="warning" text="deprecated" />
+### Компоненты в шаблонах сайтов <Badge type="warning" text="deprecated" />
 
-Overridden component templates inside a site template.
+Переопределённые шаблоны компонентов внутри шаблона сайта.
 
 ```
 local/templates/my_template/components/bitrix/news.list/custom/
@@ -96,9 +96,9 @@ local/templates/my_template/components/bitrix/news.list/custom/
     └── index.bundle.js
 ```
 
-### Activities (Business Processes) <Badge type="warning" text="deprecated" />
+### Активити (бизнес-процессы) <Badge type="warning" text="deprecated" />
 
-Actions for the business process designer. May contain frontend for configuring parameters.
+Действия для дизайнера бизнес-процессов. Могут содержать фронтенд для настройки параметров.
 
 ```
 local/activities/custom/my_activity/
@@ -109,13 +109,13 @@ local/activities/custom/my_activity/
     └── index.bundle.js
 ```
 
-::: warning Building deprecated entities
-In upcoming updates, building components, templates and activities will trigger a console warning.
+::: warning Сборка устаревших сущностей
+В ближайших обновлениях сборка компонентов, шаблонов и активити начнёт вызывать предупреждение в консоли.
 
-Components, templates and activities do not support the dependency system — they cannot be imported in code or listed as dependencies in `config.php`. Therefore, all frontend code should be moved to JS extensions, leaving only initialization in other entities:
+Компоненты, шаблоны и активити не поддерживают систему зависимостей — их нельзя импортировать в коде или указывать как зависимости в `config.php`. Поэтому весь фронтенд-код следует выносить в JS-расширения, а в остальных сущностях оставлять только инициализацию:
 
 ```php
-// component template.php — only extension initialization
+// template.php компонента — только инициализация расширения
 \Bitrix\Main\UI\Extension::load('vendor.news-list');
 ```
 
@@ -128,130 +128,130 @@ Components, templates and activities do not support the dependency system — th
 ```
 :::
 
-## Project Structure
+## Структура проекта
 
-A standard Bitrix installation with `bitrix/` and `local/` directories. Root-level configs are created by `chef init` commands:
+Стандартная установка Bitrix с директориями `bitrix/` и `local/`. Конфиги в корне проекта создаются командами `chef init`:
 
 ```
 project/
-├── .browserslistrc                    # Target browsers (chef init build)
-├── tsconfig.json                      # TypeScript config (chef init build)
-├── aliases.tsconfig.json              # Extension path aliases (chef init build)
-├── playwright.config.ts               # Playwright config (chef init tests)
-├── .env.test                          # Test credentials (chef init tests)
+├── .browserslistrc                    # Целевые браузеры (chef init build)
+├── tsconfig.json                      # Конфиг TypeScript (chef init build)
+├── aliases.tsconfig.json              # Алиасы путей расширений (chef init build)
+├── playwright.config.ts               # Конфиг Playwright (chef init tests)
+├── .env.test                          # Учётные данные для тестов (chef init tests)
 │
-├── bitrix/                            # ⛔ System directory (read-only)
+├── bitrix/                            # ⛔ Системная директория (только чтение)
 │   └── js/
 │       └── main/
-│           └── core/                  # System extension: main.core
+│           └── core/                  # Системное расширение: main.core
 │
-└── local/                             # ✅ User directory (build happens here)
+└── local/                             # ✅ Пользовательская директория (сборка здесь)
     ├── js/
     │   └── vendor/
-    │       └── my-extension/          # JS extension: vendor.my-extension
+    │       └── my-extension/          # JS-расширение: vendor.my-extension
     ├── components/
     │   └── vendor/
-    │       └── news.list/             # Component
+    │       └── news.list/             # Компонент
     │           └── templates/
-    │               └── custom/        # Component template
+    │               └── custom/        # Шаблон компонента
     ├── templates/
-    │   └── my_template/               # Site template
+    │   └── my_template/               # Шаблон сайта
     │       └── components/
     │           └── bitrix/
     │               └── menu/
-    │                   └── horizontal/ # Component in site template
+    │                   └── horizontal/ # Компонент в шаблоне сайта
     ├── activities/
     │   └── custom/
-    │       └── my_activity/           # Activity
+    │       └── my_activity/           # Активити
     └── modules/
         └── vendor.module/
             └── install/
                 └── js/
                     └── vendor/
-                        └── feature/   # Extension inside a module
+                        └── feature/   # Расширение в модуле
 ```
 
-::: danger bitrix/ directory — read only
-`bitrix/` contains the platform core and is overwritten on updates. Chef uses `bitrix/js/` only for reading — to resolve dependencies and determine namespaces of core extensions. Builds only run in `local/`.
+::: danger Директория bitrix/ — только для чтения
+`bitrix/` содержит ядро платформы и перезаписывается при обновлении. Chef использует `bitrix/js/` только для чтения — чтобы разрешить зависимости и определить неймспейсы расширений ядра. Сборка работает только в `local/`.
 :::
 
-::: tip Overriding system extensions
-If you need to modify a system extension — copy it to `local/js/` and modify it there. When loading an extension, Bitrix first looks in `local/js/`, then in `bitrix/js/`, so the local copy automatically replaces the system one. Chef works the same way: `local/js/` is checked first when resolving dependencies.
+::: tip Переопределение системных расширений
+Если нужно изменить системное расширение — скопируйте его в `local/js/` и модифицируйте там. При подключении расширения на страницу Bitrix сначала ищет его в `local/js/`, затем в `bitrix/js/`, поэтому локальная копия автоматически заменит системную. Chef работает так же: при разрешении зависимости `local/js/` проверяется первой.
 :::
 
-### Initializing configs
+### Инициализация конфигов
 
 ```bash
-chef init build    # Creates tsconfig.json, aliases.tsconfig.json, .browserslistrc
-chef init tests    # Creates playwright.config.ts, .env.test
+chef init build    # Создаёт tsconfig.json, aliases.tsconfig.json, .browserslistrc
+chef init tests    # Создаёт playwright.config.ts, .env.test
 ```
 
-`chef init build` scans all extensions and generates `aliases.tsconfig.json` with paths so that imports like `import { Tag } from 'main.core'` work in code. See [TypeScript](/guide/typescript) for details.
+`chef init build` сканирует все расширения и генерирует `aliases.tsconfig.json` с путями, чтобы в коде работали импорты вида `import { Tag } from 'main.core'`. Подробнее — в разделе [Настройка TypeScript](/guide/typescript).
 
-`chef init tests` creates a Playwright config and credentials file for automatic authentication during testing. See [Test Setup](/guide/test-setup) for details.
+`chef init tests` создаёт конфиг Playwright и файл с учётными данными для автоматической аутентификации при тестировании. Подробнее — в разделе [Настройка тестов](/guide/test-setup).
 
-## How the Build Works
+## Как работает сборка
 
-### Specifying Packages
+### Указание пакетов
 
-Most Chef commands (`build`, `test`, `stat`) accept extension lists in the same way.
+Большинство команд Chef (`build`, `test`, `stat`) принимают список расширений одинаковым способом.
 
-**One or more extensions by name:**
+**Одно или несколько расширений по имени:**
 
 ```bash
 chef build ui.buttons
-chef build ui.buttons main.core ui.icons    # Multiple, space-separated
+chef build ui.buttons main.core ui.icons    # Несколько через пробел
 ```
 
-**Glob pattern** — to work with a group of extensions at once:
+**Glob-паттерн** — для работы сразу с группой расширений:
 
 ```bash
-chef build ui.*                    # All extensions with ui. prefix
-chef build ui.bbcode.*             # All extensions inside ui.bbcode
-chef build main.core ui.* crm.*   # Mix names and patterns
+chef build ui.*                    # Все расширения с префиксом ui.
+chef build ui.bbcode.*             # Все расширения внутри ui.bbcode
+chef build main.core ui.* crm.*   # Можно комбинировать имена и паттерны
 ```
 
 ::: tip
-In zsh, escape glob patterns to prevent the shell from expanding them:
+В zsh glob-паттерны нужно экранировать, чтобы оболочка не раскрывала их сама:
 ```bash
 chef build ui.\*
 ```
 :::
 
-**Directory scan** — without arguments, Chef scans the current directory and builds all found extensions:
+**Сканирование директории** — без аргументов Chef сканирует текущую директорию и собирает все найденные расширения:
 
 ```bash
 cd local/js/ui
-chef build               # All extensions inside ui/
+chef build               # Все расширения внутри ui/
 
-chef build -p local/js/ui    # Or specify a directory explicitly via --path
+chef build -p local/js/ui    # Или явно указать директорию через --path
 ```
 
-The same rules apply to `chef test` and `chef stat`:
+Те же правила работают для `chef test` и `chef stat`:
 
 ```bash
-chef test ui.*               # Run tests for all ui.* extensions
-chef stat ui.* main.core     # Stats for a group of extensions
+chef test ui.*               # Запустить тесты для всех ui.* расширений
+chef stat ui.* main.core     # Статистика по группе расширений
 ```
 
-### Build Pipeline
+### Конвейер сборки
 
-When running `chef build`, for each package:
+При запуске `chef build` для каждого пакета выполняется:
 
-1. **Read configuration** — parse `bundle.config.ts`
-2. **Build the bundle** via Rollup:
-   - [TypeScript](https://www.typescriptlang.org/) — compile `.ts` files
-   - [Babel](https://babeljs.io/) — transpile to target browsers
-   - [PostCSS](https://postcss.org/) — autoprefixes, SVG optimization, inline images
-   - [Terser](https://terser.org/) — minification (if enabled)
-3. **Update `config.php`** — analyze imports and write dependencies to `rel`
-4. **Source maps** — generate source maps (if enabled)
+1. **Чтение конфигурации** — парсинг `bundle.config.ts`
+2. **Сборка бандла** через Rollup:
+   - [TypeScript](https://www.typescriptlang.org/) — компиляция `.ts` файлов
+   - [Babel](https://babeljs.io/) — транспиляция в целевые браузеры
+   - [PostCSS](https://postcss.org/) — автопрефиксы, SVG-оптимизация, инлайн-картинки
+   - [Terser](https://terser.org/) — минификация (если включена)
+3. **Обновление `config.php`** — анализ импортов и запись зависимостей в `rel`
+4. **Source maps** — генерация карт исходников (если включена)
 
-Up to 4 packages are built in parallel.
+Собирается до 4 пакетов параллельно.
 
-### Namespaces
+### Неймспейсы
 
-Each extension declares a global namespace in `bundle.config.ts`:
+Каждое расширение объявляет глобальный неймспейс в `bundle.config.ts`:
 
 ```ts
 export default {
@@ -261,7 +261,7 @@ export default {
 };
 ```
 
-After building, everything exported from the entry point becomes accessible via this namespace:
+При сборке всё, что экспортируется из точки входа, становится доступно через этот неймспейс:
 
 ```ts
 // src/buttons.ts
@@ -269,18 +269,18 @@ export class Button { /* ... */ }
 export class ButtonGroup { /* ... */ }
 ```
 
-In the browser after build:
+После сборки в браузере:
 
 ```js
 const button = new BX.UI.Buttons.Button();
 const group = new BX.UI.Buttons.ButtonGroup();
 ```
 
-If `namespace` is not set, `window` is used by default — exports become global variables.
+Если `namespace` не указан, по умолчанию используется `window` — экспорты становятся глобальными переменными.
 
-#### Bundle anatomy
+#### Устройство бандла
 
-The built bundle is an IIFE that extends the namespace object. Here is a simplified example for the `ui.buttons` extension with a dependency on `main.core`:
+Собранный бандл — это IIFE, которая расширяет объект неймспейса. Вот упрощённый пример для расширения `ui.buttons` с зависимостью от `main.core`:
 
 ```js
 /* eslint-disable */
@@ -303,20 +303,20 @@ this.BX.UI = this.BX.UI || {};
 }((this.BX.UI.Buttons = this.BX.UI.Buttons || {}), BX));
 ```
 
-- `this.BX.UI.Buttons` — the namespace object, all exports go into it
-- `BX` — the global namespace of the `main.core` dependency, passed as an IIFE argument
-- `import { Tag } from 'main.core'` in source becomes `main_core.Tag` in the bundle
+- `this.BX.UI.Buttons` — объект неймспейса, все экспорты попадают в него
+- `BX` — глобальный неймспейс зависимости `main.core`, передаётся как аргумент IIFE
+- `import { Tag } from 'main.core'` в исходнике превращается в обращение к `main_core.Tag`
 
-### Dependencies
+### Зависимости
 
-Standard ES imports are used in source code:
+В исходном коде используются стандартные ES-импорты:
 
 ```ts
 import { Loc, Tag } from 'main.core';
 import { Button } from 'ui.buttons';
 ```
 
-During build, Chef analyzes imports, replaces them with global namespace references and updates `config.php`:
+Chef при сборке анализирует импорты, подменяет их на обращения к глобальным неймспейсам и обновляет `config.php`:
 
 ```php
 return [
@@ -329,11 +329,11 @@ return [
 ];
 ```
 
-If the extension does not depend on `main.core`, Chef automatically adds `'skip_core' => true` to avoid loading the core unnecessarily.
+Если расширение не зависит от `main.core`, Chef автоматически добавляет `'skip_core' => true`, чтобы не загружать ядро без необходимости.
 
-### Protected Extensions
+### Защищённые расширения
 
-An extension can be marked as protected in `bundle.config.ts`:
+Расширение можно пометить как защищённое в `bundle.config.ts`:
 
 ```ts
 export default {
@@ -343,4 +343,4 @@ export default {
 };
 ```
 
-Protected extensions are skipped during scanning (`chef build` without arguments or with a glob pattern), but are built when explicitly named.
+Защищённые расширения пропускаются при сканировании (`chef build` без аргументов или с glob-паттерном), но собираются при явном указании имени.

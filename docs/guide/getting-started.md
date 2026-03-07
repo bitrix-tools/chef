@@ -1,44 +1,44 @@
-# Getting Started
+# Начало работы
 
-## Requirements
+## Требования
 
 - Node.js >= 22
-- Bitrix project
+- Проект на Bitrix
 
-## Installation
+## Установка
 
 ```bash
 npm install -g @bitrix/chef
 ```
 
-## Project Initialization
+## Инициализация проекта
 
-Navigate to the root of your Bitrix project and run:
+Перейдите в корень вашего Bitrix-проекта и выполните:
 
 ```bash
 chef init
 ```
 
-This command runs full initialization — creates configs for both build and testing at once:
+Эта команда запускает полную инициализацию — создаёт конфиги для сборки и тестирования сразу:
 
-| File | Description |
-|------|-------------|
-| `tsconfig.json` | TypeScript config with recommended settings |
-| `aliases.tsconfig.json` | Auto-generated path aliases for all extensions |
-| `.browserslistrc` | Target browsers for Babel and PostCSS |
-| `playwright.config.ts` | Playwright config for unit and e2e tests |
-| `.env.test` | Credentials for authentication during testing |
+| Файл | Описание |
+|------|----------|
+| `tsconfig.json` | Конфиг TypeScript с рекомендованными настройками |
+| `aliases.tsconfig.json` | Автоматически сгенерированные алиасы путей для всех расширений |
+| `.browserslistrc` | Целевые браузеры для Babel и PostCSS |
+| `playwright.config.ts` | Конфиг Playwright для unit и e2e тестов |
+| `.env.test` | Учётные данные для аутентификации при тестировании |
 
-To initialize only build or only tests — use subcommands:
+Если нужно инициализировать только сборку или только тесты — используйте подкоманды:
 
 ```bash
-chef init build    # Only tsconfig.json, aliases.tsconfig.json, .browserslistrc
-chef init tests    # Only playwright.config.ts, .env.test
+chef init build    # Только tsconfig.json, aliases.tsconfig.json, .browserslistrc
+chef init tests    # Только playwright.config.ts, .env.test
 ```
 
-### Manual steps after initialization
+### Ручные настройки после инициализации
 
-**`.env.test`** — fill in your local Bitrix installation credentials:
+**`.env.test`** — заполните учётные данные вашей локальной установки:
 
 ```env
 BASE_URL=http://localhost
@@ -47,43 +47,43 @@ PASSWORD=your_password
 ```
 
 ::: warning
-Do not commit `.env.test` to version control — it contains sensitive credentials. Add it to `.gitignore`.
+Не коммитьте `.env.test` в систему контроля версий — файл содержит конфиденциальные данные. Добавьте его в `.gitignore`.
 :::
 
-**`tsconfig.json`** — if the file already existed before initialization, Chef will not overwrite it. In that case, add the line manually:
+**`tsconfig.json`** — если файл уже существовал до инициализации, Chef не перезапишет его. В этом случае добавьте строку вручную:
 
 ```json
 {
   "extends": "./aliases.tsconfig.json",
-  // your settings...
+  // ваши настройки...
 }
 ```
 
-### Additional dependencies
+### Дополнительные зависимости
 
-Chef includes all required tools (`typescript`, `@playwright/test`, `mocha`, `chai`) — they are installed with it and used during build and test runs.
+Chef включает в себя все необходимые инструменты (`typescript`, `@playwright/test`, `mocha`, `chai`) — они устанавливаются вместе с ним и используются при сборке и запуске тестов.
 
-However, for IDE (VS Code, WebStorm, etc.) to understand TypeScript types and test file types, install them locally in the project:
+Однако для того чтобы IDE (VS Code, WebStorm и др.) понимала типы TypeScript и типы в тестовых файлах, нужно установить их локально в проекте:
 
 ```bash
 npm install --save-dev typescript @playwright/test @types/mocha @types/chai
 ```
 
-Then install Playwright browsers:
+После этого установите браузеры Playwright:
 
 ```bash
 npx playwright install
 ```
 
-## First Extension
+## Первое расширение
 
-Create a new extension:
+Создайте новое расширение:
 
 ```bash
 chef create my.extension
 ```
 
-A directory with all necessary files will be created:
+Будет создана директория со всеми необходимыми файлами:
 
 ```
 local/js/my/extension/
@@ -93,21 +93,21 @@ local/js/my/extension/
     └── my.extension.ts
 ```
 
-Build it:
+Запустите сборку:
 
 ```bash
 chef build my.extension
 ```
 
-Run tests:
+Запустите тесты:
 
 ```bash
 chef test my.extension
 ```
 
-## What's Next
+## Что дальше
 
-- [Overview](/guide/overview) — how extensions work and how the build pipeline works
-- [JS Extension](/guide/project-structure) — extension structure and all `bundle.config.ts` options
-- [TypeScript](/guide/typescript) — more about aliases and `tsconfig.json`
-- [Test Setup](/guide/test-setup) — how to write and run tests
+- [Обзор](/guide/overview) — как устроены расширения и как работает сборка
+- [JS-расширение](/guide/project-structure) — структура расширения и все параметры `bundle.config.ts`
+- [Настройка TypeScript](/guide/typescript) — подробнее об алиасах и `tsconfig.json`
+- [Настройка тестов](/guide/test-setup) — как писать и запускать тесты

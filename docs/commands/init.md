@@ -1,45 +1,45 @@
 # chef init
 
-Initialize build and test environment.
+Инициализация окружения сборки и тестирования.
 
 ```bash
 chef init [command] [options]
 ```
 
-## Subcommands
+## Подкоманды
 
 ### `chef init build`
 
-Initialize TypeScript, path aliases, and browserslist for the project.
+Инициализация TypeScript, алиасов путей и browserslist для проекта.
 
 ```bash
 chef init build [options]
 ```
 
-| Option | Description |
-|--------|-------------|
-| `-p, --path <path>` | Initialize in specific directory |
+| Параметр | Описание |
+|----------|----------|
+| `-p, --path [path]` | Инициализировать в указанной директории |
 
-This command:
-1. Scans all extensions in the project
-2. Generates `aliases.tsconfig.json` with path aliases for every extension
-3. Creates `tsconfig.json` with recommended settings
-4. Creates `.browserslistrc` with recommended browser targets
+Эта команда:
+1. Сканирует все расширения в проекте
+2. Генерирует `aliases.tsconfig.json` с алиасами путей для каждого расширения
+3. Создаёт `tsconfig.json` с рекомендованными настройками
+4. Создаёт `.browserslistrc` с рекомендованными целевыми браузерами
 
-See [TypeScript Setup](/guide/typescript) for details.
+Подробнее в разделе [Настройка TypeScript](/guide/typescript).
 
 ### `chef init tests`
 
-Initialize Playwright test environment.
+Инициализация тестового окружения Playwright.
 
 ```bash
 chef init tests [options]
 ```
 
-| Option | Description |
-|--------|-------------|
-| `-p, --path <path>` | Initialize in specific directory |
+| Параметр | Описание |
+|----------|----------|
+| `-p, --path [path]` | Инициализировать в указанной директории |
 
-Creates `playwright.config.ts` and `.env.test` in the project root.
+Создаёт `playwright.config.ts` и `.env.test` в корне проекта.
 
-See [Test Setup](/guide/test-setup) for details.
+Подробнее в разделе [Настройка тестов](/guide/test-setup).

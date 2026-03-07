@@ -1,84 +1,84 @@
-# Production Mode
+# Production-режим
 
-By default Chef builds extensions in dev mode. For production builds use the `--production` flag:
+По умолчанию Chef собирает расширения в dev-режиме. Для production-сборки используйте флаг `--production`:
 
 ```bash
 chef build ui.buttons --production
 ```
 
-## Mode Comparison
+## Сравнение режимов
 
-| | Dev (default) | Production |
+| | Dev (по умолчанию) | Production |
 |---|---|---|
-| Source maps | enabled | disabled |
-| Minification | disabled | enabled (Terser) |
-| Vue `__file` | included | removed |
+| Source maps | включены | отключены |
+| Минификация | отключена | включена (Terser) |
+| Vue `__file` | добавляется | удаляется |
 
-## Dev Mode
+## Dev-режим
 
-The default mode when running `chef build`. Optimized for development:
+Режим по умолчанию при запуске `chef build`. Оптимизирован для разработки:
 
-- **Source maps** — source maps are generated alongside the bundle (`.bundle.js.map`). They allow debugging TypeScript code directly in browser DevTools.
-- **No minification** — code remains readable, errors are easy to locate.
-- **Vue `__file`** — Vue components include the path to the source file, helping Vue Devtools display component names.
+- **Source maps** — карты исходников генерируются рядом с бандлом (`.bundle.js.map`). Позволяют отлаживать TypeScript-код прямо в DevTools браузера.
+- **Без минификации** — код остаётся читаемым, ошибки легко локализовать.
+- **Vue `__file`** — в Vue-компонентах добавляется путь к исходнику, что помогает Vue Devtools показывать имена компонентов.
 
 ```bash
-chef build ui.buttons          # dev mode
+chef build ui.buttons          # dev-режим
 chef build ui.buttons -w       # dev + watch
 ```
 
-## Production Mode
+## Production-режим
 
-Optimized for deployment:
+Оптимизирован для деплоя:
 
-- **Minification** — code is compressed via [Terser](https://terser.org/). Whitespace is removed, variable names are shortened, dead code is eliminated.
-- **No source maps** — source maps are not generated, reducing file size.
-- **No Vue `__file`** — the source path is removed from Vue components, keeping the project structure private.
+- **Минификация** — код сжимается через [Terser](https://terser.org/). Удаляются пробелы, сокращаются имена переменных, удаляется мёртвый код.
+- **Без source maps** — карты исходников не генерируются, уменьшается объём файлов.
+- **Без Vue `__file`** — в Vue-компонентах удаляется путь к исходнику, не раскрывается структура проекта.
 
 ```bash
 chef build ui.buttons --production
 ```
 
-### Example
+### Пример
 
-Dev build:
+Dev-сборка:
 
 ```
 ✔ ui.buttons
   └─ buttons.bundle.js  13.7 KB
 ```
 
-Production build:
+Production-сборка:
 
 ```
 ✔ ui.buttons
   └─ buttons.bundle.js  5.9 KB (-7.8 KB)
 ```
 
-## Config Priority
+## Приоритет настроек
 
-If `sourceMaps` or `minification` are explicitly set in `bundle.config`, the config value takes priority over the build mode.
+Если `sourceMaps` или `minification` явно заданы в `bundle.config` — значение из конфига имеет приоритет над режимом сборки.
 
 ```ts
 // bundle.config.ts
 export default {
   input: 'src/index.ts',
   output: 'dist/index.bundle.js',
-  sourceMaps: true,  // source maps will ALWAYS be generated, even with --production
+  sourceMaps: true,  // source maps будут ВСЕГДА, даже в --production
 };
 ```
 
-| Setting | Not set in config | Set in config |
+| Настройка | Не задана в конфиге | Задана в конфиге |
 |---|---|---|
-| `sourceMaps` | dev: `true`, prod: `false` | Config value |
-| `minification` | dev: `false`, prod: `true` | Config value |
+| `sourceMaps` | dev: `true`, prod: `false` | Значение из конфига |
+| `minification` | dev: `false`, prod: `true` | Значение из конфига |
 
-## Bulk Production Builds
+## Массовая production-сборка
 
-The `--production` flag works with all extension selection methods:
+Флаг `--production` работает со всеми способами указания расширений:
 
 ```bash
-chef build --production                        # All extensions in current directory
-chef build ui.* --production                   # By pattern
-chef build ui.buttons main.core --production   # Specific extensions
+chef build --production                    # Все расширения в текущей директории
+chef build ui.* --production               # По паттерну
+chef build ui.buttons main.core --production   # Конкретные расширения
 ```
