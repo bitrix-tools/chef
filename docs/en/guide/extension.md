@@ -63,36 +63,14 @@ The extension name is derived from its path: `local/js/ui/buttons/` → `ui.butt
 Build configuration for the extension. Created in the root of the extension directory.
 
 ```ts
-import type { BundleConfig } from '@bitrix/chef';
-
 export default {
   input: './src/ui.buttons.ts',
   output: './dist/ui.buttons.bundle.js',
   namespace: 'BX.UI.Buttons',
-} as BundleConfig;
+};
 ```
 
 > JavaScript config is also supported: `bundle.config.js`.
-
-### Options
-
-| Option | Type | Description |
-|--------|------|-------------|
-| `input` | `string` | Entry point |
-| `output` | `string \| { js, css }` | Output bundle path. String — JS only, object — JS and CSS separately |
-| `namespace` | `string` | Global namespace for exports (default: `window`) |
-| `targets` | `string \| string[]` | Target browsers for Babel and PostCSS |
-| `sourceMaps` | `boolean` | Generate source maps |
-| `minification` | `boolean \| object` | Minification via Terser |
-| `treeshake` | `boolean` | Remove unused code (default: `true`) |
-| `adjustConfigPhp` | `boolean` | Auto-update `rel` in `config.php` (default: `true`) |
-| `protected` | `boolean` | Skip extension during mass scanning |
-| `concat` | `{ js?, css? }` | Concatenate additional files into the bundle |
-| `cssImages` | `object` | Image handling in CSS (`inline` or `copy`) |
-| `plugins.babel` | `boolean \| object` | Babel plugin settings |
-| `plugins.custom` | `array` | Additional Rollup plugins |
-| `tests.localization` | `object` | Localization settings for tests |
-| `rebuild` | `string[]` | Extensions to rebuild after building the current one |
 
 ### Splitting JS and CSS
 
@@ -106,8 +84,10 @@ export default {
     css: './dist/ui.buttons.bundle.css',
   },
   namespace: 'BX.UI.Buttons',
-} as BundleConfig;
+};
 ```
+
+Full options reference — see [bundle.config](/en/config/bundle-config).
 
 ## config.php
 
@@ -140,10 +120,39 @@ Chef automatically updates the `rel` array on build — it analyzes imports and 
 
 After loading, all extension exports are available via the namespace:
 
-```js
+```ts
 const button = new BX.UI.Buttons.Button({ text: 'Save' });
 document.body.appendChild(button.render());
 ```
+
+## Bundle Anatomy
+
+The built bundle is an IIFE that extends the namespace object. Here is a simplified example for the `ui.buttons` extension with a dependency on `main.core`:
+
+```js
+/* eslint-disable */
+this.BX = this.BX || {};
+this.BX.UI = this.BX.UI || {};
+(function (exports, main_core) {
+    'use strict';
+
+    class Button {
+        constructor(options) {
+            this.node = main_core.Tag.render`<button>${options.text}</button>`;
+        }
+        render() {
+            return this.node;
+        }
+    }
+
+    exports.Button = Button;
+
+}((this.BX.UI.Buttons = this.BX.UI.Buttons || {}), BX));
+```
+
+- `this.BX.UI.Buttons` — the namespace object, all exports go into it
+- `BX` — the global namespace of the `main.core` dependency, passed as an IIFE argument
+- `import { Tag } from 'main.core'` in source becomes `main_core.Tag` in the bundle
 
 ## Tests
 
@@ -189,7 +198,7 @@ test('button is visible on page', async ({ page }) => {
 });
 ```
 
-With automatic authentication — import from `ui.test.e2e.auth`. Before each test, the extension will automatically open `/auth/`, fill in the login form with credentials from `.env.test` and sign in. The test receives an already authenticated page:
+With automatic authentication — import from `ui.test.e2e.auth`:
 
 ```ts
 // test/e2e/ui.buttons.spec.ts
@@ -202,21 +211,14 @@ test('button is visible on page', async ({ page }) => {
 });
 ```
 
-Credentials are taken from `.env.test` in the project root:
-
-```env
-BASE_URL=http://localhost
-LOGIN=admin
-PASSWORD=your_password
-```
-
-Run tests:
+### Running
 
 ```bash
-chef test ui.buttons                    # Run all tests
-chef test unit ui.buttons                        # Unit tests only
-chef test unit ui.buttons ./render-button.test.ts # Specific file
-chef test e2e ui.buttons                # E2E tests only
+chef test ui.buttons                    # All tests
+chef test unit ui.buttons               # Unit only
+chef test e2e ui.buttons                # E2E only
 chef test ui.buttons --headed           # With visible browser
 chef test ui.buttons --debug            # With DevTools and sourcemaps
 ```
+
+See [Testing](/en/guide/testing) for details.

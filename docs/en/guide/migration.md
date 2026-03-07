@@ -57,21 +57,43 @@ chef build
 
 Configs are fully compatible — existing `bundle.config.js` files work without changes. But there are a few differences to be aware of.
 
-### TypeScript support
+### Full Example
 
-Chef supports `bundle.config.ts`:
+A typical @bitrix/cli config and its Chef equivalent:
+
+```js
+// bundle.config.js (@bitrix/cli)
+module.exports = {
+  input: './src/ui.buttons.js',
+  output: './dist/ui.buttons.bundle.js',
+  namespace: 'BX.UI.Buttons',
+  browserslist: ['last 2 versions'],
+  plugins: {
+    resolve: true,
+    babel: true,
+    custom: [],
+  },
+};
+```
 
 ```ts
-import type { BundleConfig } from '@bitrix/chef';
-
+// bundle.config.ts (@bitrix/chef)
 export default {
   input: './src/ui.buttons.ts',
   output: './dist/ui.buttons.bundle.js',
   namespace: 'BX.UI.Buttons',
-} as BundleConfig;
+  targets: ['last 2 versions'],
+  resolveNodeModules: true,
+};
 ```
 
-The `BundleConfig` type provides autocompletion and type checking in the IDE.
+What changed:
+- `module.exports` → `export default` (ESM)
+- `.js` → `.ts` (TypeScript)
+- `browserslist` → `targets`
+- `plugins.resolve` → `resolveNodeModules`
+- `plugins.babel` → `babel` (defaults to `true`, can be omitted)
+- `plugins.custom` → `plugins` (array of Rollup plugins)
 
 ### browserslist → targets
 

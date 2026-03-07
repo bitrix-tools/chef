@@ -10,12 +10,43 @@ Chef запускает тесты в реальном браузере чере
 chef init tests
 ```
 
-Команда создаёт `playwright.config.ts` и `.env.test` в корне проекта. Подробнее — в разделе [Настройка тестов](/guide/test-setup).
+Команда создаёт два файла в корне проекта:
+
+| Файл | Описание |
+|------|----------|
+| `playwright.config.ts` | Конфиг Playwright для запуска unit и E2E тестов в браузере |
+| `.env.test` | Учётные данные для автоматической аутентификации при тестировании |
+
+Заполните учётные данные вашей локальной установки Bitrix:
+
+```env
+BASE_URL=http://localhost
+LOGIN=admin
+PASSWORD=your_password
+```
+
+| Переменная | Описание |
+|------------|----------|
+| `BASE_URL` | URL локальной установки Bitrix |
+| `LOGIN` | Логин тестового пользователя |
+| `PASSWORD` | Пароль тестового пользователя |
+
+::: warning
+Не коммитьте `.env.test` в систему контроля версий — файл содержит конфиденциальные данные.
+:::
 
 Установите браузеры Playwright:
 
 ```bash
 npx playwright install
+```
+
+### Типы для IDE
+
+`mocha`, `chai` и их типы включены в Chef и используются при запуске `chef test`. Для работы автодополнения в IDE установите типы локально:
+
+```bash
+npm install --save-dev @types/mocha @types/chai @playwright/test
 ```
 
 ## Unit-тесты
@@ -36,7 +67,7 @@ local/js/vendor/my-extension/
 
 ```ts
 // test/unit/my-extension.test.ts
-import { describe, it, beforeEach, afterEach } from 'mocha';
+import { describe, it, beforeEach } from 'mocha';
 import { assert } from 'chai';
 
 import { MyExtension } from '../../src/my-extension';
@@ -65,7 +96,7 @@ describe('MyExtension', () => {
 Тесты запускаются в браузере, поэтому доступен полноценный DOM:
 
 ```ts
-import { describe, it, afterEach } from 'mocha';
+import { describe, it, beforeEach, afterEach } from 'mocha';
 import { assert } from 'chai';
 
 import { Button } from '../../src/button';
@@ -164,14 +195,6 @@ describe('Chat', () => {
 });
 ```
 
-### Типы для тестов
-
-`mocha`, `chai` и их типы включены в Chef и используются при запуске `chef test`. Для работы автодополнения в IDE установите типы локально:
-
-```bash
-npm install --save-dev @types/mocha @types/chai
-```
-
 ## E2E-тесты
 
 E2E-тесты используют [Playwright Test API](https://playwright.dev/docs/api/class-test) и запускаются в реальном браузере на реальной странице Bitrix.
@@ -249,7 +272,6 @@ import { test, expect } from 'ui.test.e2e.auth';
 test('should load items via ajax', async ({ page }) => {
   await page.goto('/items/');
 
-  // Ждём завершения AJAX-запроса
   const response = page.waitForResponse('**/ajax/**');
   await page.click('.load-more');
   await response;
@@ -320,7 +342,6 @@ describe('TodoList', () => {
   });
 
   it('should start empty', () => {
-    // Не зависит от предыдущего теста
     assert.equal(list.getCount(), 0);
   });
 });

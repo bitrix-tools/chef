@@ -107,7 +107,7 @@ chef test my.extension
 
 ## Что дальше
 
-- [Обзор](/guide/overview) — как устроены расширения и как работает сборка
-- [JS-расширение](/guide/project-structure) — структура расширения и все параметры `bundle.config.ts`
-- [Настройка TypeScript](/guide/typescript) — подробнее об алиасах и `tsconfig.json`
-- [Настройка тестов](/guide/test-setup) — как писать и запускать тесты
+- [Возможности](/guide/features) — как устроены расширения и как работает сборка
+- [JS-расширение](/guide/extension) — структура расширения и конфигурация
+- [TypeScript](/guide/typescript) — подробнее об алиасах и `tsconfig.json`
+- [Тестирование](/guide/testing) — как писать и запускать тесты

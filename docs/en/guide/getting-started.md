@@ -107,7 +107,7 @@ chef test my.extension
 
 ## What's Next
 
-- [Overview](/en/guide/overview) — how extensions work and how the build pipeline works
-- [JS Extension](/en/guide/project-structure) — extension structure and all `bundle.config.ts` options
+- [Features](/en/guide/features) — how extensions work and how the build pipeline works
+- [JS Extension](/en/guide/extension) — extension structure and configuration
 - [TypeScript](/en/guide/typescript) — more about aliases and `tsconfig.json`
-- [Test Setup](/en/guide/test-setup) — how to write and run tests
+- [Testing](/en/guide/testing) — how to write and run tests

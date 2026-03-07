@@ -14,7 +14,7 @@ hero:
       link: /guide/getting-started
     - theme: alt
       text: Документация
-      link: /guide/overview
+      link: /guide/features
 
 features:
   - icon:

@@ -1,51 +1,39 @@
 import { defineConfig } from 'vitepress'
 
 const guideSidebarRu = [
-  { text: 'Обзор', link: '/guide/overview' },
   { text: 'Начало работы', link: '/guide/getting-started' },
-  { text: 'JS-расширение', link: '/guide/project-structure' },
-  { text: 'Конфигурация', link: '/guide/configuration' },
+  { text: 'Возможности', link: '/guide/features' },
+  { text: 'JS-расширение', link: '/guide/extension' },
+  { text: 'Команды', link: '/guide/commands' },
   { text: 'TypeScript', link: '/guide/typescript' },
   { text: 'Vue 3', link: '/guide/vue' },
   { text: 'Тестирование', link: '/guide/testing' },
-  { text: 'Browserslist', link: '/guide/browserslist' },
-  { text: 'Настройка тестов', link: '/guide/test-setup' },
-  { text: 'Production-режим', link: '/guide/production' },
-  { text: 'Standalone', link: '/guide/standalone' },
-  { text: 'Миграция с CLI', link: '/guide/migration' },
+  { text: 'Production-сборка', link: '/guide/production' },
+  { text: 'Миграция с @bitrix/cli', link: '/guide/migration' },
 ]
 
-const commandsSidebarRu = [
-  { text: 'build', link: '/commands/build' },
-  { text: 'test', link: '/commands/test' },
-  { text: 'stat', link: '/commands/stat' },
-  { text: 'create', link: '/commands/create' },
-  { text: 'init', link: '/commands/init' },
-  { text: 'flow-to-ts', link: '/commands/flow-to-ts' },
+const configSidebarRu = [
+  { text: 'bundle.config', link: '/config/bundle-config' },
+  { text: 'chef.config', link: '/config/chef-config' },
+  { text: 'Browserslist', link: '/config/browserslist' },
 ]
 
 const guideSidebarEn = [
-  { text: 'Overview', link: '/en/guide/overview' },
   { text: 'Getting Started', link: '/en/guide/getting-started' },
-  { text: 'JS Extension', link: '/en/guide/project-structure' },
-  { text: 'Configuration', link: '/en/guide/configuration' },
+  { text: 'Features', link: '/en/guide/features' },
+  { text: 'JS Extension', link: '/en/guide/extension' },
+  { text: 'Commands', link: '/en/guide/commands' },
   { text: 'TypeScript', link: '/en/guide/typescript' },
   { text: 'Vue 3', link: '/en/guide/vue' },
   { text: 'Testing', link: '/en/guide/testing' },
-  { text: 'Browserslist', link: '/en/guide/browserslist' },
-  { text: 'Test Setup', link: '/en/guide/test-setup' },
-  { text: 'Production Mode', link: '/en/guide/production' },
-  { text: 'Standalone', link: '/en/guide/standalone' },
-  { text: 'Migration from CLI', link: '/en/guide/migration' },
+  { text: 'Production Build', link: '/en/guide/production' },
+  { text: 'Migration from @bitrix/cli', link: '/en/guide/migration' },
 ]
 
-const commandsSidebarEn = [
-  { text: 'build', link: '/en/commands/build' },
-  { text: 'test', link: '/en/commands/test' },
-  { text: 'stat', link: '/en/commands/stat' },
-  { text: 'create', link: '/en/commands/create' },
-  { text: 'init', link: '/en/commands/init' },
-  { text: 'flow-to-ts', link: '/en/commands/flow-to-ts' },
+const configSidebarEn = [
+  { text: 'bundle.config', link: '/en/config/bundle-config' },
+  { text: 'chef.config', link: '/en/config/chef-config' },
+  { text: 'Browserslist', link: '/en/config/browserslist' },
 ]
 
 export default defineConfig({
@@ -67,13 +55,13 @@ export default defineConfig({
       description: 'CLI toolkit for building, testing and maintaining Bitrix extensions',
       themeConfig: {
         nav: [
-          { text: 'Getting Started', link: '/en/guide/getting-started' },
-          { text: 'Documentation', link: '/en/guide/overview' },
-          { text: 'Commands', link: '/en/commands/build' },
+          { text: 'Guide', link: '/en/guide/getting-started' },
+          { text: 'Config', link: '/en/config/bundle-config' },
+          { text: 'Commands', link: '/en/guide/commands' },
         ],
         sidebar: [
           { text: 'Guide', items: guideSidebarEn },
-          { text: 'Commands', items: commandsSidebarEn },
+          { text: 'Config', items: configSidebarEn },
         ],
         footer: {
           message: 'Released under the MIT License.',
@@ -88,14 +76,14 @@ export default defineConfig({
     siteTitle: 'Chef',
 
     nav: [
-      { text: 'Начало работы', link: '/guide/getting-started' },
-      { text: 'Документация', link: '/guide/overview' },
-      { text: 'Команды', link: '/commands/build' },
+      { text: 'Руководство', link: '/guide/getting-started' },
+      { text: 'Конфигурация', link: '/config/bundle-config' },
+      { text: 'Команды', link: '/guide/commands' },
     ],
 
     sidebar: [
       { text: 'Руководство', items: guideSidebarRu },
-      { text: 'Команды', items: commandsSidebarRu },
+      { text: 'Конфигурация', items: configSidebarRu },
     ],
 
     socialLinks: [

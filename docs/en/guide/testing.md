@@ -10,12 +10,43 @@ Initialize the test environment:
 chef init tests
 ```
 
-This creates `playwright.config.ts` and `.env.test` in the project root. See [Test Setup](/en/guide/test-setup) for details.
+This creates two files in the project root:
+
+| File | Description |
+|------|-------------|
+| `playwright.config.ts` | Playwright config for running unit and E2E tests in browser |
+| `.env.test` | Credentials for automatic authentication during tests |
+
+Fill in your local Bitrix installation credentials:
+
+```env
+BASE_URL=http://localhost
+LOGIN=admin
+PASSWORD=your_password
+```
+
+| Variable | Description |
+|----------|-------------|
+| `BASE_URL` | URL of your local Bitrix installation |
+| `LOGIN` | Test user login |
+| `PASSWORD` | Test user password |
+
+::: warning
+Do not commit `.env.test` to version control — it contains sensitive credentials.
+:::
 
 Install Playwright browsers:
 
 ```bash
 npx playwright install
+```
+
+### IDE Types
+
+`mocha`, `chai` and their types are included in Chef and used when running `chef test`. For IDE autocompletion, install the types locally:
+
+```bash
+npm install --save-dev @types/mocha @types/chai @playwright/test
 ```
 
 ## Unit Tests
@@ -36,7 +67,7 @@ local/js/vendor/my-extension/
 
 ```ts
 // test/unit/my-extension.test.ts
-import { describe, it, beforeEach, afterEach } from 'mocha';
+import { describe, it, beforeEach } from 'mocha';
 import { assert } from 'chai';
 
 import { MyExtension } from '../../src/my-extension';
@@ -65,7 +96,7 @@ describe('MyExtension', () => {
 Tests run in the browser, so you have full DOM access:
 
 ```ts
-import { describe, it, afterEach } from 'mocha';
+import { describe, it, beforeEach, afterEach } from 'mocha';
 import { assert } from 'chai';
 
 import { Button } from '../../src/button';
@@ -164,14 +195,6 @@ describe('Chat', () => {
 });
 ```
 
-### Test Types
-
-`mocha`, `chai` and their types are included in Chef and used when running `chef test`. For IDE autocompletion, install the types locally:
-
-```bash
-npm install --save-dev @types/mocha @types/chai
-```
-
 ## E2E Tests
 
 E2E tests use the [Playwright Test API](https://playwright.dev/docs/api/class-test) and run in a real browser on an actual Bitrix page.
@@ -249,7 +272,6 @@ import { test, expect } from 'ui.test.e2e.auth';
 test('should load items via ajax', async ({ page }) => {
   await page.goto('/items/');
 
-  // Wait for AJAX request to complete
   const response = page.waitForResponse('**/ajax/**');
   await page.click('.load-more');
   await response;
@@ -320,7 +342,6 @@ describe('TodoList', () => {
   });
 
   it('should start empty', () => {
-    // Does not depend on the previous test
     assert.equal(list.getCount(), 0);
   });
 });
