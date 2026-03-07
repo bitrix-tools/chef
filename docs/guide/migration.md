@@ -94,6 +94,30 @@ export default {
 
 Старый параметр `browserslist` продолжает работать для обратной совместимости.
 
+### plugins → plugins, resolveNodeModules, babel
+
+Формат `plugins` изменился. Раньше это был объект с полями `resolve`, `babel`, `custom`. Теперь `plugins` — это массив Rollup-плагинов, а `resolve` и `babel` вынесены в отдельные параметры:
+
+```ts
+// Было (@bitrix/cli)
+export default {
+  plugins: {
+    resolve: true,
+    babel: false,
+    custom: [myPlugin()],
+  },
+};
+
+// Стало (@bitrix/chef)
+export default {
+  resolveNodeModules: true,
+  babel: false,
+  plugins: [myPlugin()],
+};
+```
+
+Старый формат с объектом продолжает работать для обратной совместимости — Chef автоматически преобразует его в новый.
+
 ### Новое: rebuild
 
 Chef поддерживает параметр `rebuild` — автоматическая пересборка зависимых расширений:
@@ -230,6 +254,7 @@ import { Button } from 'ui.buttons';
 4. **Обновить конфиги** (опционально)
    - Переименовать `bundle.config.js` → `bundle.config.ts`
    - Заменить `browserslist` → `targets`
+   - Заменить `plugins: { resolve, babel, custom }` → `resolveNodeModules`, `babel`, `plugins: [...]`
 
 5. **Настроить тесты** (если используются)
    ```bash

@@ -94,6 +94,30 @@ export default {
 
 The old `browserslist` option continues to work for backwards compatibility.
 
+### plugins → plugins, resolveNodeModules, babel
+
+The `plugins` format has changed. Previously it was an object with `resolve`, `babel`, and `custom` fields. Now `plugins` is an array of Rollup plugins, and `resolve` and `babel` have been extracted to separate options:
+
+```ts
+// Before (@bitrix/cli)
+export default {
+  plugins: {
+    resolve: true,
+    babel: false,
+    custom: [myPlugin()],
+  },
+};
+
+// After (@bitrix/chef)
+export default {
+  resolveNodeModules: true,
+  babel: false,
+  plugins: [myPlugin()],
+};
+```
+
+The old object format continues to work for backwards compatibility — Chef automatically converts it to the new format.
+
 ### New: rebuild
 
 Chef supports the `rebuild` option — automatic rebuilding of dependent extensions:
@@ -230,6 +254,7 @@ See [TypeScript](/en/guide/typescript) for details.
 4. **Update configs** (optional)
    - Rename `bundle.config.js` → `bundle.config.ts`
    - Replace `browserslist` → `targets`
+   - Replace `plugins: { resolve, babel, custom }` → `resolveNodeModules`, `babel`, `plugins: [...]`
 
 5. **Set up tests** (if used)
    ```bash

@@ -97,6 +97,9 @@ export default {
 | `sourceMaps` | `boolean` | Генерация source maps |
 | `minification` | `boolean \| object` | Минификация через Terser |
 | `treeshake` | `boolean` | Удаление неиспользуемого кода (по умолчанию: true) |
+| `plugins` | `Plugin[]` | Кастомные Rollup-плагины |
+| `resolveNodeModules` | `boolean` | Резолв зависимостей из node_modules |
+| `babel` | `boolean` | Включение/отключение Babel (по умолчанию: true) |
 | `rebuild` | `string[]` | Расширения для пересборки после сборки текущего |
 
 > Также поддерживается JavaScript-конфигурация (`bundle.config.js`).

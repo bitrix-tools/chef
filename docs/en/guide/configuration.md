@@ -27,3 +27,121 @@ export default {
 | `sourceMaps` | `boolean` | Generate source maps |
 | `minification` | `boolean \| object` | Terser minification options |
 | `treeshake` | `boolean` | Remove unused code (default: true) |
+| `plugins` | `Plugin[]` | Custom Rollup plugins |
+| `resolveNodeModules` | `boolean` | Resolve dependencies from node_modules |
+| `babel` | `boolean` | Enable/disable Babel transpilation (default: true) |
+| `standalone` | `boolean` | Standalone build with inlined dependencies |
+| `protected` | `boolean` | Protect from rebuilding |
+| `rebuild` | `string[]` | Rebuild dependent extensions |
+| `transformClasses` | `boolean` | Transpile classes |
+
+## Plugins
+
+The `plugins` option accepts an array of Rollup-compatible plugins. Plugins are added at the end of the build chain, after Chef's built-in plugins.
+
+### Installation
+
+Install the plugin in your extension directory:
+
+```bash
+cd /path/to/my.extension
+npm install @rollup/plugin-replace
+```
+
+### Usage
+
+```ts
+import replace from '@rollup/plugin-replace';
+
+export default {
+  input: './src/index.ts',
+  output: './dist/my.bundle.js',
+  namespace: 'BX.My',
+  plugins: [
+    replace({
+      'process.env.NODE_ENV': JSON.stringify('production'),
+      preventAssignment: true,
+    }),
+  ],
+};
+```
+
+### Multiple plugins
+
+```ts
+import replace from '@rollup/plugin-replace';
+import alias from '@rollup/plugin-alias';
+
+export default {
+  input: './src/index.ts',
+  output: './dist/my.bundle.js',
+  namespace: 'BX.My',
+  plugins: [
+    alias({
+      entries: [
+        { find: '@utils', replacement: './src/utils' },
+      ],
+    }),
+    replace({
+      __VERSION__: JSON.stringify('1.0.0'),
+      preventAssignment: true,
+    }),
+  ],
+};
+```
+
+### CommonJS plugins
+
+For plugins without ESM exports, use `require`:
+
+```js
+const myPlugin = require('rollup-plugin-my');
+
+module.exports = {
+  input: './src/index.js',
+  output: './dist/my.bundle.js',
+  namespace: 'BX.My',
+  plugins: [
+    myPlugin({ /* options */ }),
+  ],
+};
+```
+
+## Resolving node_modules
+
+The `resolveNodeModules` option enables resolving dependencies from `node_modules`. By default, Chef treats all npm dependencies as external — they are not included in the bundle.
+
+```ts
+export default {
+  input: './src/index.ts',
+  output: './dist/my.bundle.js',
+  namespace: 'BX.My',
+  resolveNodeModules: true,
+};
+```
+
+When enabled:
+1. Install dependencies: `npm install` in the extension directory
+2. Dependencies from `node_modules` will be inlined into the bundle
+3. The bundle size will increase, but the extension becomes independent of npm
+
+::: tip
+If you need full independence from Bitrix dependencies as well, use [standalone](/en/guide/standalone) mode.
+:::
+
+## Disabling Babel
+
+The `babel` option allows disabling Babel transpilation. This is useful when the code is already pre-built and doesn't need Babel processing.
+
+```ts
+export default {
+  input: './src/index.js',
+  output: './dist/my.bundle.js',
+  namespace: 'BX.My',
+  babel: false,
+};
+```
+
+::: warning
+Without Babel, the code won't be transpiled for target browsers. Only use this option if you're sure the input code is already compatible with the required browsers.
+:::

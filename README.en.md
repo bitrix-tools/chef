@@ -97,6 +97,9 @@ export default {
 | `sourceMaps` | `boolean` | Generate source maps |
 | `minification` | `boolean \| object` | Terser minification options |
 | `treeshake` | `boolean` | Remove unused code (default: true) |
+| `plugins` | `Plugin[]` | Custom Rollup plugins |
+| `resolveNodeModules` | `boolean` | Resolve dependencies from node_modules |
+| `babel` | `boolean` | Enable/disable Babel (default: true) |
 | `rebuild` | `string[]` | Extensions to rebuild after building the current one |
 
 > JavaScript configuration (`bundle.config.js`) is also supported.
