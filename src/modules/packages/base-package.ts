@@ -20,6 +20,8 @@ import type { PlaywrightTestConfig } from '@playwright/test';
 import type { BuildService } from '../services/build/build.service';
 import type { BuildOptions, BuildResult } from '../services/build/types/build.service.types';
 import type { DependencyNode } from './types/dependency.node';
+import { ChefConfigManager } from '../config/project/chef.config.manager';
+import { validateBuildOptions } from '../config/project/chef.config.validator';
 
 type BasePackageOptions = {
 	path: string,
@@ -323,6 +325,9 @@ export abstract class BasePackage
 	{
 		const production = options.production ?? false;
 		const bundleConfig = this.getBundleConfig();
+		const chefConfig = ChefConfigManager.getInstance().getConfig();
+		const defaults = chefConfig.defaults;
+		const enforce = chefConfig.enforce;
 
 		return {
 			input: this.getInputPath(),
@@ -332,7 +337,7 @@ export abstract class BasePackage
 			},
 			packageRoot: this.getPath(),
 			publicPath: this.getPublicPath(),
-			targets: this.getTargets(),
+			targets: enforce?.targets ?? this.getTargets() ?? defaults?.targets,
 			namespace: bundleConfig.get('namespace'),
 			typescript: this.isTypeScriptMode(),
 			vue: this.#hasVueFiles(),
@@ -342,15 +347,35 @@ export abstract class BasePackage
 			minify: bundleConfig.has('minification')
 				? bundleConfig.get('minification')
 				: production,
-			sourceMaps: bundleConfig.has('sourceMaps')
-				? bundleConfig.get('sourceMaps')
-				: !production,
+			sourceMaps: enforce?.sourceMaps
+				?? (bundleConfig.has('sourceMaps')
+					? bundleConfig.get('sourceMaps')
+					: (defaults?.sourceMaps ?? !production)),
 			standalone: bundleConfig.get('standalone'),
 			resolve: bundleConfig.get('resolveNodeModules'),
-			babel: bundleConfig.get('babel'),
+			babel: enforce?.babel ?? bundleConfig.get('babel'),
 			transformClasses: bundleConfig.get('transformClasses'),
 			customPlugins: bundleConfig.get('plugins'),
 			production,
+		};
+	}
+
+	#validateBuildOptions(buildOptions: BuildOptions): BuildResult | null
+	{
+		const chefConfig = ChefConfigManager.getInstance().getConfig();
+		const validationErrors = validateBuildOptions(buildOptions, chefConfig);
+
+		if (validationErrors.length === 0)
+		{
+			return null;
+		}
+
+		return {
+			dependencies: [],
+			bundles: [],
+			warnings: [],
+			errors: validationErrors.map((e) => ({ message: e.message })),
+			standalone: buildOptions.standalone ?? false,
 		};
 	}
 
@@ -363,6 +388,12 @@ export abstract class BasePackage
 	{
 		const buildService = await this.#getBuildService();
 		const buildOptions = this.#getBuildOptions(options);
+
+		const denied = this.#validateBuildOptions(buildOptions);
+		if (denied)
+		{
+			return denied;
+		}
 
 		const buildResult = await buildService.build(buildOptions);
 
@@ -382,6 +413,12 @@ export abstract class BasePackage
 	{
 		const buildService = await this.#getBuildService();
 		const buildOptions = this.#getBuildOptions(options);
+
+		const denied = this.#validateBuildOptions(buildOptions);
+		if (denied)
+		{
+			return denied;
+		}
 
 		return buildService.generate(buildOptions);
 	}
