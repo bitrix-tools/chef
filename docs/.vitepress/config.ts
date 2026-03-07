@@ -11,6 +11,7 @@ const guideSidebar = [
   { text: 'Test Setup', link: '/guide/test-setup' },
   { text: 'Production Mode', link: '/guide/production' },
   { text: 'Standalone', link: '/guide/standalone' },
+  { text: 'Migration from CLI', link: '/guide/migration' },
 ]
 
 const commandsSidebar = [
@@ -33,6 +34,7 @@ const guideSidebarRu = [
   { text: 'Настройка тестов', link: '/ru/guide/test-setup' },
   { text: 'Production-режим', link: '/ru/guide/production' },
   { text: 'Standalone', link: '/ru/guide/standalone' },
+  { text: 'Миграция с CLI', link: '/ru/guide/migration' },
 ]
 
 const commandsSidebarRu = [
