@@ -104,6 +104,28 @@ export default {
 
 > Также поддерживается JavaScript-конфигурация (`bundle.config.js`).
 
+### Проектный конфиг
+
+Файл `chef.config.ts` в корне проекта задаёт правила для всех расширений:
+
+```ts
+export default {
+  deny: {
+    sfc: true,                         // запретить Vue SFC
+    standalone: {
+      severity: 'warning',             // или предупреждать
+      message: 'Standalone не рекомендуется',
+    },
+  },
+  defaults: { targets: 'last 2 versions' },
+  enforce: { sourceMaps: false },
+};
+```
+
+- **deny** — запрет опций (`error` блокирует сборку, `warning` показывает предупреждение)
+- **defaults** — значения по умолчанию (можно переопределить в `bundle.config`)
+- **enforce** — принудительные значения (нельзя переопределить)
+
 <br>
 
 ## Browserslist

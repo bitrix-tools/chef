@@ -104,6 +104,28 @@ export default {
 
 > JavaScript configuration (`bundle.config.js`) is also supported.
 
+### Project config
+
+A `chef.config.ts` file in the project root sets rules for all extensions:
+
+```ts
+export default {
+  deny: {
+    sfc: true,                         // block Vue SFC
+    standalone: {
+      severity: 'warning',             // or just warn
+      message: 'Standalone is not recommended',
+    },
+  },
+  defaults: { targets: 'last 2 versions' },
+  enforce: { sourceMaps: false },
+};
+```
+
+- **deny** — block options (`error` stops the build, `warning` shows a warning)
+- **defaults** — default values (can be overridden in `bundle.config`)
+- **enforce** — forced values (cannot be overridden)
+
 <br>
 
 ## Browserslist
