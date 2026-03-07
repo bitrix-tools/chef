@@ -8,7 +8,7 @@ async function loadAndRun(loader: () => Promise<Record<string, unknown>>): Promi
 	const mod = await loader();
 	const command = Object.values(mod).find((v) => v instanceof Command) as Command;
 
-	program.commands = program.commands.filter((c) => c.name() !== command.name());
+	(program.commands as Command[]) = program.commands.filter((c) => c.name() !== command.name());
 	program.addCommand(command);
 
 	await program.parseAsync(process.argv);

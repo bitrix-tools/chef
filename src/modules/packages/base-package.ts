@@ -337,7 +337,7 @@ export abstract class BasePackage
 			},
 			packageRoot: this.getPath(),
 			publicPath: this.getPublicPath(),
-			targets: enforce?.targets ?? this.getTargets() ?? defaults?.targets,
+			targets: [enforce?.targets ?? this.getTargets() ?? defaults?.targets].flat(),
 			namespace: bundleConfig.get('namespace'),
 			typescript: this.isTypeScriptMode(),
 			vue: this.#hasVueFiles(),
