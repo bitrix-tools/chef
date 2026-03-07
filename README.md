@@ -93,6 +93,7 @@ export default {
 | `sourceMaps` | `boolean` | Generate source maps |
 | `minification` | `boolean \| object` | Terser minification options |
 | `treeshake` | `boolean` | Remove unused code (default: true) |
+| `rebuild` | `string[]` | Extensions to rebuild after building the current one |
 
 > JavaScript configuration (`bundle.config.js`) is also supported.
 

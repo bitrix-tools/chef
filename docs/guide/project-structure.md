@@ -93,7 +93,7 @@ export default {
 | `plugins.babel` | `boolean \| object` | Babel plugin settings |
 | `plugins.custom` | `array` | Additional Rollup plugins |
 | `tests.localization` | `object` | Localization settings for tests |
-| `hooks` | `object` | Lifecycle hooks: `beforeBuild`, `afterBuild`, `beforeTest`, `afterTest` |
+| `rebuild` | `string[]` | Extensions to rebuild after building the current one |
 
 ### Splitting JS and CSS
 

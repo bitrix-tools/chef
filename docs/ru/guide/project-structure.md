@@ -93,7 +93,7 @@ export default {
 | `plugins.babel` | `boolean \| object` | Настройки Babel-плагина |
 | `plugins.custom` | `array` | Дополнительные Rollup-плагины |
 | `tests.localization` | `object` | Настройки локализации для тестов |
-| `hooks` | `object` | Хуки жизненного цикла: `beforeBuild`, `afterBuild`, `beforeTest`, `afterTest` |
+| `rebuild` | `string[]` | Список расширений, которые нужно пересобрать после сборки текущего |
 
 ### Разделение JS и CSS
 
