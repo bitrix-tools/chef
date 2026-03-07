@@ -39,10 +39,10 @@ export default {
 src/index.ts
 ├── import { Loc } from 'main.core'      → external (rel в config.php)
 ├── import { Button } from 'ui.buttons'   → external (rel в config.php)
-└── import { parse } from 'linkifyjs'     → требует plugins: { resolve: true }
+└── import { parse } from 'linkifyjs'     → требует resolveNodeModules: true
 ```
 
-Результат: бандл содержит только код расширения, Bitrix-зависимости загружаются отдельно. npm-пакеты инлайнятся при включённом `plugins: { resolve: true }`.
+Результат: бандл содержит только код расширения, Bitrix-зависимости загружаются отдельно. npm-пакеты инлайнятся при включённом `resolveNodeModules: true`.
 
 ### Standalone-режим
 
@@ -71,7 +71,7 @@ export class LinkParser
 }
 ```
 
-Обычная сборка (с `plugins: { resolve: true }`):
+Обычная сборка (с `resolveNodeModules: true`):
 
 ```
 ✔ vendor.link-parser
@@ -83,16 +83,20 @@ Standalone-сборка:
 
 ```
 ✔ vendor.link-parser
-  └─ link-parser.bundle.js  48.5 KB
+  └─ link-parser.bundle.js  93.7 KB
   rel: (пусто — все зависимости внутри)
 ```
+
+::: info
+Размер бандла в standalone заметно больше — в него входят все Bitrix-зависимости (main.core и др.), которые в обычном режиме загружаются отдельно.
+:::
 
 ## Сравнение режимов
 
 | | Обычный | Standalone |
 |---|---|---|
 | Bitrix-расширения | external (`rel`) | инлайнятся |
-| npm-пакеты | инлайнятся с `plugins: { resolve: true }` | инлайнятся автоматически |
+| npm-пакеты | инлайнятся с `resolveNodeModules: true` | инлайнятся автоматически |
 | Размер бандла | минимальный | максимальный |
 | Зависимости в `config.php` | заполняются автоматически | пустые |
 | Дублирование кода | нет | возможно |
@@ -122,4 +126,4 @@ chef build vendor.my-app --production
 
 - **Размер бандла** — в standalone все зависимости попадают в один файл. Если расширение зависит от крупных библиотек (main.core, ui.vue3), размер бандла может значительно вырасти.
 - **Дублирование** — если на странице подключены и standalone-бандл, и обычные расширения с общими зависимостями, код зависимостей загрузится дважды.
-- **npm-пакеты** — в обычном режиме npm-пакеты резолвятся только при `plugins: { resolve: true }`, при этом Bitrix-зависимости остаются external. В standalone npm-пакеты и Bitrix-зависимости инлайнятся автоматически.
+- **npm-пакеты** — в обычном режиме npm-пакеты резолвятся только при `resolveNodeModules: true`, при этом Bitrix-зависимости остаются external. В standalone npm-пакеты и Bitrix-зависимости инлайнятся автоматически.
