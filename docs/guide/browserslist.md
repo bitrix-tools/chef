@@ -2,39 +2,45 @@
 
 Chef uses [browserslist](https://github.com/browserslist/browserslist) to determine target browsers for [Babel](https://babeljs.io/) transpilation and [PostCSS](https://postcss.org/) autoprefixing.
 
-## Setup
+By default, Chef targets `baseline widely available` — browsers with [widely available](https://web-platform-dx.github.io/web-features/) support for modern web features.
 
-Create a `.browserslistrc` file in the project root with the recommended config:
+## How it works
+
+1. If `targets` is specified in `bundle.config.ts`, Chef uses it directly
+2. Otherwise, Chef looks for a `.browserslistrc` file up the directory tree from the extension
+3. If no file is found, the default `baseline widely available` is used
+
+## Custom targets
+
+Specify targets directly in the config:
+
+```ts
+export default {
+  // ...
+  targets: ['last 2 versions', 'not dead'],
+};
+```
+
+Or create a `.browserslistrc` file in the project root (use `chef init build` to generate one):
 
 ```
 baseline widely available
 ```
 
-This targets browsers that have [widely available](https://web-platform-dx.github.io/web-features/) support for modern web features — a good default for most projects.
+## Migrating from `browserslist`
 
-Then enable it in your `bundle.config.ts`:
+The `browserslist` option in `bundle.config` is deprecated. Use `targets` instead:
 
 ```ts
+// Before
 export default {
-  input: './src/my.extension.ts',
-  output: './dist/my.extension.bundle.js',
-  browserslist: true,
+  browserslist: ['last 2 versions'],
+};
+
+// After
+export default {
+  targets: ['last 2 versions'],
 };
 ```
 
-## How it works
-
-When `browserslist` is set to `true`, Chef looks for `.browserslistrc` up the directory tree from the extension. If the file is not found, the setting has no effect.
-
-You can also specify targets directly in the config instead of using a separate file:
-
-```ts
-export default {
-  // ...
-  browserslist: ['last 2 versions', 'not dead'],
-};
-```
-
-If `browserslist` is omitted or set to `false`, the default targets are used (`IE >= 11`, `last 4 version`).
-
-> When you scaffold an extension with `chef create`, the generated config automatically sets `browserslist: true` if a `.browserslistrc` file exists in the project.
+The old `browserslist` option continues to work for backwards compatibility.

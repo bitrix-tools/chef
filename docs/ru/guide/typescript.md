@@ -160,7 +160,6 @@ export default {
     css: './dist/ui.buttons.bundle.css',
   },
   namespace: 'BX.UI.Buttons',
-  browserslist: true,
 } as BundleConfig;
 ```
 

@@ -69,7 +69,6 @@ export default {
   input: './src/ui.buttons.ts',
   output: './dist/ui.buttons.bundle.js',
   namespace: 'BX.UI.Buttons',
-  browserslist: true,
 } as BundleConfig;
 ```
 
@@ -82,7 +81,7 @@ export default {
 | `input` | `string` | Точка входа |
 | `output` | `string \| { js, css }` | Путь к выходному бандлу. Строка — только JS, объект — JS и CSS отдельно |
 | `namespace` | `string` | Глобальный неймспейс для экспортов (по умолчанию: `window`) |
-| `browserslist` | `boolean \| string[]` | Целевые браузеры для Babel и PostCSS. `true` — читать из `.browserslistrc` |
+| `targets` | `string \| string[]` | Целевые браузеры для Babel и PostCSS |
 | `sourceMaps` | `boolean` | Генерация source maps |
 | `minification` | `boolean \| object` | Минификация через Terser |
 | `treeshake` | `boolean` | Удаление неиспользуемого кода (по умолчанию: `true`) |

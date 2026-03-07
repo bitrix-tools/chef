@@ -107,7 +107,6 @@ export default {
   output: 'dist/index.bundle.js',
   standalone: true,
   namespace: 'BX.MyApp',
-  browserslist: true,
 };
 ```
 
