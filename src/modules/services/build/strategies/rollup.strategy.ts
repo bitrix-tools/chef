@@ -82,6 +82,41 @@ export class RollupBuildStrategy extends BuildStrategy
 		'vue': 'ui.vue3',
 	};
 
+	protected static createEnvReplacePlugin(production: boolean): Plugin
+	{
+		const replacements: Record<string, string> = {
+			'process.env.NODE_ENV': JSON.stringify(production ? 'production' : 'development'),
+			'import.meta.env.MODE': JSON.stringify(production ? 'production' : 'development'),
+			'import.meta.env.PROD': String(production),
+			'import.meta.env.DEV': String(!production),
+		};
+
+		const keys = Object.keys(replacements);
+
+		return {
+			name: 'env-replace',
+			transform(code)
+			{
+				const matched = keys.filter((key) => code.includes(key));
+				if (matched.length === 0)
+				{
+					return null;
+				}
+
+				let result = code;
+				for (const key of matched)
+				{
+					result = result.replaceAll(key, replacements[key]);
+				}
+
+				return {
+					code: result,
+					map: null,
+				};
+			},
+		};
+	}
+
 	protected static createNpmRemapPlugin(): Plugin
 	{
 		return {
@@ -384,6 +419,7 @@ export class RollupBuildStrategy extends BuildStrategy
 		return {
 			input: options.input,
 			plugins: [
+				RollupBuildStrategy.createEnvReplacePlugin(options.production ?? false),
 				RollupBuildStrategy.createNpmRemapPlugin(),
 				...(() => {
 					if (options.standalone)
