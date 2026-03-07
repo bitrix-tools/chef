@@ -346,8 +346,10 @@ export abstract class BasePackage
 				? bundleConfig.get('sourceMaps')
 				: !production,
 			standalone: bundleConfig.get('standalone'),
+			resolve: bundleConfig.get('resolveNodeModules'),
+			babel: bundleConfig.get('babel'),
 			transformClasses: bundleConfig.get('transformClasses'),
-			customPlugins: bundleConfig.get('plugins')?.custom,
+			customPlugins: bundleConfig.get('plugins'),
 			production,
 		};
 	}

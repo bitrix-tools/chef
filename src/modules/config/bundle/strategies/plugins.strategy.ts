@@ -1,15 +1,16 @@
+import type { Plugin } from 'rollup';
 import { ConfigStrategy } from '../../config.strategy';
-import type { BundleConfig } from '../bundle.config';
+
 
 export const pluginsStrategy = {
 	key: 'plugins',
-	getDefault(): {}
+	getDefault(): Plugin[]
 	{
-		return {};
+		return [];
 	},
-	prepare(value: any): BundleConfig['plugins']
+	prepare(value: any): Plugin[]
 	{
-		if (value && typeof value === 'object')
+		if (Array.isArray(value))
 		{
 			return value;
 		}
@@ -18,11 +19,11 @@ export const pluginsStrategy = {
 	},
 	validate(value: any): true | string
 	{
-		if (value && typeof value === 'object')
+		if (Array.isArray(value) || value === undefined)
 		{
 			return true;
 		}
 
-		return 'Invalid \'plugins\' value';
+		return 'Invalid \'plugins\' value. Expected an array of Rollup plugins.';
 	},
-} satisfies ConfigStrategy<BundleConfig['plugins']>
+} satisfies ConfigStrategy<Plugin[]>

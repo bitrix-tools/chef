@@ -436,7 +436,7 @@ export class RollupBuildStrategy extends BuildStrategy
 
 					return null;
 				})(),
-				babelPlugin({
+				...((options.babel !== false) ? [babelPlugin({
 					babelHelpers: 'external',
 					presets: [
 						[
@@ -452,7 +452,7 @@ export class RollupBuildStrategy extends BuildStrategy
 						externalHelpersPlugin,
 						...(options.transformClasses ? [transformClassPropertiesPlugin, transformPrivateMethodsPlugin, transformPrivatePropertyInObjectPlugin, transformClassesPlugin] : []),
 					],
-				}),
+				})] : []),
 				jsonPlugin(),
 				postcss({
 					extensions: ['.css'],
@@ -564,7 +564,7 @@ export class RollupBuildStrategy extends BuildStrategy
 				nodeResolve({
 					browser: true,
 				}),
-				babelPlugin({
+				...((options.babel !== false) ? [babelPlugin({
 					babelHelpers: 'external',
 					presets: [
 						[
@@ -579,7 +579,7 @@ export class RollupBuildStrategy extends BuildStrategy
 						...(options.typescript ? [] : [flowStripTypesPlugin]),
 						externalHelpersPlugin,
 					],
-				}),
+				})] : []),
 				jsonPlugin(),
 				commonjs({
 					sourceMap: false,

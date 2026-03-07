@@ -1,4 +1,4 @@
-import type { RollupLog } from 'rollup';
+import type { RollupLog, Plugin } from 'rollup';
 import type { MinifyOptions } from 'terser';
 
 export interface BundleFileInfo {
@@ -40,7 +40,8 @@ export type BuildOptions = {
 	sourceMaps?: boolean,
 	vue?: boolean,
 	transformClasses?: boolean,
-	customPlugins?: any[],
+	babel?: boolean,
+	customPlugins?: Plugin[],
 	production?: boolean,
 };
 

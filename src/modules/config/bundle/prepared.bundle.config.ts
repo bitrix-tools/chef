@@ -1,4 +1,4 @@
-import type { TransformOptions } from '@babel/core';
+import type { Plugin } from 'rollup';
 import type { MinifyOptions } from 'terser';
 
 export interface PreparedBundleConfig {
@@ -12,10 +12,9 @@ export interface PreparedBundleConfig {
 	adjustConfigPhp: boolean;
 	treeshake: boolean;
 	'protected': boolean;
-	plugins: {
-		babel?: boolean | TransformOptions;
-		custom?: Array<string | ((...args: any[]) => any)>;
-	};
+	plugins: Plugin[];
+	resolveNodeModules: boolean;
+	babel: boolean;
 	cssImages?: {
 		type: 'inline' | 'copy';
 		output: string;

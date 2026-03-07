@@ -1,4 +1,4 @@
-import type { TransformOptions } from '@babel/core';
+import type { Plugin } from 'rollup';
 import type { MinifyOptions } from 'terser';
 
 export interface BundleConfig {
@@ -12,10 +12,8 @@ export interface BundleConfig {
 	adjustConfigPhp?: boolean;
 	treeshake?: boolean;
 	'protected'?: boolean;
-	plugins?: {
-		babel?: boolean | TransformOptions;
-		custom?: Array<string | ((...args: any[]) => any)>;
-	};
+	plugins?: Plugin[];
+	resolveNodeModules?: boolean;
 	cssImages?: {
 		type?: 'inline' | 'copy';
 		output?: string;
@@ -41,4 +39,11 @@ export interface BundleConfig {
 		};
 	};
 	rebuild?: string[];
+}
+
+/** @deprecated Use new format: `plugins: [...]` and `resolveNodeModules: true` */
+export interface LegacyPluginsConfig {
+	babel?: boolean;
+	resolve?: boolean;
+	custom?: Plugin[];
 }
