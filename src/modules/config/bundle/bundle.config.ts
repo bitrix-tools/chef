@@ -1,18 +1,6 @@
 import type { TransformOptions } from '@babel/core';
 import type { MinifyOptions } from 'terser';
 
-export type CommandHook = {
-	type: 'build' | 'test';
-	title: string;
-	extensions: string[];
-};
-
-export type ActionHook = {
-	type: 'action';
-	title: string;
-	run: () => Promise<any> | void;
-};
-
 export interface BundleConfig {
 	input: string;
 	output: string | { js: string; css: string };
@@ -50,10 +38,5 @@ export interface BundleConfig {
 			autoLoad?: boolean;
 		};
 	};
-	hooks?: {
-		beforeBuild?: (CommandHook | ActionHook)[];
-		afterBuild?: (CommandHook | ActionHook)[];
-		beforeTest?: (CommandHook | ActionHook)[];
-		afterTest?: (CommandHook | ActionHook)[];
-	};
+	rebuild?: string[];
 }
