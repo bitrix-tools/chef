@@ -200,29 +200,24 @@ export abstract class BasePackage
 
 	getTargets(): Array<string>
 	{
-		const query = (() => {
-			const bundleConfig = this.getBundleConfig();
-			if (bundleConfig.get('browserslist') === true)
-			{
-				const targets = browserslist.loadConfig({
-					path: this.getPath(),
-				});
+		const bundleConfig = this.getBundleConfig();
+		const value = bundleConfig.get('targets');
 
-				if (targets && targets.length > 0)
-				{
-					return targets;
-				}
-			}
-
-			return bundleConfig.get('browserslist');
-		})();
-
-		if (Array.isArray(query) || typeof query === 'string')
+		if (typeof value === 'string' || Array.isArray(value))
 		{
-			return browserslist(query);
+			return browserslist(value);
 		}
 
-		return [];
+		const fileTargets = browserslist.loadConfig({
+			path: this.getPath(),
+		});
+
+		if (fileTargets && fileTargets.length > 0)
+		{
+			return browserslist(fileTargets);
+		}
+
+		return browserslist('baseline widely available');
 	}
 
 	getGlobal(): { [name: string]: string }

@@ -2,7 +2,7 @@ export * from './input.strategy';
 export * from './output.strategy';
 export * from './namespace.strategy';
 export * from './namespace.function.strategy';
-export * from './browserslist.strategy';
+export * from './targets.strategy';
 export * from './adjust.config.php.strategy';
 export * from './minification.strategy';
 export * from './css.images.strategy';

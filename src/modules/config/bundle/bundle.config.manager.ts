@@ -22,7 +22,20 @@ export class BundleConfigManager extends ConfigManager<PreparedBundleConfig>
 		const require = createRequire(import.meta.url);
 		const sourceBundleConfig: { default: BundleConfig } & BundleConfig = require(path.resolve(configPath));
 
-		Object.entries(sourceBundleConfig?.default ?? sourceBundleConfig).forEach(([key, value]) => {
+		const config = sourceBundleConfig?.default ?? sourceBundleConfig;
+
+		// browserslist → targets (deprecated)
+		if ('browserslist' in config && !('targets' in config))
+		{
+			config.targets = config.browserslist;
+		}
+
+		Object.entries(config).forEach(([key, value]) => {
+			if (key === 'browserslist')
+			{
+				return;
+			}
+
 			this.set(key, value);
 		});
 	}

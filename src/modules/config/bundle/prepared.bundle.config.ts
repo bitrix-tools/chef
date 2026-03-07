@@ -27,7 +27,7 @@ export interface PreparedBundleConfig {
 		include: string[];
 		exclude: string[];
 	};
-	browserslist: string | string[];
+	targets: string | string[] | undefined;
 	minification: boolean | MinifyOptions;
 	transformClasses: boolean;
 	sourceMaps: boolean;

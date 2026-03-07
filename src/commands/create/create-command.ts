@@ -69,16 +69,6 @@ createCommand
 			return typeof tsConfig === 'string' && tsConfig.length > 0;
 		})();
 
-		const useBrowserslist = (() => {
-			const browsersListPath = FileFinder.findUpFile({
-				fileName: '.browserslistrc',
-				fromDir: packagePath,
-				rootDir: Environment.getRoot(),
-			});
-
-			return typeof browsersListPath === 'string' && browsersListPath.length > 0;
-		})();
-
 		const bundleConfigTemplateName = useTS ? 'bundle.config.ts.txt' : 'bundle.config.js.txt';
 		const bundleConfigTemplatePath = path.join(__dirname, 'templates', bundleConfigTemplateName);
 		const bundleConfigTemplate = await fs.readFile(bundleConfigTemplatePath, 'utf8');
@@ -87,7 +77,6 @@ createCommand
 			inputPath: `./src/${createInputFileName(extensionName, useTS ? 'ts' : 'js')}`,
 			outputPath: `./dist/${createOutputFileName(extensionName, 'js')}`,
 			namespace: createNamespace(extensionName),
-			browserslist: useBrowserslist,
 		};
 
 		const bundleConfigContent = renderTemplate({

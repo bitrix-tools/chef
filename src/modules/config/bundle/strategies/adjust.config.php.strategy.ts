@@ -22,6 +22,6 @@ export const adjustConfigPhpStrategy = {
 			return true;
 		}
 
-		return 'Invalid \'browserslist\' value';
+		return 'Invalid \'adjustConfigPhp\' value';
 	},
 } satisfies ConfigStrategy<boolean>
