@@ -25,7 +25,7 @@
 ## Features
 
 - **TypeScript First** — Native TypeScript support with automatic transpilation
-- **Build** — Rollup-based bundler with Babel and PostCSS
+- **Build** — Rollup-based bundler with Babel, PostCSS, and automatic `process.env.NODE_ENV` replacement
 - **Test** — Unit tests (Mocha + Chai) in real browsers via Playwright, and E2E tests
 - **Lint** — ESLint integration for consistent code quality
 - **Scaffold** — Generate new extensions with `chef create`

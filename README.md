@@ -25,7 +25,7 @@
 ## Возможности
 
 - **TypeScript First** — нативная поддержка TypeScript с автоматической транспиляцией
-- **Сборка** — бандлер на основе Rollup с Babel и PostCSS
+- **Сборка** — бандлер на основе Rollup с Babel, PostCSS и автозаменой `process.env.NODE_ENV`
 - **Тесты** — unit-тесты (Mocha + Chai) в реальных браузерах через Playwright и E2E-тесты
 - **Линтинг** — интеграция с ESLint
 - **Scaffold** — создание новых расширений командой `chef create`

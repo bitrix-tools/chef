@@ -35,6 +35,28 @@ export default {
 | `rebuild` | `string[]` | Rebuild dependent extensions |
 | `transformClasses` | `boolean` | Transpile classes |
 
+## Environment variables
+
+Chef automatically replaces environment variables during build, similar to [Vite](https://vite.dev/guide/env-and-mode):
+
+| Variable | Production | Development |
+|---|---|---|
+| `process.env.NODE_ENV` | `"production"` | `"development"` |
+| `import.meta.env.MODE` | `"production"` | `"development"` |
+| `import.meta.env.PROD` | `true` | `false` |
+| `import.meta.env.DEV` | `false` | `true` |
+
+Replacement happens statically at build time. This enables tree-shaking to remove dev-only code from npm packages (Lexical, React, Vue, etc.):
+
+```ts
+// This block will be completely removed in production builds
+if (process.env.NODE_ENV !== 'production') {
+  console.warn('Debug info');
+}
+```
+
+In `chef build` mode (no flags), variables are set to `development`. In `chef build --production` mode — to `production`.
+
 ## Plugins
 
 The `plugins` option accepts an array of Rollup-compatible plugins. Plugins are added at the end of the build chain, after Chef's built-in plugins.
@@ -45,22 +67,24 @@ Install the plugin in your extension directory:
 
 ```bash
 cd /path/to/my.extension
-npm install @rollup/plugin-replace
+npm install @rollup/plugin-alias
 ```
 
 ### Usage
 
 ```ts
-import replace from '@rollup/plugin-replace';
+import alias from '@rollup/plugin-alias';
+import path from 'path';
 
 export default {
   input: './src/index.ts',
   output: './dist/my.bundle.js',
   namespace: 'BX.My',
   plugins: [
-    replace({
-      'process.env.NODE_ENV': JSON.stringify('production'),
-      preventAssignment: true,
+    alias({
+      entries: [
+        { find: '@utils', replacement: path.resolve(__dirname, 'src/utils') },
+      ],
     }),
   ],
 };
@@ -69,8 +93,8 @@ export default {
 ### Multiple plugins
 
 ```ts
-import replace from '@rollup/plugin-replace';
 import alias from '@rollup/plugin-alias';
+import replace from '@rollup/plugin-replace';
 
 export default {
   input: './src/index.ts',

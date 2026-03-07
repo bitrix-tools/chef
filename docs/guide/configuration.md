@@ -35,6 +35,28 @@ export default {
 | `rebuild` | `string[]` | Пересборка зависимых расширений |
 | `transformClasses` | `boolean` | Транспиляция классов |
 
+## Переменные окружения
+
+Chef автоматически заменяет переменные окружения при сборке, аналогично [Vite](https://vite.dev/guide/env-and-mode):
+
+| Переменная | Production | Development |
+|---|---|---|
+| `process.env.NODE_ENV` | `"production"` | `"development"` |
+| `import.meta.env.MODE` | `"production"` | `"development"` |
+| `import.meta.env.PROD` | `true` | `false` |
+| `import.meta.env.DEV` | `false` | `true` |
+
+Замена происходит статически на этапе сборки. Это позволяет tree-shaking вырезать dev-only код из npm-пакетов (Lexical, React, Vue и др.):
+
+```ts
+// Этот блок будет полностью удалён в production-сборке
+if (process.env.NODE_ENV !== 'production') {
+  console.warn('Debug info');
+}
+```
+
+В режиме `chef build` (без флагов) переменные подставляются как `development`. В режиме `chef build --production` — как `production`.
+
 ## Плагины
 
 Параметр `plugins` принимает массив Rollup-совместимых плагинов. Плагины добавляются в конец цепочки сборки, после встроенных плагинов Chef.
@@ -45,22 +67,24 @@ export default {
 
 ```bash
 cd /path/to/my.extension
-npm install @rollup/plugin-replace
+npm install @rollup/plugin-alias
 ```
 
 ### Использование
 
 ```ts
-import replace from '@rollup/plugin-replace';
+import alias from '@rollup/plugin-alias';
+import path from 'path';
 
 export default {
   input: './src/index.ts',
   output: './dist/my.bundle.js',
   namespace: 'BX.My',
   plugins: [
-    replace({
-      'process.env.NODE_ENV': JSON.stringify('production'),
-      preventAssignment: true,
+    alias({
+      entries: [
+        { find: '@utils', replacement: path.resolve(__dirname, 'src/utils') },
+      ],
     }),
   ],
 };
@@ -69,8 +93,8 @@ export default {
 ### Несколько плагинов
 
 ```ts
-import replace from '@rollup/plugin-replace';
 import alias from '@rollup/plugin-alias';
+import replace from '@rollup/plugin-replace';
 
 export default {
   input: './src/index.ts',
