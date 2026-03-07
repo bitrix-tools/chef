@@ -15,31 +15,12 @@ import {
 
 import type { ParsedCommandLine } from 'typescript';
 
-import nodeResolve from '@rollup/plugin-node-resolve';
-import babelPlugin from '@rollup/plugin-babel';
-import commonjs from '@rollup/plugin-commonjs';
-import jsonPlugin from '@rollup/plugin-json';
-import urlPlugin from '@rollup/plugin-url';
-import postcss from 'rollup-plugin-postcss';
-import postcssUrl from 'postcss-url';
-import postcssSvgo from 'postcss-svgo';
-import autoprefixer from 'autoprefixer';
-
-import presetEnv from '@babel/preset-env';
-import flowStripTypesPlugin from '@babel/plugin-transform-flow-strip-types';
-import externalHelpersPlugin from '@babel/plugin-external-helpers';
-import transformClassesPlugin from '@babel/plugin-transform-classes';
-import transformClassPropertiesPlugin from '@babel/plugin-transform-class-properties';
-import transformPrivateMethodsPlugin from '@babel/plugin-transform-private-methods';
-import transformPrivatePropertyInObjectPlugin from '@babel/plugin-transform-private-property-in-object';
-
 import { Environment } from '../../../../environment/environment';
 import { PackageResolver } from '../../../packages/package.resolver';
 import { isExternalDependencyName } from '../../../../utils/is.external.dependency.name';
 import { BuildStrategy } from './build.strategy';
 import { FileFinder } from '../../../../utils/file.finder';
 import concatPlugin from './rollup/plugin/concat-plugin';
-import terserPlugin from '@rollup/plugin-terser';
 
 import type {
 	BuildResult,
@@ -418,8 +399,123 @@ export class RollupBuildStrategy extends BuildStrategy
 		}) as Plugin;
 	}
 
+	async #loadBuildPlugins(options: BuildOptions)
+	{
+		const [
+			{ default: nodeResolve },
+			{ default: commonjs },
+			{ default: jsonPlugin },
+			{ default: urlPlugin },
+			{ default: postcss },
+			{ default: postcssUrl },
+			{ default: postcssSvgo },
+			{ default: autoprefixer },
+		] = await Promise.all([
+			import('@rollup/plugin-node-resolve'),
+			import('@rollup/plugin-commonjs'),
+			import('@rollup/plugin-json'),
+			import('@rollup/plugin-url'),
+			import('rollup-plugin-postcss'),
+			import('postcss-url'),
+			import('postcss-svgo'),
+			import('autoprefixer'),
+		]);
+
+		const babelPlugin = await this.#loadBabelPlugin(options);
+		const terserPlugin = options.minify
+			? (await import('@rollup/plugin-terser')).default
+			: null;
+
+		return {
+			nodeResolve,
+			commonjs,
+			jsonPlugin,
+			urlPlugin,
+			postcss,
+			postcssUrl,
+			postcssSvgo,
+			autoprefixer,
+			babelPlugin,
+			terserPlugin,
+		};
+	}
+
+	async #loadBabelPlugin(options: { babel?: boolean, typescript?: boolean, targets: string[], transformClasses?: boolean }): Promise<Plugin | null>
+	{
+		if (options.babel === false)
+		{
+			return null;
+		}
+
+		const [
+			{ default: babelPlugin },
+			{ default: presetEnv },
+			{ default: flowStripTypesPlugin },
+			{ default: externalHelpersPlugin },
+		] = await Promise.all([
+			import('@rollup/plugin-babel'),
+			import('@babel/preset-env'),
+			import('@babel/plugin-transform-flow-strip-types'),
+			import('@babel/plugin-external-helpers'),
+		]);
+
+		const babelTransformPlugins = [
+			...(options.typescript ? [] : [flowStripTypesPlugin]),
+			externalHelpersPlugin,
+		];
+
+		if (options.transformClasses)
+		{
+			const [
+				{ default: transformClassProperties },
+				{ default: transformPrivateMethods },
+				{ default: transformPrivatePropertyInObject },
+				{ default: transformClasses },
+			] = await Promise.all([
+				import('@babel/plugin-transform-class-properties'),
+				import('@babel/plugin-transform-private-methods'),
+				import('@babel/plugin-transform-private-property-in-object'),
+				import('@babel/plugin-transform-classes'),
+			]);
+
+			babelTransformPlugins.push(
+				transformClassProperties,
+				transformPrivateMethods,
+				transformPrivatePropertyInObject,
+				transformClasses,
+			);
+		}
+
+		return babelPlugin({
+			babelHelpers: 'external',
+			presets: [
+				[
+					presetEnv,
+					{
+						targets: options.targets,
+						modules: false,
+					},
+				],
+			],
+			plugins: babelTransformPlugins,
+		});
+	}
+
 	async #buildRollupInputOptions(options: BuildOptions, onWarn: WarningHandlerWithDefault, dependenciesRef: string[]): Promise<InputOptions>
 	{
+		const {
+			nodeResolve,
+			commonjs,
+			jsonPlugin,
+			urlPlugin,
+			postcss,
+			postcssUrl,
+			postcssSvgo,
+			autoprefixer,
+			babelPlugin,
+			terserPlugin,
+		} = await this.#loadBuildPlugins(options);
+
 		return {
 			input: options.input,
 			plugins: [
@@ -476,23 +572,7 @@ export class RollupBuildStrategy extends BuildStrategy
 
 					return null;
 				})(),
-				...((options.babel !== false) ? [babelPlugin({
-					babelHelpers: 'external',
-					presets: [
-						[
-							presetEnv,
-							{
-								targets: options.targets,
-								modules: false,
-							},
-						],
-					],
-					plugins: [
-						...(options.typescript ? [] : [flowStripTypesPlugin]),
-						externalHelpersPlugin,
-						...(options.transformClasses ? [transformClassPropertiesPlugin, transformPrivateMethodsPlugin, transformPrivatePropertyInObjectPlugin, transformClassesPlugin] : []),
-					],
-				})] : []),
+				...(babelPlugin ? [babelPlugin] : []),
 				jsonPlugin(),
 				postcss({
 					extensions: ['.css'],
@@ -543,7 +623,7 @@ export class RollupBuildStrategy extends BuildStrategy
 					),
 				}),
 				...(options.customPlugins ?? []),
-				...(options.minify ? [terserPlugin(typeof options.minify === 'object' ? options.minify : {})] : []),
+				...(terserPlugin ? [terserPlugin(typeof options.minify === 'object' ? options.minify : {})] : []),
 			],
 			onwarn: onWarn,
 			treeshake: {
@@ -568,6 +648,18 @@ export class RollupBuildStrategy extends BuildStrategy
 
 	async #buildRollupBuildCodeInputOptions(options: BuildCodeOptions, onWarning: WarningHandlerWithDefault, dependenciesRef: string[]): Promise<InputOptions>
 	{
+		const [
+			{ default: nodeResolve },
+			{ default: commonjs },
+			{ default: jsonPlugin },
+			babelPlugin,
+		] = await Promise.all([
+			import('@rollup/plugin-node-resolve'),
+			import('@rollup/plugin-commonjs'),
+			import('@rollup/plugin-json'),
+			this.#loadBabelPlugin(options),
+		]);
+
 		return {
 			input: 'source-code.js',
 			plugins: [
@@ -604,22 +696,7 @@ export class RollupBuildStrategy extends BuildStrategy
 				nodeResolve({
 					browser: true,
 				}),
-				...((options.babel !== false) ? [babelPlugin({
-					babelHelpers: 'external',
-					presets: [
-						[
-							presetEnv,
-							{
-								targets: options.targets,
-								modules: false,
-							},
-						],
-					],
-					plugins: [
-						...(options.typescript ? [] : [flowStripTypesPlugin]),
-						externalHelpersPlugin,
-					],
-				})] : []),
+				...(babelPlugin ? [babelPlugin] : []),
 				jsonPlugin(),
 				commonjs({
 					sourceMap: false,
