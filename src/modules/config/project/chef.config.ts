@@ -1,12 +1,22 @@
+export type DenySeverity = 'error' | 'warning';
+
+export interface DenyRule
+{
+	severity?: DenySeverity;
+	message?: string;
+}
+
+export type DenyOption = boolean | DenyRule;
+
 export interface ChefConfig
 {
 	deny?: {
-		sfc?: boolean;
-		minification?: boolean;
-		standalone?: boolean;
-		resolveNodeModules?: boolean;
-		transformClasses?: boolean;
-		sourceMaps?: boolean;
+		sfc?: DenyOption;
+		minification?: DenyOption;
+		standalone?: DenyOption;
+		resolveNodeModules?: DenyOption;
+		transformClasses?: DenyOption;
+		sourceMaps?: DenyOption;
 	};
 	defaults?: {
 		targets?: string | string[];
@@ -29,3 +39,22 @@ export const denyLabels: Record<string, string> = {
 	transformClasses: 'Class transformation',
 	sourceMaps: 'Source maps',
 };
+
+export function parseDenyOption(option: DenyOption | undefined): { enabled: boolean; severity: DenySeverity; message?: string }
+{
+	if (option === undefined || option === false)
+	{
+		return { enabled: false, severity: 'error' };
+	}
+
+	if (option === true)
+	{
+		return { enabled: true, severity: 'error' };
+	}
+
+	return {
+		enabled: true,
+		severity: option.severity ?? 'error',
+		message: option.message,
+	};
+}

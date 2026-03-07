@@ -1,70 +1,45 @@
-import type { ChefConfig } from './chef.config';
-import { denyLabels } from './chef.config';
+import type { ChefConfig, DenySeverity } from './chef.config';
+import { denyLabels, parseDenyOption } from './chef.config';
 import type { BuildOptions } from '../../services/build/types/build.service.types';
 
-export interface ValidationError
+export interface ValidationIssue
 {
 	option: string;
+	severity: DenySeverity;
 	message: string;
 }
 
-export function validateBuildOptions(options: BuildOptions, config: ChefConfig): ValidationError[]
+const denyChecks: Array<{ key: string; check: (options: BuildOptions) => boolean }> = [
+	{ key: 'sfc', check: (o) => !!o.vue },
+	{ key: 'minification', check: (o) => !!o.minify },
+	{ key: 'standalone', check: (o) => !!o.standalone },
+	{ key: 'resolveNodeModules', check: (o) => !!o.resolve },
+	{ key: 'transformClasses', check: (o) => !!o.transformClasses },
+	{ key: 'sourceMaps', check: (o) => !!o.sourceMaps },
+];
+
+export function validateBuildOptions(options: BuildOptions, config: ChefConfig): ValidationIssue[]
 {
-	const errors: ValidationError[] = [];
+	const issues: ValidationIssue[] = [];
 	const deny = config.deny;
 
 	if (!deny)
 	{
-		return errors;
+		return issues;
 	}
 
-	if (deny.sfc && options.vue)
+	for (const { key, check } of denyChecks)
 	{
-		errors.push({
-			option: 'sfc',
-			message: `${denyLabels.sfc} denied by project config (chef.config)`,
-		});
+		const rule = parseDenyOption(deny[key as keyof typeof deny]);
+		if (rule.enabled && check(options))
+		{
+			issues.push({
+				option: key,
+				severity: rule.severity,
+				message: rule.message ?? `${denyLabels[key]} denied by project config (chef.config)`,
+			});
+		}
 	}
 
-	if (deny.minification && options.minify)
-	{
-		errors.push({
-			option: 'minification',
-			message: `${denyLabels.minification} denied by project config (chef.config)`,
-		});
-	}
-
-	if (deny.standalone && options.standalone)
-	{
-		errors.push({
-			option: 'standalone',
-			message: `${denyLabels.standalone} denied by project config (chef.config)`,
-		});
-	}
-
-	if (deny.resolveNodeModules && options.resolve)
-	{
-		errors.push({
-			option: 'resolveNodeModules',
-			message: `${denyLabels.resolveNodeModules} denied by project config (chef.config)`,
-		});
-	}
-
-	if (deny.transformClasses && options.transformClasses)
-	{
-		errors.push({
-			option: 'transformClasses',
-			message: `${denyLabels.transformClasses} denied by project config (chef.config)`,
-		});
-	}
-
-	if (deny.sourceMaps && options.sourceMaps)
-	{
-		errors.push({
-			option: 'sourceMaps',
-			message: `${denyLabels.sourceMaps} denied by project config (chef.config)`,
-		});
-	}
-
-	return errors;
+	return issues;
 }

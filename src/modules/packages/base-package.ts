@@ -360,23 +360,33 @@ export abstract class BasePackage
 		};
 	}
 
-	#validateBuildOptions(buildOptions: BuildOptions): BuildResult | null
+	#validateBuildOptions(buildOptions: BuildOptions): { denied: BuildResult } | { warnings: string[] } | null
 	{
 		const chefConfig = ChefConfigManager.getInstance().getConfig();
-		const validationErrors = validateBuildOptions(buildOptions, chefConfig);
+		const issues = validateBuildOptions(buildOptions, chefConfig);
 
-		if (validationErrors.length === 0)
+		if (issues.length === 0)
 		{
 			return null;
 		}
 
-		return {
-			dependencies: [],
-			bundles: [],
-			warnings: [],
-			errors: validationErrors.map((e) => ({ message: e.message })),
-			standalone: buildOptions.standalone ?? false,
-		};
+		const errors = issues.filter((i) => i.severity === 'error');
+		const warnings = issues.filter((i) => i.severity === 'warning');
+
+		if (errors.length > 0)
+		{
+			return {
+				denied: {
+					dependencies: [],
+					bundles: [],
+					warnings: warnings.map((w) => ({ message: w.message })),
+					errors: errors.map((e) => ({ message: e.message })),
+					standalone: buildOptions.standalone ?? false,
+				},
+			};
+		}
+
+		return { warnings: warnings.map((w) => w.message) };
 	}
 
 	#hasVueFiles(): boolean
@@ -389,13 +399,18 @@ export abstract class BasePackage
 		const buildService = await this.#getBuildService();
 		const buildOptions = this.#getBuildOptions(options);
 
-		const denied = this.#validateBuildOptions(buildOptions);
-		if (denied)
+		const validation = this.#validateBuildOptions(buildOptions);
+		if (validation && 'denied' in validation)
 		{
-			return denied;
+			return validation.denied;
 		}
 
 		const buildResult = await buildService.build(buildOptions);
+
+		if (validation && 'warnings' in validation)
+		{
+			buildResult.warnings.push(...validation.warnings.map((message) => ({ message })));
+		}
 
 		const phpConfig = this.getPhpConfig();
 
@@ -414,13 +429,20 @@ export abstract class BasePackage
 		const buildService = await this.#getBuildService();
 		const buildOptions = this.#getBuildOptions(options);
 
-		const denied = this.#validateBuildOptions(buildOptions);
-		if (denied)
+		const validation = this.#validateBuildOptions(buildOptions);
+		if (validation && 'denied' in validation)
 		{
-			return denied;
+			return validation.denied;
 		}
 
-		return buildService.generate(buildOptions);
+		const buildResult = await buildService.generate(buildOptions);
+
+		if (validation && 'warnings' in validation)
+		{
+			buildResult.warnings.push(...validation.warnings.map((message) => ({ message })));
+		}
+
+		return buildResult;
 	}
 
 	async lint(): Promise<LintResult>
