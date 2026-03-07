@@ -47,17 +47,19 @@ export abstract class BasePackage
 	#getBuildService(): Promise<BuildService>
 	{
 		return this.#cache.remember('buildService', async () => {
-			const [
-				{ BuildService },
-				{ RollupBuildStrategy },
-			] = await Promise.all([
-				import('../services/build/build.service'),
-				import('../services/build/strategies/rollup.strategy'),
-			]);
+			const chefConfig = ChefConfigManager.getInstance().getConfig();
+			const bundler = chefConfig?.bundler ?? 'rollup';
 
-			return new BuildService(
-				new RollupBuildStrategy(),
-			);
+			const { BuildService } = await import('../services/build/build.service');
+
+			if (bundler === 'rolldown')
+			{
+				const { RolldownBuildStrategy } = await import('../services/build/strategies/rolldown.strategy');
+				return new BuildService(new RolldownBuildStrategy());
+			}
+
+			const { RollupBuildStrategy } = await import('../services/build/strategies/rollup.strategy');
+			return new BuildService(new RollupBuildStrategy());
 		});
 	}
 

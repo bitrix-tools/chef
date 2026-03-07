@@ -8,8 +8,11 @@ export interface DenyRule
 
 export type DenyOption = boolean | DenyRule;
 
+export type Bundler = 'rollup' | 'rolldown';
+
 export interface ChefConfig
 {
+	bundler?: Bundler;
 	deny?: {
 		sfc?: DenyOption;
 		minification?: DenyOption;

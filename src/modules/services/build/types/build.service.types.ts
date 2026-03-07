@@ -55,6 +55,7 @@ export type BuildCodeOptions = {
 	resolve?: boolean,
 	standalone?: boolean;
 	sourcemap?: boolean;
+	babel?: boolean;
 };
 
 export interface BuildCodeResult {
