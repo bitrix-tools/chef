@@ -117,7 +117,7 @@ export class RollupBuildStrategy extends BuildStrategy
 		};
 	}
 
-	protected static createNpmRemapPlugin(): Plugin
+	protected static createNpmRemapPlugin(dependenciesRef?: string[]): Plugin
 	{
 		return {
 			name: 'npm-to-bitrix-remap',
@@ -125,7 +125,10 @@ export class RollupBuildStrategy extends BuildStrategy
 			{
 				if (id in RollupBuildStrategy.#npmToBitrixMap)
 				{
-					return { id: RollupBuildStrategy.#npmToBitrixMap[id], external: true };
+					const mapped = RollupBuildStrategy.#npmToBitrixMap[id];
+					dependenciesRef?.push(mapped);
+
+					return { id: mapped, external: true };
 				}
 
 				return null;
@@ -204,7 +207,7 @@ export class RollupBuildStrategy extends BuildStrategy
 	async build(options: BuildOptions): Promise<BuildResult>
 	{
 		const { onWarning, warningsRef, dependenciesRef } = RollupBuildStrategy.createOnWarningHandler();
-		const inputOptions: InputOptions = await this.#buildRollupInputOptions(options, onWarning);
+		const inputOptions: InputOptions = await this.#buildRollupInputOptions(options, onWarning, dependenciesRef);
 
 		let bundle: RollupBuild;
 		try
@@ -262,6 +265,7 @@ export class RollupBuildStrategy extends BuildStrategy
 		const rollupInputOptions: InputOptions = await this.#buildRollupBuildCodeInputOptions(
 			options,
 			onWarning,
+			dependenciesRef,
 		);
 
 		const bundle: RollupBuild = await rollup(rollupInputOptions);
@@ -293,7 +297,7 @@ export class RollupBuildStrategy extends BuildStrategy
 	async generate(options: BuildOptions): Promise<BuildResult>
 	{
 		const { onWarning, warningsRef, dependenciesRef } = RollupBuildStrategy.createOnWarningHandler();
-		const inputOptions: InputOptions = await this.#buildRollupInputOptions(options, onWarning);
+		const inputOptions: InputOptions = await this.#buildRollupInputOptions(options, onWarning, dependenciesRef);
 
 		let bundle: RollupBuild;
 		try
@@ -414,13 +418,13 @@ export class RollupBuildStrategy extends BuildStrategy
 		}) as Plugin;
 	}
 
-	async #buildRollupInputOptions(options: BuildOptions, onWarn: WarningHandlerWithDefault): Promise<InputOptions>
+	async #buildRollupInputOptions(options: BuildOptions, onWarn: WarningHandlerWithDefault, dependenciesRef: string[]): Promise<InputOptions>
 	{
 		return {
 			input: options.input,
 			plugins: [
 				RollupBuildStrategy.createEnvReplacePlugin(options.production ?? false),
-				RollupBuildStrategy.createNpmRemapPlugin(),
+				RollupBuildStrategy.createNpmRemapPlugin(dependenciesRef),
 				...(() => {
 					if (options.standalone)
 					{
@@ -562,7 +566,7 @@ export class RollupBuildStrategy extends BuildStrategy
 		};
 	}
 
-	async #buildRollupBuildCodeInputOptions(options: BuildCodeOptions, onWarning: WarningHandlerWithDefault): Promise<InputOptions>
+	async #buildRollupBuildCodeInputOptions(options: BuildCodeOptions, onWarning: WarningHandlerWithDefault, dependenciesRef: string[]): Promise<InputOptions>
 	{
 		return {
 			input: 'source-code.js',
@@ -570,7 +574,7 @@ export class RollupBuildStrategy extends BuildStrategy
 				RollupBuildStrategy.createVirtualEntryPlugin({
 					'source-code.js': options.code,
 				}),
-				RollupBuildStrategy.createNpmRemapPlugin(),
+				RollupBuildStrategy.createNpmRemapPlugin(dependenciesRef),
 				...(options.standalone ? [RollupBuildStrategy.createStandalonePlugin()] : []),
 				await (async () => {
 					if (options.typescript)
