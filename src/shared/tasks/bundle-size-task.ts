@@ -1,8 +1,8 @@
-import { formatSize, formatSizeWithDelta } from '../../../../../utils/format-size';
-import { TASK_STATUS_ICON } from '../../../../../modules/task/icons';
+import { formatSize, formatSizeWithDelta } from '../../utils/format-size';
+import { TASK_STATUS_ICON } from '../../modules/task/icons';
 
-import type { BasePackage } from '../../../../../modules/packages/base-package';
-import type { Task } from '../../../../../modules/task/task';
+import type { BasePackage } from '../../modules/packages/base-package';
+import type { Task } from '../../modules/task/task';
 
 export function bundleSizeTask(extension: BasePackage, args: Record<string, any>): Task
 {
@@ -16,13 +16,17 @@ export function bundleSizeTask(extension: BasePackage, args: Record<string, any>
 
 			if (bundleSize.js > 0)
 			{
-				const formattedJsSize = formatSizeWithDelta(bundleSize.js, previousSizes?.previousJsSize ?? null);
+				const formattedJsSize = previousSizes
+					? formatSizeWithDelta(bundleSize.js, previousSizes.previousJsSize ?? null)
+					: formatSize({ size: bundleSize.js });
 				context.log(`    ${TASK_STATUS_ICON.arrowRight} JS: ${formattedJsSize}`);
 			}
 
 			if (bundleSize.css > 0)
 			{
-				const formattedCssSize = formatSizeWithDelta(bundleSize.css, previousSizes?.previousCssSize ?? null);
+				const formattedCssSize = previousSizes
+					? formatSizeWithDelta(bundleSize.css, previousSizes.previousCssSize ?? null)
+					: formatSize({ size: bundleSize.css });
 				context.log(`    ${TASK_STATUS_ICON.arrowRight} CSS: ${formattedCssSize}`);
 			}
 

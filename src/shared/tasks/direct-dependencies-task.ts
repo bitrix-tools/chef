@@ -1,6 +1,6 @@
-import { generateTreeString } from '../../../../../utils/generate-tree';
-import type { BasePackage } from '../../../../../modules/packages/base-package';
-import type { Task } from '../../../../../modules/task/task';
+import { generateTreeString } from '../../utils/generate-tree';
+import type { BasePackage } from '../../modules/packages/base-package';
+import type { Task } from '../../modules/task/task';
 
 export function directDependenciesTask(extension: BasePackage, argv: Record<string, any>): Task
 {

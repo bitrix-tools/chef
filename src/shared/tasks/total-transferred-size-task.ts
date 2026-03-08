@@ -1,7 +1,7 @@
-import { formatSize } from '../../../utils/format-size';
-import type { BasePackage } from '../../../modules/packages/base-package';
-import type { Task } from '../../../modules/task/task';
-import {TASK_STATUS_ICON} from '../../../modules/task/icons';
+import { formatSize } from '../../utils/format-size';
+import { TASK_STATUS_ICON } from '../../modules/task/icons';
+import type { BasePackage } from '../../modules/packages/base-package';
+import type { Task } from '../../modules/task/task';
 
 export function totalTransferredSizeTask(extension: BasePackage): Task
 {
@@ -16,7 +16,6 @@ export function totalTransferredSizeTask(extension: BasePackage): Task
 				const formattedJsSize = formatSize({
 					size: totalTransferredSize.js,
 				});
-
 				context.log(`    ${TASK_STATUS_ICON.arrowRight} JS: ${formattedJsSize}`);
 			}
 
@@ -25,7 +24,6 @@ export function totalTransferredSizeTask(extension: BasePackage): Task
 				const formattedCssSize = formatSize({
 					size: totalTransferredSize.css,
 				});
-
 				context.log(`    ${TASK_STATUS_ICON.arrowRight} CSS: ${formattedCssSize}`);
 			}
 		},

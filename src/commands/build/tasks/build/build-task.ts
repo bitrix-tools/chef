@@ -4,10 +4,10 @@ import chalk from 'chalk';
 import type { Task } from '../../../../modules/task/task';
 import type { BasePackage } from '../../../../modules/packages/base-package';
 import type { RollupLog } from 'rollup';
-import { directDependenciesTask } from '../statistic/tasks/direct-dependencies-task';
-import { dependenciesTreeTask } from '../statistic/tasks/dependencies-tree-task';
-import { bundleSizeTask } from '../statistic/tasks/bundle-size-task';
-import { totalTransferredSizeTask } from '../statistic/tasks/total-transferred-size-task';
+import { directDependenciesTask } from '../../../../shared/tasks/direct-dependencies-task';
+import { dependenciesTreeTask } from '../../../../shared/tasks/dependencies-tree-task';
+import { bundleSizeTask } from '../../../../shared/tasks/bundle-size-task';
+import { totalTransferredSizeTask } from '../../../../shared/tasks/total-transferred-size-task';
 
 function getFileSize(filePath: string): number | null
 {
@@ -119,7 +119,7 @@ export function buildTask(extension: BasePackage, args: Record<string, any>): Ta
 		},
 		subtasks: [
 			bundleSizeTask(extension, args),
-			totalTransferredSizeTask(extension, args),
+			totalTransferredSizeTask(extension),
 			directDependenciesTask(extension, args),
 			dependenciesTreeTask(extension, args),
 		],
