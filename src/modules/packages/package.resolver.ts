@@ -120,43 +120,89 @@ export class PackageResolver
 			return output;
 		}
 
-		// Build search directories based on environment
-		const searchDirs: string[] = [];
+		// Build search tasks: pairs of [searchDir, configPatterns]
+		const searchTasks: Array<{ dir: string, patterns: string[] }> = [];
 
-		if (Environment.getType() === 'source')
+		for (const pattern of patterns)
 		{
-			const modules = fg.sync('*', {
-				cwd: root,
-				onlyDirectories: true,
-				ignore: ['node_modules', '.git'],
-			});
+			const segments = pattern.split('.');
 
-			for (const moduleName of modules)
+			// Split into fixed prefix segments and glob tail
+			const fixedSegments: string[] = [];
+			let globStart = 0;
+			for (let i = 0; i < segments.length; i++)
 			{
-				const jsDir = path.join(root, moduleName, 'install', 'js');
-				if (fs.existsSync(jsDir))
+				if (isGlobPattern(segments[i]))
 				{
-					searchDirs.push(jsDir);
+					globStart = i;
+					break;
+				}
+				fixedSegments.push(segments[i]);
+				globStart = i + 1;
+			}
+
+			const globSegments = segments.slice(globStart);
+			const globPath = globSegments.length > 0
+				? globSegments.join('/') + '/'
+				: '';
+
+			const configPatterns = [
+				`${globPath}bundle.config.js`,
+				`${globPath}bundle.config.ts`,
+			];
+
+			if (Environment.getType() === 'source')
+			{
+				if (fixedSegments.length > 0)
+				{
+					const moduleName = fixedSegments[0];
+					const deepPath = path.join(root, moduleName, 'install', 'js', ...fixedSegments);
+					if (fs.existsSync(deepPath))
+					{
+						searchTasks.push({ dir: deepPath, patterns: configPatterns });
+					}
+				}
+				else
+				{
+					// Glob in first segment — scan all modules
+					const modules = fs.readdirSync(root, { withFileTypes: true });
+					for (const entry of modules)
+					{
+						if (!entry.isDirectory() || entry.name === 'node_modules' || entry.name === '.git')
+						{
+							continue;
+						}
+						const jsDir = path.join(root, entry.name, 'install', 'js');
+						if (fs.existsSync(jsDir))
+						{
+							searchTasks.push({ dir: jsDir, patterns: configPatterns });
+						}
+					}
+				}
+			}
+
+			if (Environment.getType() === 'project')
+			{
+				const baseDirs = [
+					path.join(root, 'local', 'js'),
+					path.join(root, 'bitrix', 'js'),
+				];
+
+				for (const baseDir of baseDirs)
+				{
+					const deepPath = fixedSegments.length > 0
+						? path.join(baseDir, ...fixedSegments)
+						: baseDir;
+
+					if (fs.existsSync(deepPath))
+					{
+						searchTasks.push({ dir: deepPath, patterns: configPatterns });
+					}
 				}
 			}
 		}
 
-		if (Environment.getType() === 'project')
-		{
-			const localJs = path.join(root, 'local', 'js');
-			const bitrixJs = path.join(root, 'bitrix', 'js');
-
-			if (fs.existsSync(localJs))
-			{
-				searchDirs.push(localJs);
-			}
-			if (fs.existsSync(bitrixJs))
-			{
-				searchDirs.push(bitrixJs);
-			}
-		}
-
-		if (searchDirs.length === 0)
+		if (searchTasks.length === 0)
 		{
 			process.nextTick(() => {
 				output.emit('done', { count });
@@ -165,22 +211,13 @@ export class PackageResolver
 			return output;
 		}
 
-		// Convert patterns to glob file patterns
-		const configPatterns = patterns.flatMap((pattern) => {
-			const pathPattern = pattern.replace(/\./g, '/');
-			return [
-				`${pathPattern}/bundle.config.js`,
-				`${pathPattern}/bundle.config.ts`,
-			];
-		});
-
 		// Search in each directory
-		let pendingDirs = searchDirs.length;
+		let pendingTasks = searchTasks.length;
 
-		for (const searchDir of searchDirs)
+		for (const task of searchTasks)
 		{
-			const fastGlobStream = fg.stream(configPatterns, {
-				cwd: searchDir,
+			const fastGlobStream = fg.stream(task.patterns, {
+				cwd: task.dir,
 				absolute: true,
 				onlyFiles: true,
 			});
@@ -215,8 +252,8 @@ export class PackageResolver
 				.pipe(transformStream)
 				.on('data', (data: unknown) => output.push(data))
 				.on('end', () => {
-					pendingDirs--;
-					if (pendingDirs === 0)
+					pendingTasks--;
+					if (pendingTasks === 0)
 					{
 						output.emit('done', { count });
 						output.end();
