@@ -10,7 +10,7 @@ import { Environment } from '../../environment/environment';
 import { pathOption } from './options/path-option';
 import { PackageFactoryProvider } from '../../modules/packages/providers/package-factory-provider';
 import { findPackages } from '../../utils/package/find-packages';
-import { TemplateService } from '../../modules/services/template/template.service';
+import { TemplateManager } from '../../modules/services/template/template-manager';
 import { safeFileWrite, SaveFileStatus } from '../../utils/safe.file.write';
 import { multiline } from '../../utils/multiline.text.tag';
 
@@ -35,12 +35,12 @@ const initTestsCommand = new Command('tests')
 
 		console.log('');
 
-		const templateService = new TemplateService(
+		const templateManager = new TemplateManager(
 			path.join(__dirname, 'templates'),
 		);
 
 		const targetPlaywrightConfigPath = path.join(Environment.getRoot(), 'playwright.config.ts');
-		const playWrightConfigContent = await templateService.get('playwright.config.ts.txt');
+		const playWrightConfigContent = await templateManager.get('playwright.config.ts.txt');
 		const playwrightConfigStatus = await safeFileWrite({
 			filePath: targetPlaywrightConfigPath,
 			data: playWrightConfigContent,
@@ -52,7 +52,7 @@ const initTestsCommand = new Command('tests')
 		}
 
 		const targetDotEnvTestPath = path.join(Environment.getRoot(), '.env.test');
-		const dotEnvTestContent = await templateService.get('.env.test.txt');
+		const dotEnvTestContent = await templateManager.get('.env.test.txt');
 		const dotEnvTestStatus = await safeFileWrite({
 			filePath: targetDotEnvTestPath,
 			data: dotEnvTestContent,
@@ -215,12 +215,12 @@ const initBuildCommand = new Command('build')
 						console.log(`  → file://${aliasesPath}\n`,);
 
 						console.log(chalk.bold('Preparing tsconfig.json'));
-						const templateService = new TemplateService(
+						const templateManager = new TemplateManager(
 							path.join(__dirname, 'templates'),
 						);
 
 						const tsConfigPath = path.join(Environment.getRoot(), 'tsconfig.json');
-						const tsConfigContent = await templateService.get('tsconfig.json.txt');
+						const tsConfigContent = await templateManager.get('tsconfig.json.txt');
 						const tsConfigStatus = await safeFileWrite({
 							filePath: tsConfigPath,
 							theme: {
@@ -232,7 +232,7 @@ const initBuildCommand = new Command('build')
 						console.log('');
 						console.log(chalk.bold('Preparing .browserslistrc'));
 						const browserslistPath = path.join(Environment.getRoot(), '.browserslistrc');
-						const browserslistContent = await templateService.get('.browserslistrc.txt');
+						const browserslistContent = await templateManager.get('.browserslistrc.txt');
 						const browserslistStatus = await safeFileWrite({
 							filePath: browserslistPath,
 							theme: {

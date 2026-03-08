@@ -15,12 +15,12 @@ import {
 
 import type { ParsedCommandLine } from 'typescript';
 
-import { Environment } from '../../../../environment/environment';
-import { PackageResolver } from '../../../packages/package.resolver';
-import { isExternalDependencyName } from '../../../../utils/is.external.dependency.name';
-import { BuildStrategy } from './build.strategy';
-import { FileFinder } from '../../../../utils/file.finder';
-import concatPlugin from './rollup/plugin/concat-plugin';
+import { Environment } from '../../../environment/environment';
+import { PackageResolver } from '../../packages/package.resolver';
+import { isExternalDependencyName } from '../../../utils/is.external.dependency.name';
+import { BuildStrategy } from '../build-strategy';
+import { FileFinder } from '../../../utils/file.finder';
+import concatPlugin from './plugins/concat';
 
 import type {
 	BuildResult,
@@ -28,7 +28,7 @@ import type {
 	BundleFileInfo,
 	BuildCodeOptions,
 	BuildCodeResult,
-} from '../types/build.service.types';
+} from '../build-types';
 
 
 export class RollupBuildStrategy extends BuildStrategy
@@ -362,7 +362,7 @@ export class RollupBuildStrategy extends BuildStrategy
 
 	async #createTypeScriptPlugin(tsConfig: ParsedCommandLine, packageRoot: string): Promise<Plugin>
 	{
-		const { default: bitrixTypescriptPlugin } = await import('./rollup/plugin/typescript-plugin');
+		const { default: bitrixTypescriptPlugin } = await import('./plugins/typescript');
 
 		const typesPath = (() => {
 			const devExtension = PackageResolver.resolve('ui.dev');

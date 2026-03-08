@@ -1,7 +1,7 @@
-import type { BuildStrategy } from './strategies/build.strategy';
-import type { BuildResult, BuildOptions, BuildCodeOptions, BuildCodeResult } from './types/build.service.types';
+import type { BuildStrategy } from './build-strategy';
+import type { BuildResult, BuildOptions, BuildCodeOptions, BuildCodeResult } from './build-types';
 
-export class BuildService
+export class BuildEngine
 {
 	protected readonly strategy: BuildStrategy;
 

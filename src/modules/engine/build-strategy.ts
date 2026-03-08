@@ -1,4 +1,4 @@
-import type { BuildResult, BuildOptions, BuildCodeOptions, BuildCodeResult } from '../types/build.service.types';
+import type { BuildResult, BuildOptions, BuildCodeOptions, BuildCodeResult } from './build-types';
 
 
 export abstract class BuildStrategy
