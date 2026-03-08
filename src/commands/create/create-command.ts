@@ -7,12 +7,12 @@ import chalk from 'chalk';
 import { Environment } from '../../environment/environment';
 import { pathOption } from './options/path-option';
 import { resolvePackage } from '../../utils/package/resolve-package';
-import { renderTemplate } from '../../utils/render.template';
-import { FileFinder } from '../../utils/file.finder';
-import { createInputFileName } from '../../utils/create.input.file.name';
-import { createOutputFileName } from '../../utils/create.output.file.name';
-import { createNamespace } from '../../utils/create.namespace';
-import { toPascalCase } from '../../utils/to.pascal.case';
+import { renderTemplate } from '../../utils/render-template';
+import { FileFinder } from '../../utils/file-finder';
+import { createInputFileName } from '../../utils/create-input-file-name';
+import { createOutputFileName } from '../../utils/create-output-file-name';
+import { createNamespace } from '../../utils/create-namespace';
+import { toPascalCase } from '../../utils/to-pascal-case';
 
 export const createCommand = new Command('create');
 

@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import type { PlaywrightTestConfig } from '@playwright/test';
 import type { BasePackage } from '../../packages/base-package';
 import { Environment } from '../../../environment/environment';
-import { FileFinder } from '../../../utils/file.finder';
+import { FileFinder } from '../../../utils/file-finder';
 import { PackageBuilder } from '../build/package-builder';
 
 export class PackageTestRunner

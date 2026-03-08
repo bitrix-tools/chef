@@ -1,6 +1,6 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { fileExistsAsync } from '../../../utils/file.exists.async';
+import { fileExistsAsync } from '../../../utils/file-exists-async';
 
 export class TemplateManager
 {

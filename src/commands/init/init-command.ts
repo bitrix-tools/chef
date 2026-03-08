@@ -11,12 +11,12 @@ import { pathOption } from './options/path-option';
 import { PackageFactoryProvider } from '../../modules/packages/providers/package-factory-provider';
 import { findPackages } from '../../utils/package/find-packages';
 import { TemplateManager } from '../../modules/services/template/template-manager';
-import { safeFileWrite, SaveFileStatus } from '../../utils/safe.file.write';
-import { multiline } from '../../utils/multiline.text.tag';
+import { safeFileWrite, SaveFileStatus } from '../../utils/safe-file-write';
+import { multiline } from '../../utils/multiline-text-tag';
 
 import type { FlexibleCompilerOptions } from '@rollup/plugin-typescript';
 import type { BasePackage } from '../../modules/packages/base-package';
-import { PackageResolver } from '../../modules/packages/package.resolver';
+import { PackageResolver } from '../../modules/packages/package-resolver';
 
 const initTestsCommand = new Command('tests')
 	.description('Set up Playwright config and .env.test for browser tests')

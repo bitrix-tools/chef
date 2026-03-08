@@ -31,7 +31,7 @@ program
 	.addCommand(lazyCommand('stat', 'Show build, tests and bundle statistics for Bitrix extensions', () => import('./commands/stat/stat-command')))
 	.addCommand(lazyCommand('test', 'Run unit and end-to-end tests for extensions', () => import('./commands/test/test-command')))
 	.addCommand(lazyCommand('create', 'Create a new Bitrix JS extension scaffold', () => import('./commands/create/create-command')))
-	.addCommand(lazyCommand('flow-to-ts', 'Migrate Flow-typed JS code to TypeScript in extensions', () => import('./commands/flow-to-ts/flow-to-ts.command')))
+	.addCommand(lazyCommand('flow-to-ts', 'Migrate Flow-typed JS code to TypeScript in extensions', () => import('./commands/flow-to-ts/flow-to-ts-command')))
 	.addCommand(lazyCommand('init', 'Initialize testing and build tooling for your Bitrix project', () => import('./commands/init/init-command')))
 	.hook('preAction', adjustCwdPreAction)
 	.hook('preAction', checkCwdPreAction)

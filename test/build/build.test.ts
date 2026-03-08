@@ -4,8 +4,8 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { BuildEngine } from '../../src/modules/engine/build-engine';
 import { RollupBuildStrategy } from '../../src/modules/engine/rollup/rollup-strategy';
-import { BundleConfigManager } from '../../src/modules/config/bundle/bundle.config.manager';
-import { PhpConfigManager } from '../../src/modules/config/php/php.config.manager';
+import { BundleConfigManager } from '../../src/modules/config/bundle/bundle-config-manager';
+import { PhpConfigManager } from '../../src/modules/config/php/php-config-manager';
 
 import type { BuildOptions } from '../../src/modules/engine/build-types';
 

@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 
 import type { BasePackage } from '../../packages/base-package';
-import { LintResult } from '../../linter/lint.result';
+import { LintResult } from '../../linter/lint-result';
 import { Environment } from '../../../environment/environment';
 
 export class PackageLinter

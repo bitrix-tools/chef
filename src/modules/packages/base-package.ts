@@ -4,17 +4,17 @@ import fg from 'fast-glob';
 
 import browserslist from 'browserslist';
 
-import { BundleConfigManager } from '../config/bundle/bundle.config.manager';
-import { PhpConfigManager } from '../config/php/php.config.manager';
+import { BundleConfigManager } from '../config/bundle/bundle-config-manager';
+import { PhpConfigManager } from '../config/php/php-config-manager';
 import { MemoryCache } from '../../utils/memory-cache';
-import { LintResult } from '../linter/lint.result';
-import { flattenTree } from '../../utils/flatten.tree';
-import { buildDependenciesTree } from '../../utils/package/build.dependencies.tree';
+import { LintResult } from '../linter/lint-result';
+import { flattenTree } from '../../utils/flatten-tree';
+import { buildDependenciesTree } from '../../utils/package/build-dependencies-tree';
 
 import { Environment } from '../../environment/environment';
 import { PackageSizeCalculator } from '../services/stats/package-size-calculator';
 import type { BuildResult } from '../engine/build-types';
-import type { DependencyNode } from './types/dependency.node';
+import type { DependencyNode } from './types/dependency-node';
 
 type BasePackageOptions = {
 	path: string,

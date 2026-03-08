@@ -9,9 +9,9 @@ import { productionOption } from './options/production-option';
 import { buildQueue } from './queue/build-queue';
 
 import { PackageFactoryProvider } from '../../modules/packages/providers/package-factory-provider';
-import { PackageResolver } from '../../modules/packages/package.resolver';
+import { PackageResolver } from '../../modules/packages/package-resolver';
 import { findPackages } from '../../utils/package/find-packages';
-import { createShutdown } from '../../utils/create.shutdown';
+import { createShutdown } from '../../utils/create-shutdown';
 
 import { build } from './internal/build';
 

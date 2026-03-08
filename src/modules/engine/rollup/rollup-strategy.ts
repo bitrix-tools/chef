@@ -16,10 +16,10 @@ import {
 import type { ParsedCommandLine } from 'typescript';
 
 import { Environment } from '../../../environment/environment';
-import { PackageResolver } from '../../packages/package.resolver';
-import { isExternalDependencyName } from '../../../utils/is.external.dependency.name';
+import { PackageResolver } from '../../packages/package-resolver';
+import { isExternalDependencyName } from '../../../utils/is-external-dependency-name';
 import { BuildStrategy } from '../build-strategy';
-import { FileFinder } from '../../../utils/file.finder';
+import { FileFinder } from '../../../utils/file-finder';
 import concatPlugin from './plugins/concat';
 
 import type {
