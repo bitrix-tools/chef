@@ -1,7 +1,6 @@
+import * as path from 'node:path';
 import { Command, program } from 'commander';
-
-import { checkCwdPreAction } from './hooks/check-cwd-pre-action';
-import { adjustCwdPreAction } from './hooks/adjust-cwd-pre-action';
+import { Environment } from './environment/environment';
 
 async function loadAndRun(loader: () => Promise<Record<string, unknown>>): Promise<void>
 {
@@ -22,6 +21,43 @@ function lazyCommand(name: string, description: string, loader: () => Promise<Re
 		.allowExcessArguments(true)
 		.helpOption(false)
 		.action(() => loadAndRun(loader));
+}
+
+function adjustCwdPreAction(thisCommand: Command, actionCommand: Command)
+{
+	const sourceCwd = actionCommand.getOptionValue('path');
+	if (!sourceCwd)
+	{
+		return;
+	}
+	const envType = Environment.getType();
+	const root = Environment.getRoot();
+
+	if (envType === 'project' && sourceCwd === root)
+	{
+		const newCwd = path.join(sourceCwd, 'local');
+		actionCommand.setOptionValueWithSource('path', newCwd, sourceCwd);
+	}
+}
+
+function checkCwdPreAction(thisCommand: Command, actionCommand: Command)
+{
+	const cwd = actionCommand.getOptionValue('path');
+	if (!cwd)
+	{
+		return;
+	}
+
+	const envType = Environment.getType();
+	const root = Environment.getRoot();
+
+	const isOutsideRoot = envType === 'unknown' || !cwd.startsWith(root);
+
+	if (isOutsideRoot)
+	{
+		console.log(`\n❌ Error: \nThe target directory is outside the project root: ${cwd}\n`);
+		process.exit(1);
+	}
 }
 
 program
