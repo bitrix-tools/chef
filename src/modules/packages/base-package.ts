@@ -12,7 +12,7 @@ import { flattenTree } from '../../utils/flatten-tree';
 import { buildDependenciesTree } from '../../utils/package/build-dependencies-tree';
 
 import { Environment } from '../../environment/environment';
-import { PackageSizeCalculator } from '../services/stats/package-size-calculator';
+import { PackageSizeCalculator } from '../services/package-size-calculator';
 import type { BuildResult } from '../engine/build-types';
 import type { DependencyNode } from './types/dependency-node';
 
@@ -373,7 +373,7 @@ export abstract class BasePackage
 
 			if (this.hasBundleConfigJsFile())
 			{
-				const { PackageBuilder } = await import('../services/build/package-builder');
+				const { PackageBuilder } = await import('../services/package-builder');
 				const buildEngine = await PackageBuilder.getBuildEngine();
 				const buildResult = await buildEngine.build({
 					input: this.getInputPath(),
@@ -416,31 +416,31 @@ export abstract class BasePackage
 
 	async build(options: { production?: boolean } = {}): Promise<BuildResult>
 	{
-		const { PackageBuilder } = await import('../services/build/package-builder');
+		const { PackageBuilder } = await import('../services/package-builder');
 		return new PackageBuilder(this).build(options);
 	}
 
 	async generate(options: { production?: boolean } = {}): Promise<BuildResult>
 	{
-		const { PackageBuilder } = await import('../services/build/package-builder');
+		const { PackageBuilder } = await import('../services/package-builder');
 		return new PackageBuilder(this).generate(options);
 	}
 
 	async lint(): Promise<LintResult>
 	{
-		const { PackageLinter } = await import('../services/lint/package-linter');
+		const { PackageLinter } = await import('../services/package-linter');
 		return new PackageLinter(this).lint();
 	}
 
 	async runUnitTests(args: Record<string, any> = {}): Promise<any>
 	{
-		const { PackageTestRunner } = await import('../services/test/package-test-runner');
+		const { PackageTestRunner } = await import('../services/package-test-runner');
 		return new PackageTestRunner(this).runUnitTests(args);
 	}
 
 	async runEndToEndTests(args: Record<string, any> = {}): Promise<any>
 	{
-		const { PackageTestRunner } = await import('../services/test/package-test-runner');
+		const { PackageTestRunner } = await import('../services/package-test-runner');
 		return new PackageTestRunner(this).runEndToEndTests(args);
 	}
 

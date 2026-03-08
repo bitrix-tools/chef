@@ -1,11 +1,11 @@
 import * as path from 'node:path';
 import fg from 'fast-glob';
 
-import type { BasePackage } from '../../packages/base-package';
-import type { BuildEngine } from '../../engine/build-engine';
-import type { BuildOptions, BuildResult } from '../../engine/build-types';
-import { ChefConfigManager } from '../../config/project/chef-config-manager';
-import { validateBuildOptions } from '../../config/project/chef-config-validator';
+import type { BasePackage } from '../packages/base-package';
+import type { BuildEngine } from '../engine/build-engine';
+import type { BuildOptions, BuildResult } from '../engine/build-types';
+import { ChefConfigManager } from '../config/project/chef-config-manager';
+import { validateBuildOptions } from '../config/project/chef-config-validator';
 
 export class PackageBuilder
 {
@@ -151,7 +151,7 @@ export class PackageBuilder
 					{ BuildEngine },
 					{ RollupBuildStrategy },
 				] = await Promise.all([
-					import('../../engine/build-engine'),
+					import('../engine/build-engine'),
 					import('../../engine/rollup/rollup-strategy'),
 				]);
 

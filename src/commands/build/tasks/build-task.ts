@@ -1,12 +1,12 @@
 import chalk from 'chalk';
-import type { Task } from '../../../../modules/task/task';
-import type { BasePackage } from '../../../../modules/packages/base-package';
+import type { Task } from '../../../modules/task/task';
+import type { BasePackage } from '../../../modules/packages/base-package';
 import type { RollupLog } from 'rollup';
-import { directDependenciesTask } from '../../../../shared/tasks/direct-dependencies-task';
-import { dependenciesTreeTask } from '../../../../shared/tasks/dependencies-tree-task';
-import { bundleSizeTask } from '../../../../shared/tasks/bundle-size-task';
-import { totalTransferredSizeTask } from '../../../../shared/tasks/total-transferred-size-task';
-import { getFileSize } from '../../../../utils/get-file-size';
+import { directDependenciesTask } from '../../../shared/tasks/direct-dependencies-task';
+import { dependenciesTreeTask } from '../../../shared/tasks/dependencies-tree-task';
+import { bundleSizeTask } from '../../../shared/tasks/bundle-size-task';
+import { totalTransferredSizeTask } from '../../../shared/tasks/total-transferred-size-task';
+import { getFileSize } from '../../../utils/get-file-size';
 
 function formatWarning(warning: RollupLog): string
 {

@@ -2,8 +2,8 @@ import chalk from 'chalk';
 import { TaskRunner } from '../../../modules/task/task';
 import { BasePackage } from '../../../modules/packages/base-package';
 import { lintTask } from '../../../shared/tasks/lint-task';
-import { buildTask } from '../tasks/build/build-task';
-import { rebuildTask } from '../tasks/rebuild/rebuild-task';
+import { buildTask } from '../tasks/build-task';
+import { rebuildTask } from '../tasks/rebuild-task';
 
 export function verboseBuild(extension: BasePackage, args: Record<string, any>): Promise<any>
 {

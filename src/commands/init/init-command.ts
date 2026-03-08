@@ -10,7 +10,7 @@ import { Environment } from '../../environment/environment';
 import { createPathOption } from '../../shared/options/path-option';
 import { PackageFactoryProvider } from '../../modules/packages/providers/package-factory-provider';
 import { findPackages } from '../../utils/package/find-packages';
-import { TemplateManager } from '../../modules/services/template/template-manager';
+import { TemplateManager } from '../../modules/services/template-manager';
 import { safeFileWrite, SaveFileStatus } from '../../utils/safe-file-write';
 import { multiline } from '../../utils/multiline-text-tag';
 
