@@ -1,7 +1,9 @@
 import * as path from 'node:path';
 
 import type { BasePackage } from '../packages/base-package';
-import { LintResult } from '../linter/lint-result';
+import type { LintResult } from '../engines/lint/lint-types';
+import { LintEngine } from '../engines/lint/lint-engine';
+import { ESLintStrategy } from '../engines/lint/eslint/eslint-strategy';
 import { Environment } from '../../environment/environment';
 
 export class PackageLinter
@@ -15,19 +17,11 @@ export class PackageLinter
 
 	async lint(): Promise<LintResult>
 	{
-		const { ESLint } = await import('eslint');
+		const engine = new LintEngine(new ESLintStrategy());
 
-		const eslint = new ESLint({
-			errorOnUnmatchedPattern: false,
-			cwd: Environment.getRoot(),
-		});
-
-		const results = await eslint.lintFiles(
-			path.join(this.#package.getPath(), 'src', '**/*.js'),
-		);
-
-		return new LintResult({
-			results,
+		return engine.lint({
+			sourcePath: path.join(this.#package.getPath(), 'src'),
+			rootPath: Environment.getRoot(),
 		});
 	}
 }

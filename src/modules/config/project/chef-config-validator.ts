@@ -1,6 +1,6 @@
 import type { ChefConfig, DenySeverity } from './chef-config';
 import { denyLabels, parseDenyOption } from './chef-config';
-import type { BuildOptions } from '../../engine/build-types';
+import type { BuildOptions } from '../../engines/build/build-types';
 
 export interface ValidationIssue
 {

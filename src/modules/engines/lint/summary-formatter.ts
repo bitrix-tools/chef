@@ -1,7 +1,7 @@
-import { LintResult } from '../../linter/lint-result';
+import type { LintResult, LintFormatterLevel } from './lint-types';
 import { pluralize } from '../../../utils/pluralize';
 
-export async function summaryFormatter(result: LintResult): Promise<{ title: string, text: string; level: 'succeed' | 'warn' | 'fail'; }>
+export function summaryFormatter(result: LintResult): { title: string; text: string; level: LintFormatterLevel }
 {
 	if (result.hasErrors())
 	{

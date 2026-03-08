@@ -1,6 +1,7 @@
 import type { BasePackage } from '../../modules/packages/base-package';
 import type { Task } from '../../modules/task/task';
-import { summaryFormatter } from '../../modules/formatters/lint/summary-formatter';
+import { summaryFormatter } from '../../modules/engines/lint/summary-formatter';
+import { verboseFormatter } from '../../modules/engines/lint/verbose-formatter';
 
 export function lintTask(extension: BasePackage, args?: Record<string, any>): Task
 {
@@ -8,12 +9,11 @@ export function lintTask(extension: BasePackage, args?: Record<string, any>): Ta
 		title: 'ESLint analysis...',
 		run: async (context) => {
 			const result = await extension.lint();
-			const { text, title, level } = await (async () => {
+			const { text, title, level } = (() => {
 				if (args?.verbose)
 				{
-					const { verboseFormatter } = await import('../../modules/formatters/lint/verbose-formatter');
-					const verboseResult = await verboseFormatter(result);
-					const summaryResult = await summaryFormatter(result);
+					const verboseResult = verboseFormatter(result);
+					const summaryResult = summaryFormatter(result);
 
 					return {
 						level: verboseResult.level,
@@ -22,7 +22,7 @@ export function lintTask(extension: BasePackage, args?: Record<string, any>): Ta
 					};
 				}
 
-				return await summaryFormatter(result);
+				return summaryFormatter(result);
 			})();
 
 			context[level](title);

@@ -1,7 +1,6 @@
-import { LintResult } from '../../linter/lint-result';
 import chalk from 'chalk';
 import table from 'text-table';
-import type { ESLint } from 'eslint';
+import type { LintResult, LintFormatterLevel, LintMessage } from './lint-types';
 
 function truncateWords(str: string, maxLength: number): string
 {
@@ -15,23 +14,19 @@ function truncateWords(str: string, maxLength: number): string
 	return truncated.replace(/\s+\S*$/, '') + '...';
 }
 
-function getLevelIcon(severity: number): string
+function getLevelIcon(severity: LintMessage['severity']): string
 {
-	if (severity === 2)
+	if (severity === 'error')
 	{
 		return chalk.red('✖');
 	}
-	if (severity === 1)
-	{
-		return chalk.yellow('⚠');
-	}
 
-	return chalk.white('•');
+	return chalk.yellow('⚠');
 }
 
-export async function verboseFormatter(result: LintResult): Promise<{ text: string; level: 'succeed' | 'warn' | 'fail'; }>
+export function verboseFormatter(result: LintResult): { text: string; level: LintFormatterLevel }
 {
-	const level = (() => {
+	const level: LintFormatterLevel = (() => {
 		if (result.hasErrors())
 		{
 			return 'fail';
@@ -45,14 +40,12 @@ export async function verboseFormatter(result: LintResult): Promise<{ text: stri
 		return 'succeed';
 	})();
 
-	const text = result.getResults()
-		.filter((resultItem: ESLint.LintResult) => {
-			return resultItem.messages.length > 0
-		})
-		.map((resultItem: ESLint.LintResult) => {
-			const head = `${chalk.bold(resultItem.filePath.split('/src/')[1])}`;
+	const text = result.files
+		.filter((file) => file.messages.length > 0)
+		.map((file) => {
+			const head = `${chalk.bold(file.filePath.split('/src/')[1])}`;
 			const messages = table(
-				resultItem.messages.map((message) => {
+				file.messages.map((message) => {
 					return [
 						` ${getLevelIcon(message.severity)}`,
 						`${message.line}:${message.column}`,

@@ -2,12 +2,12 @@ import { describe, it, beforeEach, afterEach } from 'mocha';
 import { assert } from 'chai';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
-import { BuildEngine } from '../../src/modules/engine/build-engine';
-import { RollupBuildStrategy } from '../../src/modules/engine/rollup/rollup-strategy';
+import { BuildEngine } from '../../src/modules/engines/build/build-engine';
+import { RollupBuildStrategy } from '../../src/modules/engines/build/rollup/rollup-strategy';
 import { BundleConfigManager } from '../../src/modules/config/bundle/bundle-config-manager';
 import { PhpConfigManager } from '../../src/modules/config/php/php-config-manager';
 
-import type { BuildOptions } from '../../src/modules/engine/build-types';
+import type { BuildOptions } from '../../src/modules/engines/build/build-types';
 
 const fixturesPath = path.join(import.meta.dirname, 'fixtures');
 
