@@ -1,26 +1,9 @@
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 import chalk from 'chalk';
 import { TaskRunner } from '../../../modules/task/task';
 import { BasePackage } from '../../../modules/packages/base-package';
 import { formatSizeWithDelta } from '../../../utils/format-size';
-
-function getFileSize(filePath: string): number | null
-{
-	try
-	{
-		if (fs.existsSync(filePath))
-		{
-			return fs.statSync(filePath).size;
-		}
-	}
-	catch
-	{
-		// Ignore errors
-	}
-
-	return null;
-}
+import { getFileSize } from '../../../utils/get-file-size';
 
 export function plainBuild(extension: BasePackage, args: Record<string, any>): Promise<any>
 {

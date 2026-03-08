@@ -18,7 +18,7 @@ import { totalTransferredSizeTask } from '../../shared/tasks/total-transferred-s
 import { unitTestsTask } from './tasks/unit-tests-task';
 import { e2eTestsTask } from './tasks/e2e-tests-task';
 import { tryBuildTask } from './tasks/try-build-task';
-import { lintTask } from './tasks/lint-task';
+import { lintTask } from '../../shared/tasks/lint-task';
 
 const statCommand = new Command('stat');
 

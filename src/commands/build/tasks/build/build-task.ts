@@ -1,5 +1,3 @@
-import * as fs from 'node:fs';
-import * as path from 'node:path';
 import chalk from 'chalk';
 import type { Task } from '../../../../modules/task/task';
 import type { BasePackage } from '../../../../modules/packages/base-package';
@@ -8,23 +6,7 @@ import { directDependenciesTask } from '../../../../shared/tasks/direct-dependen
 import { dependenciesTreeTask } from '../../../../shared/tasks/dependencies-tree-task';
 import { bundleSizeTask } from '../../../../shared/tasks/bundle-size-task';
 import { totalTransferredSizeTask } from '../../../../shared/tasks/total-transferred-size-task';
-
-function getFileSize(filePath: string): number | null
-{
-	try
-	{
-		if (fs.existsSync(filePath))
-		{
-			return fs.statSync(filePath).size;
-		}
-	}
-	catch
-	{
-		// Ignore errors
-	}
-
-	return null;
-}
+import { getFileSize } from '../../../../utils/get-file-size';
 
 function formatWarning(warning: RollupLog): string
 {
