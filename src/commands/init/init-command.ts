@@ -7,7 +7,7 @@ import boxen from 'boxen';
 import logSymbols from 'log-symbols';
 
 import { Environment } from '../../environment/environment';
-import { pathOption } from './options/path-option';
+import { createPathOption } from '../../shared/options/path-option';
 import { PackageFactoryProvider } from '../../modules/packages/providers/package-factory-provider';
 import { findPackages } from '../../utils/package/find-packages';
 import { TemplateManager } from '../../modules/services/template/template-manager';
@@ -21,7 +21,7 @@ import { PackageResolver } from '../../modules/packages/package-resolver';
 const initTestsCommand = new Command('tests')
 	.description('Set up Playwright config and .env.test for browser tests')
 	.option('-f, --force', 'Overwrite existing files without prompting')
-	.addOption(pathOption)
+	.addOption(createPathOption('Project root where configs and helpers will be initialized'))
 	.action(async () => {
 		console.log(
 			multiline`
@@ -135,7 +135,7 @@ const initTestsCommand = new Command('tests')
 
 const initBuildCommand = new Command('build')
 	.description('Generate TypeScript configs, path aliases, and browserslist for extensions')
-	.addOption(pathOption)
+	.addOption(createPathOption('Project root where configs and helpers will be initialized'))
 	.action(async () => {
 		const packageFactory = PackageFactoryProvider.create();
 		const extensionsStream: NodeJS.ReadableStream = findPackages({
@@ -378,7 +378,7 @@ const initBuildCommand = new Command('build')
 
 const initCommand = new Command('init')
 	.description('Initialize testing and build tooling for your Bitrix project')
-	.addOption(pathOption)
+	.addOption(createPathOption('Project root where configs and helpers will be initialized'))
 	.action(async () => {
 		await initTestsCommand.parseAsync([]);
 		console.log('\n');

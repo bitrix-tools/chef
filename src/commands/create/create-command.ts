@@ -5,7 +5,7 @@ import { confirm } from '@inquirer/prompts';
 import chalk from 'chalk';
 
 import { Environment } from '../../environment/environment';
-import { pathOption } from './options/path-option';
+import { createPathOption } from '../../shared/options/path-option';
 import { resolvePackage } from '../../utils/package/resolve-package';
 import { renderTemplate } from '../../utils/render-template';
 import { FileFinder } from '../../utils/file-finder';
@@ -21,7 +21,7 @@ createCommand
 	.argument('<name>', 'Extension name (e.g. ui.buttons)')
 	.option('-t, --tech [tech]', 'Source language: "ts" (default) or "js"')
 	.option('-f, --force', 'Overwrite existing directory without asking')
-	.addOption(pathOption)
+	.addOption(createPathOption('Root directory where the extension will be created'))
 	.action(async (extensionName, args) => {
 		const packagePath = resolvePackage(extensionName);
 		const isDirectoryExists = await (async () => {

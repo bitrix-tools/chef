@@ -3,8 +3,8 @@ import { Command } from 'commander';
 
 import { PackageFactoryProvider } from '../../modules/packages/providers/package-factory-provider';
 import { findPackages } from '../../utils/package/find-packages';
-import { pathOption } from '../build/options/path-option';
-import { convertQueue } from './queue/convert-queue';
+import { createPathOption } from '../../shared/options/path-option';
+import PQueue from 'p-queue';
 import { TaskContext, TaskRunner } from '../../modules/task/task';
 
 import { renameFileTask } from './tasks/rename-file-task';
@@ -18,10 +18,12 @@ export const flowToTsCommand = new Command('flow-to-ts');
 
 flowToTsCommand
 	.description('Migrate Flow-typed JS code to TypeScript in extensions')
-	.addOption(pathOption)
+	.addOption(createPathOption('Start searching for bundle.config.* and Flow sources from this directory'))
 	.option('--rm-ts', 'Remove existing .ts sources after migration', false)
 	.option('--rm-js', 'Remove original .js sources after migration', false)
 	.action((args): void => {
+		const queue = new PQueue({ concurrency: 1 });
+
 		const packageFactory = PackageFactoryProvider.create();
 		const extensionsStream: NodeJS.ReadableStream = findPackages({
 			startDirectory: args.path,
@@ -30,7 +32,7 @@ flowToTsCommand
 
 		extensionsStream
 			.on('data', async ({ extension }: { extension: BasePackage }) => {
-				void convertQueue.add(async () => {
+				void queue.add(async () => {
 					const sourceFiles = extension.getActualSourceFiles();
 					if (sourceFiles.length === 0)
 					{
@@ -115,7 +117,7 @@ flowToTsCommand
 				});
 			})
 			.on('done', async () => {
-				await convertQueue.onIdle();
+				await queue.onIdle();
 				process.exit(0);
 			})
 			.on('error', (err: Error) => {

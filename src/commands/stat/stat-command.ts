@@ -1,6 +1,6 @@
 import { Command } from 'commander';
-import { pathOption } from './options/path-option';
-import { statQueue } from './queue/stat-queue';
+import { createPathOption } from '../../shared/options/path-option';
+import PQueue from 'p-queue';
 import { findPackages } from '../../utils/package/find-packages';
 import { PackageFactory } from '../../modules/packages/package-factory';
 import { PackageResolver } from '../../modules/packages/package-resolver';
@@ -25,8 +25,10 @@ const statCommand = new Command('stat');
 statCommand
 	.description('Show build, tests and bundle statistics for Bitrix extensions')
 	.argument('[extensions...]', 'Extensions to analyze (e.g. main.core ui.buttons)')
-	.addOption(pathOption)
+	.addOption(createPathOption('Scan for extensions and stats starting from this directory'))
 	.action(async (extensions: string[], args) => {
+		const queue = new PQueue({ concurrency: 1 });
+
 		const extensionsStream: NodeJS.ReadableStream = (() => {
 			if (extensions.length > 0)
 			{
@@ -44,7 +46,7 @@ statCommand
 
 		extensionsStream
 			.on('data', ({ extension }) => {
-				statQueue.add(async () => {
+				queue.add(async () => {
 					const name = extension.getName();
 
 					await TaskRunner.run([
@@ -69,7 +71,7 @@ statCommand
 				});
 			})
 			.on('done', async () => {
-				await statQueue.onIdle();
+				await queue.onIdle();
 				process.exit(0);
 			});
 	});

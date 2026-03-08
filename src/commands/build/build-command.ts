@@ -2,11 +2,11 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 
 import { watchOption } from './options/watch-option';
-import { pathOption } from './options/path-option';
+import { createPathOption } from '../../shared/options/path-option';
 import { verboseOption } from './options/verbose-option';
 import { forceOption } from './options/force-option';
 import { productionOption } from './options/production-option';
-import { buildQueue } from './queue/build-queue';
+import PQueue from 'p-queue';
 
 import { PackageFactoryProvider } from '../../modules/packages/providers/package-factory-provider';
 import { PackageResolver } from '../../modules/packages/package-resolver';
@@ -24,11 +24,13 @@ buildCommand
 	.description('Build JS extensions for Bitrix')
 	.argument('[extensions...]', 'Extensions to build (e.g. main.core ui.buttons)')
 	.addOption(watchOption)
-	.addOption(pathOption)
+	.addOption(createPathOption('Search for bundle.config.* and build extensions starting from this directory'))
 	.addOption(verboseOption)
 	.addOption(forceOption)
 	.addOption(productionOption)
 	.action(async (extensions: string[], args) => {
+		const queue = new PQueue({ concurrency: 1 });
+
 		const extensionsStream: NodeJS.ReadableStream = (() => {
 			if (extensions.length > 0)
 			{
@@ -50,13 +52,13 @@ buildCommand
 			.on('data', async ({ extension }: { extension: BasePackage }) => {
 				const extensionId = extension.getName();
 
-				await buildQueue.add(
+				await queue.add(
 					build(extension, args),
 				);
 
 				if (args.watch)
 				{
-					await buildQueue.add(async () => {
+					await queue.add(async () => {
 						const chokidar = await import('chokidar');
 						const watcher = chokidar.watch(
 							extension.getSourceDirectoryPath(),
@@ -72,7 +74,7 @@ buildCommand
 							}
 
 							const timer = setTimeout(() => {
-								buildQueue.add(
+								queue.add(
 									build(extension, args),
 								);
 								timers.delete(extensionId);
@@ -84,7 +86,7 @@ buildCommand
 				}
 			})
 			.on('done', async ({ count }) => {
-				await buildQueue.onIdle();
+				await queue.onIdle();
 
 				if (args.watch)
 				{
@@ -127,7 +129,7 @@ buildCommand
 					clearTimeout(timer);
 				}
 
-				await buildQueue.onIdle();
+				await queue.onIdle();
 
 				console.log('👋 Goodbye!');
 			});

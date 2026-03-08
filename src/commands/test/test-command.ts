@@ -5,7 +5,7 @@ import { PackageFactoryProvider } from '../../modules/packages/providers/package
 import { PackageResolver } from '../../modules/packages/package-resolver';
 import { findPackages } from '../../utils/package/find-packages';
 import { createShutdown } from '../../utils/create-shutdown';
-import { testQueue } from './queue/test-queue';
+import PQueue from 'p-queue';
 import { TaskRunner } from '../../modules/task/task';
 import { runUnitTestsTask } from './tasks/run-unit-tests-task';
 import { runEndToEndTestsTask } from './tasks/run-e2e-tests-task';
@@ -21,6 +21,8 @@ type RunTestsOptions = {
 
 function runTests({ extensions, args, type }: RunTestsOptions): void
 {
+	const queue = new PQueue({ concurrency: 1 });
+
 	const extensionsStream: NodeJS.ReadableStream = (() => {
 		if (extensions.length > 0)
 		{
@@ -43,7 +45,7 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 				...(type !== 'unit' ? [runEndToEndTestsTask(extension, args)] : []),
 			];
 
-			await testQueue.add(async () => {
+			await queue.add(async () => {
 				const name = extension.getName();
 				await TaskRunner.run([
 					{
@@ -58,7 +60,7 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 
 			if (args.watch)
 			{
-				await testQueue.add(async () => {
+				await queue.add(async () => {
 					const name = extension.getName();
 					const chokidar = await import('chokidar');
 					const watchDirs = [
@@ -70,7 +72,7 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 					watchers.push(watcher);
 
 					watcher.on('change', async () => {
-						await testQueue.add(async () => {
+						await queue.add(async () => {
 							await TaskRunner.run([
 								{
 									title: chalk.bold(name),
@@ -86,7 +88,7 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 			}
 		})
 		.on('done', async ({ count }) => {
-			await testQueue.onIdle();
+			await queue.onIdle();
 
 			if (args.watch)
 			{
@@ -124,7 +126,7 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 				await watcher.close();
 			}
 
-			await testQueue.onIdle();
+			await queue.onIdle();
 
 			console.log('👋 Goodbye!');
 		});
