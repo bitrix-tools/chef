@@ -444,6 +444,12 @@ export abstract class BasePackage
 		return new PackageTestRunner(this).runEndToEndTests(args);
 	}
 
+	async createMigrator()
+	{
+		const { PackageMigrator } = await import('../services/package-migrator');
+		return new PackageMigrator(this);
+	}
+
 	getBundlesSize(): { css: number, js: number }
 	{
 		return this.#cache.remember('bundleSize', () => {
