@@ -62,4 +62,5 @@ export interface BuildCodeResult {
 	errors: RollupLog[];
 	code: string;
 	dependencies: string[];
+	map?: import('rollup').SourceMap | null;
 }

@@ -269,6 +269,7 @@ export class RollupBuildStrategy extends BuildStrategy
 
 		return {
 			code: outputEntry?.code,
+			map: outputEntry?.map ?? null,
 			dependencies: [...dependenciesRef],
 			warnings: [...warningsRef],
 			errors: [],

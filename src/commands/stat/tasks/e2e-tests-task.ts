@@ -1,5 +1,6 @@
 import type { BasePackage } from '../../../modules/packages/base-package';
 import type { Task } from '../../../modules/task/task';
+import { buildSuiteTree } from '../../../modules/engines/test/test-report-renderer';
 
 export function e2eTestsTask(extension: BasePackage): Task
 {
@@ -10,19 +11,31 @@ export function e2eTestsTask(extension: BasePackage): Task
 			if (endToEndTests.length === 0)
 			{
 				context.warn('No E2E tests found');
+				return;
+			}
+
+			const testResult = await extension.runEndToEndTests();
+
+			if (testResult.errors.length > 0)
+			{
+				context.fail('E2E tests failed');
+				return;
+			}
+
+			if (testResult.report.length === 0)
+			{
+				context.warn('No E2E tests found');
+				return;
+			}
+
+			const tree = buildSuiteTree(testResult.report);
+			if (tree.failed > 0)
+			{
+				context.fail('E2E tests failed');
 			}
 			else
 			{
-				const { status } = await extension.runEndToEndTests();
-				if (status === 'TESTS_PASSED')
-				{
-					context.succeed('E2E tests passed');
-				}
-
-				if (status === 'TESTS_FAILED')
-				{
-					context.fail('E2E tests failed');
-				}
+				context.succeed('E2E tests passed');
 			}
 		},
 	};

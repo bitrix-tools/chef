@@ -432,13 +432,13 @@ export abstract class BasePackage
 		return new PackageLinter(this).lint();
 	}
 
-	async runUnitTests(args: Record<string, any> = {}): Promise<any>
+	async runUnitTests(args: Record<string, any> = {})
 	{
 		const { PackageTestRunner } = await import('../services/package-test-runner');
 		return new PackageTestRunner(this).runUnitTests(args);
 	}
 
-	async runEndToEndTests(args: Record<string, any> = {}): Promise<any>
+	async runEndToEndTests(args: Record<string, any> = {})
 	{
 		const { PackageTestRunner } = await import('../services/package-test-runner');
 		return new PackageTestRunner(this).runEndToEndTests(args);
