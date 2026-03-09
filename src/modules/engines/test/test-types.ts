@@ -13,7 +13,8 @@ export type UnitTestOptions = {
 	debug?: boolean;
 	grep?: string;
 	file?: string;
-	onToken?: (token: TestToken) => void;
+	onToken?: (token: TestToken, browser?: string) => void;
+	onStatus?: (status: string) => void;
 };
 
 export type E2ETestOptions = {
@@ -25,11 +26,15 @@ export type E2ETestOptions = {
 	grep?: string;
 	project?: string | string[];
 	file?: string;
+	onToken?: (token: TestToken, browser?: string) => void;
+	onStatus?: (status: string) => void;
+	onBegin?: (info: { totalTests: number; browserCount: number }) => void;
 };
 
 export type TestToken = {
 	id: 'SUITE_START' | 'SUITE_END' | 'TEST_PASSED' | 'TEST_FAILED' | 'TEST_PENDING';
 	title?: string;
+	suite?: string[];
 	root?: boolean;
 	duration?: number;
 	speed?: string;

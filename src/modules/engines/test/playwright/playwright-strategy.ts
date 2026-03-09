@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 
 import type { PlaywrightTestConfig } from '@playwright/test';
@@ -14,6 +15,12 @@ import type {
 } from '../test-types';
 import { FileFinder } from '../../../../utils/file-finder';
 import { PackageBuilder } from '../../../services/package-builder';
+
+const STREAMING_REPORTER_PATH = path.resolve(
+	path.dirname(fileURLToPath(import.meta.url)),
+	'streaming-reporter.ts',
+);
+const TOKEN_MARKER = '__CHEF_TOKEN__';
 
 export class PlaywrightStrategy extends TestStrategy
 {
@@ -95,6 +102,9 @@ export class PlaywrightStrategy extends TestStrategy
 		}
 
 		const browserType = options.browserType ?? 'chromium';
+		const onStatus = options.onStatus ?? (() => {});
+
+		onStatus('Loading Playwright...');
 		const playwright = await import('playwright');
 		const browserLauncher = playwright[browserType];
 		if (!browserLauncher)
@@ -109,6 +119,7 @@ export class PlaywrightStrategy extends TestStrategy
 			};
 		}
 
+		onStatus(`Launching ${browserType}...`);
 		const isDebug = !!options.debug;
 		const browser = await browserLauncher.launch({
 			headless: isDebug ? false : !options.headed,
@@ -128,8 +139,10 @@ export class PlaywrightStrategy extends TestStrategy
 				`/dev/ui/cli/mocha-wrapper.php?extension=${options.packageName}`,
 			);
 
+			onStatus('Loading test page...');
 			await page.goto(testsPage);
 
+			onStatus('Building test bundle...');
 			const { code: testsCodeBundle, map: sourceMap } = await this.#buildTestBundle(options);
 			const tracer = sourceMap ? new TraceMap(sourceMap as any) : null;
 
@@ -223,6 +236,7 @@ export class PlaywrightStrategy extends TestStrategy
 				});
 			}, { grep, timeout });
 
+			onStatus('Running tests...');
 			await page.addScriptTag({
 				content: testsCodeBundle,
 			});
@@ -294,7 +308,10 @@ export class PlaywrightStrategy extends TestStrategy
 			};
 		}
 
-		const args = ['playwright', 'test', '--reporter=json'];
+		const onStatus = options.onStatus ?? (() => {});
+		const onToken = options.onToken ?? (() => {});
+		const onBegin = options.onBegin ?? (() => {});
+		const args = ['playwright', 'test', `--reporter=${STREAMING_REPORTER_PATH}`];
 
 		if (options.headed)
 		{
@@ -325,6 +342,8 @@ export class PlaywrightStrategy extends TestStrategy
 			args.push(options.file);
 		}
 
+		onStatus('Running Playwright...');
+
 		const childProcess = spawn('npx', args, {
 			stdio: ['inherit', 'pipe', 'pipe'],
 			cwd: options.projectRoot,
@@ -334,126 +353,100 @@ export class PlaywrightStrategy extends TestStrategy
 			},
 		});
 
-		const stdout: string[] = [];
-		const stderr: string[] = [];
+		const report: TestToken[] = [];
+		const consoleLogs: ConsoleLog[] = [];
+		const errors: Error[] = [];
+		let stdoutBuffer = '';
 
 		childProcess.stdout.on('data', (data: Buffer) => {
-			stdout.push(data.toString());
-		});
+			stdoutBuffer += data.toString();
 
-		childProcess.stderr.on('data', (data: Buffer) => {
-			stderr.push(data.toString());
-		});
+			let startIdx: number;
+			while ((startIdx = stdoutBuffer.indexOf(TOKEN_MARKER)) !== -1)
+			{
+				const endIdx = stdoutBuffer.indexOf(TOKEN_MARKER, startIdx + TOKEN_MARKER.length);
+				if (endIdx === -1)
+				{
+					break;
+				}
 
-		return new Promise((resolve) => {
-			childProcess.on('close', () => {
-				const jsonOutput = stdout.join('');
+				const json = stdoutBuffer.slice(startIdx + TOKEN_MARKER.length, endIdx);
+				stdoutBuffer = stdoutBuffer.slice(endIdx + TOKEN_MARKER.length);
 
 				try
 				{
-					const playwrightReport = JSON.parse(jsonOutput);
-					const report = this.#convertPlaywrightReport(playwrightReport);
-					const consoleLogs: ConsoleLog[] = [];
-
-					if (stderr.length > 0)
+					const data = JSON.parse(json);
+					if (data.id === 'END')
 					{
-						const stderrText = stderr.join('').trim();
-						if (stderrText)
-						{
-							consoleLogs.push({ type: 'error', text: stderrText });
-						}
+						continue;
 					}
 
-					resolve({
-						report,
-						stats: playwrightReport.stats ?? {},
-						consoleLogs,
-						errors: (playwrightReport.errors ?? []).map(
-							(error: { message: string }) => new Error(error.message),
-						),
-					});
+					if (data.id === 'BEGIN')
+					{
+						onBegin({ totalTests: data.totalTests, browserCount: data.browserCount });
+						onStatus(`Running ${data.totalTests} tests...`);
+						continue;
+					}
+
+					if (data.id === 'STATUS')
+					{
+						onStatus(data.text);
+						continue;
+					}
+
+					const browser: string | undefined = data.browser || undefined;
+					const token: TestToken = {
+						id: data.id,
+						title: data.title,
+						suite: data.suite,
+						duration: data.duration,
+						error: data.error,
+					};
+					report.push(token);
+					onToken(token, browser);
 				}
 				catch
 				{
-					resolve({
-						report: [],
-						stats: {},
-						consoleLogs: [],
-						errors: [new Error(jsonOutput || stderr.join('') || 'Failed to parse Playwright JSON report')],
-					});
+					// Skip malformed tokens
 				}
+			}
+		});
+
+		childProcess.stderr.on('data', (data: Buffer) => {
+			const text = data.toString().trim();
+			if (text)
+			{
+				consoleLogs.push({ type: 'error', text });
+			}
+		});
+
+		return new Promise((resolve) => {
+			childProcess.on('close', (code) => {
+				if (report.length === 0 && code !== 0)
+				{
+					const stderrText = consoleLogs.map((l) => l.text).join('\n').trim();
+					errors.push(new Error(stderrText || 'Playwright exited with errors'));
+				}
+
+				resolve({
+					report,
+					stats: {},
+					consoleLogs: report.length > 0 ? consoleLogs : [],
+					errors,
+				});
 			});
 		});
 	}
 
-	#convertPlaywrightReport(report: PlaywrightJsonReport): TestToken[]
-	{
-		const tokens: TestToken[] = [];
-		this.#convertSuites(report.suites ?? [], tokens);
-
-		return tokens;
-	}
-
-	#convertSuites(suites: PlaywrightSuite[], tokens: TestToken[]): void
-	{
-		for (const suite of suites)
-		{
-			tokens.push({ id: 'SUITE_START', title: suite.title });
-
-			for (const spec of (suite.specs ?? []))
-			{
-				const test = spec.tests?.[0];
-				const result = test?.results?.[0];
-
-				if (!result)
-				{
-					tokens.push({ id: 'TEST_PENDING', title: spec.title });
-					continue;
-				}
-
-				if (result.status === 'passed')
-				{
-					tokens.push({
-						id: 'TEST_PASSED',
-						title: spec.title,
-						duration: result.duration,
-					});
-				}
-				else if (result.status === 'skipped')
-				{
-					tokens.push({ id: 'TEST_PENDING', title: spec.title });
-				}
-				else
-				{
-					const errorMessage = result.errors
-						?.map((e: { message?: string }) => e.message)
-						.filter(Boolean)
-						.join('\n');
-
-					tokens.push({
-						id: 'TEST_FAILED',
-						title: spec.title,
-						duration: result.duration,
-						error: errorMessage ? { message: errorMessage } : undefined,
-					});
-				}
-			}
-
-			this.#convertSuites(suite.suites ?? [], tokens);
-
-			tokens.push({ id: 'SUITE_END', title: suite.title });
-		}
-	}
-
 	#mapStack(stack: string, tracer: TraceMap): string
 	{
-		// Match location patterns in stack traces across browsers:
+		// Match bundle frames including the full URL prefix:
 		// Chromium: "at fn (<anonymous>:53:13)"
-		// Firefox: "@http://url:53:13" or "fn@http://url:53:13"
-		// WebKit: "@url line 7 > injectedScript:53:13"
-		const framePattern = /(?:<anonymous>|[^\s()]+):(\d+):(\d+)/g;
+		// Firefox: "@http://host/dev/ui/cli/mocha-wrapper.php:53:13"
+		// WebKit: "http://host/dev/ui/cli/mocha-wrapper.php:53:13"
+		const bundleFramePattern = /(?:https?:\/\/\S*)?(?:<anonymous>|injectedScript|mocha-wrapper\.php):(\d+):(\d+)/g;
 
-		return stack.replace(framePattern, (match, lineStr: string, colStr: string) => {
+		return stack.replace(bundleFramePattern, (match, lineStr: string, colStr: string) => {
 			const line = Number(lineStr);
 			const column = Number(colStr);
 
@@ -464,33 +457,10 @@ export class PlaywrightStrategy extends TestStrategy
 					? pos.source
 					: path.resolve(pos.source);
 
-				return `${source}:${pos.line}:${pos.column}`;
+				return `${source}:${pos.line}:${pos.column + 1}`;
 			}
 
 			return match;
 		});
 	}
 }
-
-type PlaywrightJsonReport = {
-	suites?: PlaywrightSuite[];
-	stats?: Record<string, unknown>;
-	errors?: Array<{ message: string }>;
-};
-
-type PlaywrightSuite = {
-	title: string;
-	specs?: PlaywrightSpec[];
-	suites?: PlaywrightSuite[];
-};
-
-type PlaywrightSpec = {
-	title: string;
-	tests?: Array<{
-		results?: Array<{
-			status: string;
-			duration: number;
-			errors?: Array<{ message?: string }>;
-		}>;
-	}>;
-};

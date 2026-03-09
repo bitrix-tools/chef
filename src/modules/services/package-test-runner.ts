@@ -31,6 +31,7 @@ export class PackageTestRunner
 			grep: args.grep,
 			file: args.file,
 			onToken: args.onToken,
+			onStatus: args.onStatus,
 		});
 	}
 
@@ -48,6 +49,9 @@ export class PackageTestRunner
 			grep: args.grep,
 			project: args.project,
 			file: args.file,
+			onToken: args.onToken,
+			onStatus: args.onStatus,
+			onBegin: args.onBegin,
 		});
 	}
 }

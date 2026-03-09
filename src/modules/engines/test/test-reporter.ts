@@ -1,10 +1,11 @@
+import * as fs from 'node:fs';
 import chalk from 'chalk';
 import ora, { type Ora } from 'ora';
-import logUpdate from 'log-update';
 import type { TestToken, ConsoleLog } from './test-types';
 
 const SLOW_TEST_THRESHOLD = 75;
 const PREFIX = '    ';
+const isTTY = process.stdout.isTTY ?? false;
 
 type FailedTest = {
 	suitePath: string;
@@ -30,6 +31,16 @@ type SlowTest = {
 	browser?: string;
 };
 
+type BrowserStatus = 'passed' | 'failed' | 'pending';
+
+type LiveLine = {
+	status: BrowserStatus;
+	fullPath: string;
+	duration?: number;
+	browsers: Map<string, BrowserStatus>;
+	row: number;
+};
+
 export class TestReporter
 {
 	readonly #suiteStacks = new Map<string, string[]>();
@@ -37,8 +48,14 @@ export class TestReporter
 	readonly #failedTests: FailedTest[] = [];
 	readonly #slowTests: SlowTest[] = [];
 	readonly #browsers = new Set<string>();
+	readonly #browserStatuses = new Map<string, string>();
+	readonly #countedTests = new Set<string>();
+	readonly #liveLines = new Map<string, LiveLine>();
 	readonly #startTime: number;
 	#spinner: Ora;
+	#hasResults = false;
+	#currentRow = 0;
+	#expectedBrowsers = 1;
 
 	#passed = 0;
 	#failed = 0;
@@ -53,6 +70,39 @@ export class TestReporter
 			prefixText: PREFIX,
 		});
 		this.#spinner.start();
+	}
+
+	setBrowserCount(count: number): void
+	{
+		this.#expectedBrowsers = count;
+	}
+
+	stop(): void
+	{
+		this.#spinner.stop();
+	}
+
+	updateStatus(status: string, browser?: string): void
+	{
+		if (this.#hasResults)
+		{
+			return;
+		}
+
+		if (browser)
+		{
+			this.#browserStatuses.set(browser, status);
+
+			const parts = [...this.#browserStatuses.entries()]
+				.map(([name, s]) => `${name}: ${s}`)
+				.join(chalk.gray(' · '));
+
+			this.#spinner.text = parts;
+		}
+		else
+		{
+			this.#spinner.text = status;
+		}
 	}
 
 	handleToken(token: TestToken, browser?: string): void
@@ -81,11 +131,15 @@ export class TestReporter
 			stack.pop();
 		}
 
-		if (token.id === 'TEST_PASSED' || token.id === 'TEST_FAILED')
+		if (token.id === 'TEST_PASSED' || token.id === 'TEST_FAILED' || token.id === 'TEST_PENDING')
 		{
-			const suiteName = stack[0] ?? '';
-			const suitePath = stack.join(' > ');
+			const suites = token.suite ?? stack;
+			const suiteName = suites[0] ?? '';
+			const suitePath = suites.join(' > ');
 			const fullPath = suitePath ? `${suitePath} > ${token.title}` : (token.title ?? '');
+			const status: BrowserStatus = token.id === 'TEST_PASSED' ? 'passed'
+				: token.id === 'TEST_FAILED' ? 'failed'
+				: 'pending';
 
 			if (!this.#suiteStats.has(suiteName))
 			{
@@ -93,17 +147,71 @@ export class TestReporter
 			}
 
 			const stats = this.#suiteStats.get(suiteName)!;
-			stats.duration += token.duration ?? 0;
+			const existing = this.#liveLines.get(fullPath);
 
-			if (token.id === 'TEST_PASSED')
+			if (!existing)
 			{
-				this.#passed++;
-				stats.passed++;
+				// First occurrence of this test — count it
+				this.#countedTests.add(fullPath);
+				stats.duration += token.duration ?? 0;
+
+				if (status === 'passed')
+				{
+					this.#passed++;
+					stats.passed++;
+				}
+				else if (status === 'failed')
+				{
+					this.#failed++;
+					stats.failed++;
+				}
+				else
+				{
+					this.#pending++;
+					stats.pending++;
+				}
+
+				this.#appendLine(fullPath, status, fullPath, token.duration, browser);
+
+				if (status === 'failed' && typeof token.duration === 'number' && token.duration > SLOW_TEST_THRESHOLD)
+				{
+					this.#slowTests.push({ title: fullPath, duration: token.duration, browser });
+				}
 			}
 			else
 			{
-				this.#failed++;
-				stats.failed++;
+				// Same test in another browser — update the line
+				if (browser)
+				{
+					existing.browsers.set(browser, status);
+				}
+
+				// If this browser failed but the test was previously counted as passed, upgrade to failed
+				if (status === 'failed' && existing.status !== 'failed')
+				{
+					const previousStatus = existing.status;
+					existing.status = 'failed';
+
+					if (previousStatus === 'passed')
+					{
+						this.#passed--;
+						stats.passed--;
+					}
+					else if (previousStatus === 'pending')
+					{
+						this.#pending--;
+						stats.pending--;
+					}
+
+					this.#failed++;
+					stats.failed++;
+				}
+
+				this.#updateLine(existing);
+			}
+
+			if (token.id === 'TEST_FAILED')
+			{
 				this.#failedTests.push({
 					suitePath,
 					title: token.title ?? '',
@@ -115,43 +223,93 @@ export class TestReporter
 					expected: token.expected,
 				});
 			}
-
-			if (typeof token.duration === 'number' && token.duration > SLOW_TEST_THRESHOLD)
-			{
-				this.#slowTests.push({ title: fullPath, duration: token.duration, browser });
-			}
-
-			this.#updateSpinner(fullPath);
-		}
-
-		if (token.id === 'TEST_PENDING')
-		{
-			this.#pending++;
-
-			const suiteName = stack[0] ?? '';
-			if (!this.#suiteStats.has(suiteName))
-			{
-				this.#suiteStats.set(suiteName, { passed: 0, failed: 0, pending: 0, duration: 0 });
-			}
-
-			this.#suiteStats.get(suiteName)!.pending++;
 		}
 	}
 
-	#updateSpinner(currentTest: string): void
+	#appendLine(key: string, status: BrowserStatus, fullPath: string, duration?: number, browser?: string): void
 	{
-		const total = this.#passed + this.#failed + this.#pending;
-		const parts = [
-			this.#passed > 0 ? chalk.green(`${this.#passed} passed`) : null,
-			this.#failed > 0 ? chalk.red(`${this.#failed} failed`) : null,
-		].filter(Boolean);
+		if (!this.#hasResults)
+		{
+			this.#hasResults = true;
+			this.#spinner.stop();
+		}
 
-		const progress = `${parts.join(chalk.gray(' | '))} ${chalk.gray(`(${total})`)}`;
-		const testName = currentTest.length > 50
-			? currentTest.slice(0, 47) + '...'
-			: currentTest;
+		const browsers = new Map<string, BrowserStatus>();
+		if (browser)
+		{
+			browsers.set(browser, status);
+		}
 
-		this.#spinner.text = `${progress} ${chalk.gray('—')} ${chalk.dim(testName)}`;
+		const live: LiveLine = {
+			status,
+			fullPath,
+			duration,
+			browsers,
+			row: this.#currentRow,
+		};
+		this.#liveLines.set(key, live);
+		this.#currentRow++;
+
+		process.stdout.write(this.#formatLine(live) + '\n');
+	}
+
+	#updateLine(live: LiveLine): void
+	{
+		if (!isTTY)
+		{
+			return;
+		}
+
+		const rowsUp = this.#currentRow - live.row;
+		if (rowsUp <= 0)
+		{
+			return;
+		}
+
+		const line = this.#formatLine(live);
+
+		// Move cursor up, clear line, write, move cursor back down
+		process.stdout.write(
+			`\x1B[${rowsUp}A` // move up
+			+ '\x1B[2K\x1B[0G' // clear line, go to column 0
+			+ line // write content
+			+ `\x1B[${rowsUp}E`, // move back down
+		);
+	}
+
+	#formatLine(live: LiveLine): string
+	{
+		const { status, fullPath, duration, browsers } = live;
+		const isComplete = browsers.size >= this.#expectedBrowsers;
+
+		const durationStr = typeof duration === 'number'
+			? ' ' + formatDuration(duration)
+			: '';
+		const browserTag = browsers.size > 0
+			? ' ' + formatBrowserTag(browsers)
+			: '';
+
+		if (!isComplete && status !== 'pending')
+		{
+			return `${PREFIX} ${chalk.gray('◌')} ${chalk.dim(fullPath)}${durationStr}${browserTag}`;
+		}
+
+		if (status === 'passed')
+		{
+			return `${PREFIX} ${chalk.green('✓')} ${chalk.dim(fullPath)}${durationStr}${browserTag}`;
+		}
+
+		if (status === 'failed')
+		{
+			return `${PREFIX} ${chalk.red('✗')} ${fullPath}${durationStr}${browserTag}`;
+		}
+
+		if (status === 'pending')
+		{
+			return `${PREFIX} ${chalk.yellow('○')} ${chalk.dim(fullPath)} ${chalk.yellow('skipped')}`;
+		}
+
+		return '';
 	}
 
 	#groupFailedTests(): Array<{
@@ -177,18 +335,23 @@ export class TestReporter
 		for (const test of this.#failedTests)
 		{
 			const path = test.suitePath ? `${test.suitePath} > ${test.title}` : test.title;
-			const key = `${path}::${test.error?.message ?? ''}`;
 
-			if (groups.has(key))
+			if (groups.has(path))
 			{
+				const group = groups.get(path)!;
 				if (test.browser)
 				{
-					groups.get(key)!.browsers.push(test.browser);
+					group.browsers.push(test.browser);
+				}
+
+				if (test.error?.stack && hasLocalFilePath(test.error.stack) && !hasLocalFilePath(group.error?.stack))
+				{
+					group.error = test.error;
 				}
 			}
 			else
 			{
-				groups.set(key, {
+				groups.set(path, {
 					suitePath: test.suitePath,
 					title: test.title,
 					browsers: test.browser ? [test.browser] : [],
@@ -212,68 +375,64 @@ export class TestReporter
 
 		const lines: string[] = [];
 
-		// Suites summary
-		for (const [suiteName, stats] of this.#suiteStats)
-		{
-			const suiteTotal = stats.passed + stats.failed + stats.pending;
-			const duration = formatDuration(stats.duration);
-
-			if (stats.failed > 0)
-			{
-				const counts = [
-					stats.passed > 0 ? chalk.green(`${stats.passed} passed`) : null,
-					chalk.red(`${stats.failed} failed`),
-					stats.pending > 0 ? chalk.yellow(`${stats.pending} pending`) : null,
-				].filter(Boolean).join(chalk.gray(' | '));
-
-				lines.push(`${PREFIX} ${chalk.red('✖')} ${chalk.bold(suiteName)} ${chalk.gray(`(${counts})`)} ${duration}`);
-			}
-			else
-			{
-				const pendingStr = stats.pending > 0 ? ` | ${stats.pending} pending` : '';
-				lines.push(`${PREFIX} ${chalk.green('✓')} ${suiteName} ${chalk.gray(`(${suiteTotal} tests${pendingStr})`)} ${duration}`);
-			}
-		}
-
-		// Failed test details (grouped by path + error)
+		// Failed test details (grouped by path)
 		if (this.#failedTests.length > 0)
 		{
-			lines.push('');
-			lines.push(`${PREFIX} ${chalk.red.bold('Failed Tests:')}`);
-
 			const grouped = this.#groupFailedTests();
 
-			for (const group of grouped)
+			lines.push('');
+			lines.push(`${PREFIX} ${chalk.red.bold(`Failed Tests (${grouped.length}):`)}`);
+
+			for (let idx = 0; idx < grouped.length; idx++)
 			{
+				const group = grouped[idx];
 				const browsers = group.browsers.length > 0
 					? chalk.dim(` [${group.browsers.join(' · ')}]`)
 					: '';
 				const path = group.suitePath ? `${group.suitePath} > ${group.title}` : group.title;
+				const counter = chalk.dim(`${idx + 1}/${grouped.length}`);
 
 				lines.push('');
-				lines.push(`${PREFIX} ${chalk.red('✖')} ${chalk.red(path)}${browsers}`);
+				if (idx > 0)
+				{
+					lines.push(`${PREFIX} ${chalk.dim('─'.repeat(40))}`);
+					lines.push('');
+				}
+				lines.push(`${PREFIX} ${counter} ${chalk.red(path)}${browsers}`);
+				lines.push('');
+
+				const hasDiff = group.showDiff && group.actual !== undefined && group.expected !== undefined;
 
 				if (group.error?.message)
 				{
-					lines.push(`${PREFIX}   ${chalk.dim(group.error.message)}`);
-				}
-
-				if (group.error?.stack)
-				{
-					const stackLines = formatStack(group.error.stack);
-					for (const stackLine of stackLines)
+					const message = stripAnsi(group.error.message);
+					const styledLines = styleErrorMessage(message);
+					for (const styledLine of styledLines)
 					{
-						lines.push(`${PREFIX}   ${stackLine}`);
+						lines.push(`${PREFIX}   ${styledLine}`);
 					}
 				}
 
-				if (group.showDiff && group.actual !== undefined && group.expected !== undefined)
+				if (hasDiff)
 				{
 					lines.push('');
 					const diffLines = renderDiff(group.actual, group.expected);
 					for (const diffLine of diffLines)
 					{
 						lines.push(`${PREFIX}   ${diffLine}`);
+					}
+				}
+
+				if (group.error?.stack)
+				{
+					const stackLines = formatStack(group.error.stack);
+					if (stackLines.length > 0)
+					{
+						lines.push('');
+						for (const stackLine of stackLines)
+						{
+							lines.push(`${PREFIX}   ${stackLine}`);
+						}
 					}
 				}
 			}
@@ -335,6 +494,101 @@ export class TestReporter
 	}
 }
 
+function styleErrorMessage(message: string): string[]
+{
+	const lines = message.split('\n');
+	const result: string[] = [];
+
+	for (const line of lines)
+	{
+		const trimmed = line.trimStart();
+
+		// Code frame: "> 35 | code" — error line
+		if (/^>\s*\d+\s*\|/.test(trimmed))
+		{
+			const pipeIndex = line.indexOf('|');
+			const prefix = line.slice(line.indexOf('>') + 1, pipeIndex);
+			result.push(chalk.red('>') + chalk.dim(prefix) + chalk.gray('|') + line.slice(pipeIndex + 1));
+			continue;
+		}
+
+		// Code frame: "  35 | code" — context line
+		if (/^\d+\s*\|/.test(trimmed))
+		{
+			const pipeIndex = line.indexOf('|');
+			result.push(chalk.dim(line.slice(0, pipeIndex)) + chalk.gray('|') + line.slice(pipeIndex + 1));
+			continue;
+		}
+
+		// Code frame: "     | ^" — pointer line
+		if (/^\s*\|\s*\^/.test(line))
+		{
+			const pipeIndex = line.indexOf('|');
+			result.push(line.slice(0, pipeIndex) + chalk.gray('|') + chalk.red(line.slice(pipeIndex + 1)));
+			continue;
+		}
+
+		// "at /path/to/file:line:col"
+		if (/^\s*at\s+\//.test(line))
+		{
+			const match = line.match(/at\s+(\/\S+)/);
+			result.push(match ? `  at ${match[1]}` : line);
+			continue;
+		}
+
+		// "Expected" / "Expected:" / "Expected pattern:" etc.
+		if (/^Expected\b/.test(trimmed))
+		{
+			result.push(chalk.green(line));
+			continue;
+		}
+
+		// "Received" / "Received:" / "Received string:" etc.
+		if (/^Received\b/.test(trimmed))
+		{
+			result.push(chalk.red(line));
+			continue;
+		}
+
+		// Everything else — dim
+		result.push(chalk.dim(line));
+	}
+
+	return result;
+}
+
+function stripAnsi(text: string): string
+{
+	// eslint-disable-next-line no-control-regex
+	return text.replace(/\x1B\[[0-9;]*m/g, '');
+}
+
+function hasLocalFilePath(stack?: string): boolean
+{
+	if (!stack)
+	{
+		return false;
+	}
+
+	// Match /absolute/path:line:col but not //cdn... or http://...
+	const match = stack.match(/(\/[^\s:()]+):\d+:\d+/);
+
+	return !!match && !match[1].startsWith('//') && !match[1].includes('://');
+}
+
+function formatBrowserTag(browsers: Map<string, BrowserStatus>): string
+{
+	const parts = [...browsers.entries()].map(([name, status]) => {
+		const icon = status === 'passed' ? chalk.green('✓')
+			: status === 'failed' ? chalk.red('✗')
+			: chalk.yellow('○');
+
+		return chalk.dim(name) + ' ' + icon;
+	});
+
+	return chalk.dim('[') + parts.join(chalk.dim(' · ')) + chalk.dim(']');
+}
+
 function formatDuration(ms: number): string
 {
 	if (ms < 1)
@@ -353,21 +607,98 @@ function formatDuration(ms: number): string
 function formatStack(stack: string): string[]
 {
 	const lines = stack.split('\n');
-	const result: string[] = [];
 
 	for (const line of lines)
 	{
-		// Extract file path with line:col from stack frame
-		const fileMatch = line.match(/(\/[^\s:()]+:\d+:\d+)/);
+		const fileMatch = line.match(/(\/[^\s:()]+):(\d+):(\d+)/);
 		if (fileMatch)
 		{
-			result.push(`file://${fileMatch[1]}`);
+			const [, filePath, lineStr, colStr] = fileMatch;
+
+			// Skip URLs (CDN paths like //cdn.jsdelivr.net/...)
+			if (filePath.startsWith('//') || filePath.includes('://'))
+			{
+				continue;
+			}
+
+			const errorLine = Number(lineStr);
+			const errorCol = Number(colStr);
+
+			const result: string[] = [];
+			result.push(...renderCodeFrame(filePath, errorLine, errorCol));
+			result.push('');
+			result.push(`  at ${filePath}:${lineStr}:${colStr}`);
+
+			return result;
+		}
+	}
+
+	return [];
+}
+
+function renderCodeFrame(filePath: string, errorLine: number, errorCol: number): string[]
+{
+	let fileContent: string;
+	try
+	{
+		fileContent = fs.readFileSync(filePath, 'utf-8');
+	}
+	catch
+	{
+		return [];
+	}
+
+	const sourceLines = fileContent.split('\n');
+	const contextSize = 2;
+	const start = Math.max(0, errorLine - contextSize - 1);
+	const end = Math.min(sourceLines.length, errorLine + contextSize);
+	const padWidth = String(end).length;
+
+	// Expand tabs and find minimum common indent
+	const expandedLines: string[] = [];
+	for (let i = start; i < end; i++)
+	{
+		expandedLines.push(sourceLines[i].replaceAll('\t', '    '));
+	}
+
+	const minIndent = expandedLines.reduce((min, line) => {
+		if (line.trim().length === 0)
+		{
+			return min;
 		}
 
-		// Show only the first relevant frame
-		if (result.length >= 1)
+		const indent = line.match(/^(\s*)/)?.[1].length ?? 0;
+
+		return Math.min(min, indent);
+	}, Infinity);
+
+	const strip = minIndent === Infinity ? 0 : minIndent;
+
+	const result: string[] = [];
+
+	for (let i = start; i < end; i++)
+	{
+		const lineNum = String(i + 1).padStart(padWidth);
+		const sourceLine = expandedLines[i - start].slice(strip);
+
+		if (i + 1 === errorLine)
 		{
-			break;
+			result.push(`${chalk.red('>')} ${chalk.dim(lineNum)} ${chalk.gray('|')} ${sourceLine}`);
+
+			// Convert source column to expanded column (tabs → 4 spaces)
+			const rawLine = sourceLines[i];
+			let expandedCol = 0;
+			for (let c = 0; c < errorCol - 1 && c < rawLine.length; c++)
+			{
+				expandedCol += rawLine[c] === '\t' ? 4 : 1;
+			}
+
+			const pointer = ' '.repeat(Math.max(0, expandedCol - strip)) + '^';
+			result.push(`  ${' '.repeat(padWidth)} ${chalk.gray('|')} ${chalk.red(pointer)}`);
+		}
+		else
+		{
+			result.push(`  ${chalk.dim(lineNum)} ${chalk.gray('|')} ${sourceLine}`);
 		}
 	}
 
@@ -384,37 +715,59 @@ function stringify(value: unknown): string
 	return JSON.stringify(value, null, 2) ?? String(value);
 }
 
+function isScalar(value: unknown): boolean
+{
+	return typeof value === 'string' || typeof value === 'number'
+		|| typeof value === 'boolean' || value === null || value === undefined;
+}
+
 function renderDiff(actual: unknown, expected: unknown): string[]
 {
-	const actualLines = stringify(actual).split('\n');
-	const expectedLines = stringify(expected).split('\n');
+	// For scalar values: simple Expected / Received (like Jest/Playwright)
+	if (isScalar(actual) && isScalar(expected))
+	{
+		const expectedStr = stringify(expected);
+		const actualStr = stringify(actual);
+
+		return [
+			...expectedStr.split('\n').map((line, i) =>
+				chalk.green(i === 0 ? `Expected: ${line}` : `          ${line}`),
+			),
+			...actualStr.split('\n').map((line, i) =>
+				chalk.red(i === 0 ? `Received: ${line}` : `          ${line}`),
+			),
+		];
+	}
+
+	// For objects/arrays: line-by-line diff (like Jest)
+	const actualStr = stringify(actual);
+	const expectedStr = stringify(expected);
+	const actualLines = actualStr.split('\n');
+	const expectedLines = expectedStr.split('\n');
 	const maxLen = Math.max(actualLines.length, expectedLines.length);
-	const padWidth = String(maxLen).length;
-	const pad = ' '.repeat(padWidth);
 	const lines: string[] = [];
 
-	lines.push(`${pad}   ${chalk.red('- actual')}  ${chalk.green('+ expected')}`);
+	lines.push(`${chalk.green('- Expected')}  ${chalk.red('+ Received')}`);
 	lines.push('');
 
 	for (let i = 0; i < maxLen; i++)
 	{
-		const lineNum = chalk.gray(String(i + 1).padStart(padWidth));
 		const aLine = actualLines[i];
 		const eLine = expectedLines[i];
 
 		if (aLine === eLine)
 		{
-			lines.push(`${lineNum} ${chalk.gray('│')}   ${aLine ?? ''}`);
+			lines.push(`    ${aLine}`);
 		}
 		else
 		{
-			if (aLine !== undefined)
-			{
-				lines.push(`${lineNum} ${chalk.gray('│')} ${chalk.red('-')} ${chalk.red(aLine)}`);
-			}
 			if (eLine !== undefined)
 			{
-				lines.push(`${chalk.gray(pad)} ${chalk.gray('│')} ${chalk.green('+')} ${chalk.green(eLine)}`);
+				lines.push(`  ${chalk.green('-')} ${chalk.green(eLine)}`);
+			}
+			if (aLine !== undefined)
+			{
+				lines.push(`  ${chalk.red('+')} ${chalk.red(aLine)}`);
 			}
 		}
 	}

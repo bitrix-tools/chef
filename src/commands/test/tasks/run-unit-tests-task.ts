@@ -45,6 +45,7 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 			context.succeed('Unit tests');
 
 			const reporter = new TestReporter();
+			reporter.setBrowserCount(browsers.length);
 			const allConsoleLogs: ConsoleLog[] = [];
 			const allErrors: Error[] = [];
 			let hasTests = false;
@@ -56,6 +57,7 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 					...args,
 					browserType,
 					onToken: (token) => reporter.handleToken(token, label),
+					onStatus: (status) => reporter.updateStatus(status, label),
 				});
 
 				if (testResult.errors.length > 0)

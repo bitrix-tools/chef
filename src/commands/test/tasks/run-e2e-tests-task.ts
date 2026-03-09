@@ -7,11 +7,20 @@ export function runEndToEndTestsTask(extension: BasePackage, args: Record<string
 	return {
 		title: 'E2E tests',
 		run: async (context): Promise<any> => {
-			const testResult = await extension.runEndToEndTests(args);
+			context.succeed('E2E tests');
+
+			const reporter = new TestReporter();
+
+			const testResult = await extension.runEndToEndTests({
+				...args,
+				onToken: (token, browser) => reporter.handleToken(token, browser),
+				onStatus: (status: string) => reporter.updateStatus(status),
+				onBegin: ({ browserCount }) => reporter.setBrowserCount(browserCount),
+			});
 
 			if (testResult.errors.length > 0)
 			{
-				context.fail('E2E tests');
+				reporter.stop();
 
 				testResult.errors.forEach((error: Error) => {
 					context.border(error.message, 'red', 2);
@@ -22,16 +31,9 @@ export function runEndToEndTestsTask(extension: BasePackage, args: Record<string
 
 			if (testResult.report.length === 0)
 			{
+				reporter.stop();
 				context.warn('No E2E tests found');
 				return true;
-			}
-
-			context.succeed('E2E tests');
-
-			const reporter = new TestReporter();
-			for (const token of testResult.report)
-			{
-				reporter.handleToken(token);
 			}
 
 			const { failed } = reporter.finish(testResult.consoleLogs);
