@@ -1,4 +1,5 @@
 import path from 'node:path';
+import fs from 'node:fs';
 import { createFilter } from '@rollup/pluginutils';
 import type { Plugin } from 'rollup';
 import type { CompilerOptions } from 'typescript';
@@ -44,8 +45,32 @@ export default async function typescriptPlugin(options: TypeScriptPluginOptions)
 		rootDir: packageRoot,
 	};
 
+	const tsExtensions = ['.ts', '.tsx', '.mts', '.cts'];
+
 	return {
 		name: 'bitrix-typescript',
+
+		resolveId(source, importer)
+		{
+			if (!importer || path.extname(source))
+			{
+				return null;
+			}
+
+			const importerDir = path.dirname(importer);
+			const resolved = path.resolve(importerDir, source);
+
+			for (const ext of tsExtensions)
+			{
+				const candidate = resolved + ext;
+				if (fs.existsSync(candidate))
+				{
+					return candidate;
+				}
+			}
+
+			return null;
+		},
 
 		transform(code, id)
 		{

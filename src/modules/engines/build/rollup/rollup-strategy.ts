@@ -382,11 +382,10 @@ export class RollupBuildStrategy extends BuildStrategy
 				baseUrl: tsConfig.options.baseUrl,
 				types: typesPath ? [typesPath] : [],
 			},
-			include: [`${packageRoot}/src/**`],
+			include: [`${packageRoot}/**`],
 			exclude: [
 				...(tsConfig?.raw?.exclude ?? []),
 				`${packageRoot}/dist/**`,
-				`${packageRoot}/test/**`,
 			],
 		});
 	}
