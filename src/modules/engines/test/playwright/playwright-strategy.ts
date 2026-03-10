@@ -194,6 +194,19 @@ export class PlaywrightStrategy extends TestStrategy
 			onStatus('Loading test page...');
 			await page.goto(testsPage);
 
+			// Close extra pages (about:blank) so CDP /json only shows the test page.
+			// This prevents WipRemoteVmConnection from connecting to the wrong page.
+			if (cdpPort)
+			{
+				for (const p of context.pages())
+				{
+					if (p !== page)
+					{
+						await p.close();
+					}
+				}
+			}
+
 			onStatus('Building test bundle...');
 			const { code: testsCodeBundle, map: sourceMap } = await this.#buildTestBundle(options);
 			const tracer = sourceMap ? new TraceMap(sourceMap as any) : null;
@@ -315,6 +328,41 @@ export class PlaywrightStrategy extends TestStrategy
 					+ Buffer.from(JSON.stringify(mapWithFileUrls)).toString('base64');
 			})();
 
+			if (cdpPort)
+			{
+				// Wait for external debugger to connect BEFORE injecting test scripts.
+				// This ensures the debugger receives scriptParsed events and can bind breakpoints.
+				const fs = await import('node:fs');
+				const os = await import('node:os');
+				const signalDir = path.join(os.tmpdir(), 'chef-debug-signal');
+				fs.mkdirSync(signalDir, { recursive: true });
+
+				const readyFile = path.join(signalDir, 'ready');
+				const runFile = path.join(signalDir, 'run');
+
+				try { fs.unlinkSync(readyFile); } catch {}
+				try { fs.unlinkSync(runFile); } catch {}
+
+				// Signal that page is ready for debugger to connect
+				fs.writeFileSync(readyFile, String(cdpPort));
+
+				// Wait for debugger to connect
+				await new Promise<void>((resolve) => {
+					const check = () => {
+						if (fs.existsSync(runFile))
+						{
+							try { fs.unlinkSync(readyFile); } catch {}
+							try { fs.unlinkSync(runFile); } catch {}
+							resolve();
+							return;
+						}
+						setTimeout(check, 100);
+					};
+					check();
+				});
+			}
+
+			// Inject test scripts (after debugger is connected when cdpPort is set)
 			await page.addScriptTag({
 				content: codeWithSourceMap,
 			});
@@ -325,10 +373,7 @@ export class PlaywrightStrategy extends TestStrategy
 				return new Promise((resolve) => {
 					// @ts-ignore
 					globalThis.mocha.run(() => {
-						resolve({
-							// @ts-ignore
-							stats: globalThis.mocha.stats,
-						});
+						resolve({ stats: globalThis.mocha.stats });
 					});
 				});
 			});

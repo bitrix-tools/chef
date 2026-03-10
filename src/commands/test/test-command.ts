@@ -10,6 +10,7 @@ import { TaskRunner } from '../../modules/task/task';
 import { runUnitTestsTask } from './tasks/run-unit-tests-task';
 import { runEndToEndTestsTask } from './tasks/run-e2e-tests-task';
 import { createReporter } from './create-reporter';
+import { TeamcityReporter } from '../../modules/engines/test/teamcity-reporter';
 
 import type { BasePackage } from '../../modules/packages/base-package';
 import type { FSWatcher } from 'chokidar';
@@ -38,7 +39,7 @@ function runTestsTeamcity({ extensions, args, type }: RunTestsOptions): void
 {
 	const queue = new PQueue({ concurrency: 1 });
 	const extensionsStream = createExtensionsStream(extensions, args);
-	const reporter = createReporter('teamcity');
+	const reporter = new TeamcityReporter();
 
 	extensionsStream
 		.on('data', async ({ extension }: { extension: BasePackage }) => {
@@ -61,22 +62,23 @@ function runTestsTeamcity({ extensions, args, type }: RunTestsOptions): void
 						webkit: 'WebKit',
 					};
 
-					// Run browsers sequentially to avoid interleaving TeamCity messages
-				for (const browserType of browsers)
-				{
-					const label = browserLabels[browserType] ?? browserType;
+					// Run browsers in parallel, flat test list with browser prefix
+					const browserPromises = browsers.map(async (browserType) => {
+						const label = browserLabels[browserType] ?? browserType;
 
-					const result = await extension.runUnitTests({
-						...args,
-						browserType,
-						onToken: (token) => reporter.handleToken(token, label),
+						const result = await extension.runUnitTests({
+							...args,
+							browserType,
+							onToken: (token) => reporter.handleToken(token, label),
+						});
+
+						if (result.debugCleanup)
+						{
+							await result.debugCleanup();
+						}
 					});
 
-					if (result.debugCleanup)
-					{
-						await result.debugCleanup();
-					}
-				}
+					await Promise.all(browserPromises);
 				}
 
 				if (type !== 'unit')

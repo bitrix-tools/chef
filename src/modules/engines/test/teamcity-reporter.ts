@@ -31,6 +31,7 @@ export class TeamcityReporter
 	#failed = 0;
 	#testCount = 0;
 	#started = false;
+	#suitePath: Map<string, string[]> = new Map();
 
 	setBrowserCount(_count: number): void {}
 	stop(): void {}
@@ -51,35 +52,45 @@ export class TeamcityReporter
 		}
 	}
 
+	#getSuitePath(browser?: string): string[]
+	{
+		const key = browser ?? '';
+		let path = this.#suitePath.get(key);
+		if (!path)
+		{
+			path = [];
+			this.#suitePath.set(key, path);
+		}
+		return path;
+	}
+
+	#formatTestName(token: TestToken, browser?: string): string
+	{
+		const path = this.#getSuitePath(browser);
+		const parts = [...path, token.title ?? ''];
+		const fullName = parts.join(' > ');
+		return browser ? `[${browser}] ${fullName}` : fullName;
+	}
+
 	handleToken(token: TestToken, browser?: string): void
 	{
 		this.#ensureStarted();
 
 		if (token.id === 'SUITE_START' && !token.root)
 		{
-			const name = browser
-				? `${token.title} [${browser}]`
-				: (token.title ?? '');
-
-			this.#write(message('testSuiteStarted', { name }));
+			this.#getSuitePath(browser).push(token.title ?? '');
 		}
 
 		if (token.id === 'SUITE_END' && !token.root)
 		{
-			const name = browser
-				? `${token.title} [${browser}]`
-				: (token.title ?? '');
-
-			this.#write(message('testSuiteFinished', { name }));
+			this.#getSuitePath(browser).pop();
 		}
 
 		if (token.id === 'TEST_PASSED' || token.id === 'TEST_FAILED' || token.id === 'TEST_PENDING')
 		{
 			this.#testCount++;
 
-			const name = browser
-				? `${token.title} [${browser}]`
-				: (token.title ?? '');
+			const name = this.#formatTestName(token, browser);
 
 			this.#write(message('testStarted', { name }));
 
