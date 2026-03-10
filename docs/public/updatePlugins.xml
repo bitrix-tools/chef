@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugins>
+    <plugin id="com.bitrix.chef"
+            url="https://github.com/bitrix-tools/chef-phpstorm-plugin/releases/download/v0.1.0/chef-phpstorm-plugin-0.1.0.zip"
+            version="0.1.0">
+        <idea-version since-build="252" until-build="261.*"/>
+        <name>Bitrix Chef</name>
+        <description><![CDATA[Integration with @bitrix/chef CLI: run/debug JS extension tests, recognize bundle.config files, scaffold new extensions]]></description>
+    </plugin>
+</plugins>

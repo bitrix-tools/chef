@@ -10,6 +10,7 @@ const guideSidebarRu = [
   { text: 'Тестирование', link: '/guide/testing' },
   { text: 'Production-сборка', link: '/guide/production' },
   { text: 'Миграция с @bitrix/cli', link: '/guide/migration' },
+  { text: 'Плагин PhpStorm', link: '/guide/phpstorm-plugin' },
 ]
 
 const configSidebarRu = [
@@ -28,6 +29,7 @@ const guideSidebarEn = [
   { text: 'Testing', link: '/en/guide/testing' },
   { text: 'Production Build', link: '/en/guide/production' },
   { text: 'Migration from @bitrix/cli', link: '/en/guide/migration' },
+  { text: 'PhpStorm Plugin', link: '/en/guide/phpstorm-plugin' },
 ]
 
 const configSidebarEn = [
