@@ -9,6 +9,7 @@ import PQueue from 'p-queue';
 import { TaskRunner } from '../../modules/task/task';
 import { runUnitTestsTask } from './tasks/run-unit-tests-task';
 import { runEndToEndTestsTask } from './tasks/run-e2e-tests-task';
+import { createReporter } from './create-reporter';
 
 import type { BasePackage } from '../../modules/packages/base-package';
 import type { FSWatcher } from 'chokidar';
@@ -19,22 +20,104 @@ type RunTestsOptions = {
 	type?: 'unit' | 'e2e';
 };
 
-function runTests({ extensions, args, type }: RunTestsOptions): void
+function createExtensionsStream(extensions: string[], args: Record<string, any>): NodeJS.ReadableStream
+{
+	if (extensions.length > 0)
+	{
+		return PackageResolver.resolveStream(extensions);
+	}
+
+	const packageFactory = PackageFactoryProvider.create();
+	return findPackages({
+		startDirectory: args.path,
+		packageFactory,
+	});
+}
+
+function runTestsTeamcity({ extensions, args, type }: RunTestsOptions): void
 {
 	const queue = new PQueue({ concurrency: 1 });
+	const extensionsStream = createExtensionsStream(extensions, args);
+	const reporter = createReporter('teamcity');
 
-	const extensionsStream: NodeJS.ReadableStream = (() => {
-		if (extensions.length > 0)
-		{
-			return PackageResolver.resolveStream(extensions);
-		}
+	extensionsStream
+		.on('data', async ({ extension }: { extension: BasePackage }) => {
+			await queue.add(async () => {
+				if (type !== 'e2e')
+				{
+					const browsers = (() => {
+						if (args.project)
+						{
+							const projects: string[] = Array.isArray(args.project) ? args.project : [args.project];
+							return projects.filter(Boolean);
+						}
 
-		const packageFactory = PackageFactoryProvider.create();
-		return findPackages({
-			startDirectory: args.path,
-			packageFactory,
+						return ['chromium', 'firefox', 'webkit'];
+					})();
+
+					const browserLabels: Record<string, string> = {
+						chromium: 'Chromium',
+						firefox: 'Firefox',
+						webkit: 'WebKit',
+					};
+
+					// Run browsers sequentially to avoid interleaving TeamCity messages
+				for (const browserType of browsers)
+				{
+					const label = browserLabels[browserType] ?? browserType;
+
+					const result = await extension.runUnitTests({
+						...args,
+						browserType,
+						onToken: (token) => reporter.handleToken(token, label),
+					});
+
+					if (result.debugCleanup)
+					{
+						await result.debugCleanup();
+					}
+				}
+				}
+
+				if (type !== 'unit')
+				{
+					await extension.runEndToEndTests({
+						...args,
+						onToken: (token, browser) => reporter.handleToken(token, browser),
+					});
+				}
+			});
+		})
+		.on('done', async () => {
+			await queue.onIdle();
+
+			// Wait for any remaining async console events
+			await new Promise(resolve => setTimeout(resolve, 500));
+
+			reporter.finish();
+
+			// Flush stdout so all TeamCity messages reach the IDE
+			await new Promise<void>((resolve) => {
+				process.stdout.write('', () => resolve());
+			});
+
+			// Let the process exit naturally (no process.exit to avoid truncating output)
+		})
+		.on('error', (err: Error) => {
+			console.error(err.message);
+			process.exit(1);
 		});
-	})();
+}
+
+function runTests({ extensions, args, type }: RunTestsOptions): void
+{
+	if (args.reporter === 'teamcity')
+	{
+		return runTestsTeamcity({ extensions, args, type });
+	}
+
+	const queue = new PQueue({ concurrency: 1 });
+	const extensionsStream = createExtensionsStream(extensions, args);
 
 	const watchers: Array<FSWatcher> = [];
 
@@ -143,7 +226,9 @@ const commonOptions = (cmd: Command) => cmd
 	.option('--headed', 'Run browser tests in headed mode')
 	.option('--debug', 'Run tests in debug mode (slower, more logs)')
 	.option('--grep <pattern>', 'Run only tests that match the given pattern')
-	.option('--project <projects...>', 'Run tests in the specified Playwright projects');
+	.option('--project <projects...>', 'Run tests in the specified Playwright projects')
+	.option('--reporter <type>', 'Reporter to use: default, teamcity', 'default')
+	.option('--cdp-port <port>', 'Launch browser with Chrome DevTools Protocol on this port', parseInt);
 
 export const testCommand = new Command('test');
 
@@ -152,8 +237,8 @@ testCommand
 	.argument('[extensions...]', 'Extensions to test (e.g. main.core ui.buttons)');
 
 commonOptions(testCommand)
-	.action((extensions: string[], args): void => {
-		runTests({ extensions, args });
+	.action((extensions: string[], _opts, command: Command): void => {
+		runTests({ extensions, args: command.optsWithGlobals() });
 	});
 
 // Splits [extensions..., file?] — file is the last arg if it looks like a filename (contains a dot and no dot-separated segments > 2 chars each)
@@ -180,7 +265,8 @@ const unitCommand = new Command('unit')
 	.argument('[args...]', 'Extensions to test and optionally a test file (e.g. main.core ui.buttons dom.test.ts)');
 
 commonOptions(unitCommand)
-	.action((rawArgs: string[], args): void => {
+	.action((rawArgs: string[], _opts, command: Command): void => {
+		const args = command.optsWithGlobals();
 		const { extensions, file } = splitExtensionsAndFile(rawArgs);
 		runTests({ extensions, args: { ...args, file }, type: 'unit' });
 	});
@@ -190,7 +276,8 @@ const e2eCommand = new Command('e2e')
 	.argument('[args...]', 'Extensions to test and optionally a test file (e.g. main.core ui.buttons button.spec.ts)');
 
 commonOptions(e2eCommand)
-	.action((rawArgs: string[], args): void => {
+	.action((rawArgs: string[], _opts, command: Command): void => {
+		const args = command.optsWithGlobals();
 		const { extensions, file } = splitExtensionsAndFile(rawArgs);
 		runTests({ extensions, args: { ...args, file }, type: 'e2e' });
 	});

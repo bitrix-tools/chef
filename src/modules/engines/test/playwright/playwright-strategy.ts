@@ -121,16 +121,68 @@ export class PlaywrightStrategy extends TestStrategy
 
 		onStatus(`Launching ${browserType}...`);
 		const isDebug = !!options.debug;
-		const browser = await browserLauncher.launch({
-			headless: isDebug ? false : !options.headed,
-			...(isDebug ? {
-				slowMo: 250,
-				devtools: true,
-				args: ['--auto-open-devtools-for-tabs'],
-			} : {}),
-		});
-		const context = await browser.newContext();
-		const page = await context.newPage();
+		const cdpPort = options.cdpPort;
+
+		let browser;
+		if (cdpPort && browserType === 'chromium')
+		{
+			// Launch Chromium with CDP port, then connect Playwright to it.
+			// We can't pass --remote-debugging-port to Playwright's launch()
+			// because Playwright uses its own CDP pipe which conflicts.
+			const chromiumPath = browserLauncher.executablePath();
+			const { spawn } = await import('node:child_process');
+			const chromiumProcess = spawn(chromiumPath, [
+				`--remote-debugging-port=${cdpPort}`,
+				'--no-first-run',
+				'--no-default-browser-check',
+				`--user-data-dir=${(await import('node:os')).tmpdir()}/chef-debug-${Date.now()}`,
+			], { stdio: 'ignore' });
+
+			// Wait for CDP port to be ready
+			await new Promise<void>((resolve) => {
+				const check = async () => {
+					try
+					{
+						const response = await fetch(`http://localhost:${cdpPort}/json/version`);
+						if (response.ok)
+						{
+							resolve();
+							return;
+						}
+					}
+					catch
+					{
+						// Port not ready yet
+					}
+					setTimeout(check, 100);
+				};
+
+				check();
+			});
+
+			browser = await browserLauncher.connectOverCDP(`http://localhost:${cdpPort}`);
+
+			// Ensure Chromium process is killed when browser disconnects
+			browser.on('disconnected', () => {
+				chromiumProcess.kill();
+			});
+		}
+		else
+		{
+			browser = await browserLauncher.launch({
+				headless: isDebug ? false : !options.headed,
+				...(isDebug ? {
+					slowMo: 250,
+					devtools: true,
+					args: ['--auto-open-devtools-for-tabs'],
+				} : {}),
+			});
+		}
+
+		const context = cdpPort
+			? browser.contexts()[0] ?? await browser.newContext()
+			: await browser.newContext();
+		const page = context.pages()[0] ?? await context.newPage();
 
 		try
 		{
@@ -237,8 +289,34 @@ export class PlaywrightStrategy extends TestStrategy
 			}, { grep, timeout });
 
 			onStatus('Running tests...');
+
+			const codeWithSourceMap = (() => {
+				if (!sourceMap || !cdpPort)
+				{
+					return testsCodeBundle;
+				}
+
+				// Ensure sources use file:// URLs so PhpStorm can map them to local files
+				const mapWithFileUrls = {
+					...sourceMap,
+					sources: (sourceMap.sources ?? []).map((source: string) => {
+						if (source.startsWith('/'))
+						{
+							return `file://${source}`;
+						}
+
+						return source;
+					}),
+				};
+
+				return testsCodeBundle
+					+ '\n//# sourceURL=chef-test-bundle.js'
+					+ '\n//# sourceMappingURL=data:application/json;base64,'
+					+ Buffer.from(JSON.stringify(mapWithFileUrls)).toString('base64');
+			})();
+
 			await page.addScriptTag({
-				content: testsCodeBundle,
+				content: codeWithSourceMap,
 			});
 
 			type TestStats = Promise<{ stats: any }>;
@@ -258,18 +336,28 @@ export class PlaywrightStrategy extends TestStrategy
 			// Wait for pending console events to be processed
 			await new Promise(resolve => setTimeout(resolve, 100));
 
-			if (!isDebug)
+			const keepOpen = isDebug || !!cdpPort;
+
+			if (!keepOpen)
 			{
 				await browser.close();
 			}
 
-			const debugCleanup = isDebug
+			const debugCleanup = keepOpen
 				? async () => {
+					// Keep the Node.js event loop alive while waiting
+					const keepAlive = setInterval(() => {}, 30_000);
+
 					await new Promise<void>((resolve) => {
-						page.on('close', () => resolve());
+						const cleanup = async () => {
+							clearInterval(keepAlive);
+							resolve();
+						};
+
+						browser.on('disconnected', cleanup);
+						page.on('close', cleanup);
 						process.on('SIGINT', async () => {
 							await browser.close();
-							resolve();
 						});
 					});
 				}

@@ -30,6 +30,7 @@ export class PackageTestRunner
 			debug: args.debug,
 			grep: args.grep,
 			file: args.file,
+			cdpPort: args.cdpPort,
 			onToken: args.onToken,
 			onStatus: args.onStatus,
 		});

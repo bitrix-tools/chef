@@ -4,7 +4,7 @@ import boxen from 'boxen';
 import type { BasePackage } from '../../../modules/packages/base-package';
 import type { Task } from '../../../modules/task/task';
 import type { ConsoleLog } from '../../../modules/engines/test/test-types';
-import { TestReporter } from '../../../modules/engines/test/test-reporter';
+import { createReporter } from '../create-reporter';
 
 const PROJECT_TO_BROWSER: Record<string, string> = {
 	chromium: 'chromium',
@@ -44,7 +44,7 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 		run: async (context): Promise<any> => {
 			context.succeed('Unit tests');
 
-			const reporter = new TestReporter();
+			const reporter = createReporter(args.reporter);
 			reporter.setBrowserCount(browsers.length);
 			const allConsoleLogs: ConsoleLog[] = [];
 			const allErrors: Error[] = [];
@@ -107,7 +107,7 @@ function createDebugTask(extension: BasePackage, args: Record<string, any>, brow
 		return {
 			title: label,
 			run: async (context): Promise<any> => {
-				const reporter = new TestReporter();
+				const reporter = createReporter(args.reporter);
 
 				context.succeed(label);
 

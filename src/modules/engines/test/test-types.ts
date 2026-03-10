@@ -13,6 +13,7 @@ export type UnitTestOptions = {
 	debug?: boolean;
 	grep?: string;
 	file?: string;
+	cdpPort?: number;
 	onToken?: (token: TestToken, browser?: string) => void;
 	onStatus?: (status: string) => void;
 };

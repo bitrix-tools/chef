@@ -1,6 +1,6 @@
 import type { BasePackage } from '../../../modules/packages/base-package';
 import type { Task } from '../../../modules/task/task';
-import { TestReporter } from '../../../modules/engines/test/test-reporter';
+import { createReporter } from '../create-reporter';
 
 export function runEndToEndTestsTask(extension: BasePackage, args: Record<string, any>): Task
 {
@@ -9,7 +9,7 @@ export function runEndToEndTestsTask(extension: BasePackage, args: Record<string
 		run: async (context): Promise<any> => {
 			context.succeed('E2E tests');
 
-			const reporter = new TestReporter();
+			const reporter = createReporter(args.reporter);
 
 			const testResult = await extension.runEndToEndTests({
 				...args,
