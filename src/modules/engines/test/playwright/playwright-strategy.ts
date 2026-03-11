@@ -184,15 +184,41 @@ export class PlaywrightStrategy extends TestStrategy
 			: await browser.newContext();
 		const page = context.pages()[0] ?? await context.newPage();
 
+		const report: TestToken[] = [];
+		const consoleLogs: ConsoleLog[] = [];
+		let tracer: TraceMap | null = null;
+
 		try
 		{
-			const testsPage = path.join(
-				playwrightConfig.use.baseURL,
-				`/dev/ui/cli/mocha-wrapper.php?extension=${options.packageName}`,
-			);
+			onStatus('Building test bundle...');
+
+			// Expose function for browser to send tokens directly via CDP
+			await page.exposeFunction('__chefSendToken', (data: string) => {
+				try
+				{
+					const token = JSON.parse(data) as TestToken;
+					if (token.id === 'TEST_FAILED' && token.error?.stack && tracer)
+					{
+						token.error.stack = this.#mapStack(token.error.stack, tracer);
+					}
+					report.push(token);
+					options.onToken?.(token);
+				}
+				catch
+				{
+					// Skip malformed tokens
+				}
+			});
+
+			const { code: testsCodeBundle, map: sourceMap } = await this.#buildTestBundle(options);
+
+			tracer = sourceMap ? new TraceMap(sourceMap as any) : null;
+
+			const testsPageUrl = new URL('/dev/ui/cli/mocha-wrapper.php', playwrightConfig.use.baseURL);
+			testsPageUrl.searchParams.set('extension', options.packageName);
 
 			onStatus('Loading test page...');
-			await page.goto(testsPage);
+			await page.goto(testsPageUrl.toString());
 
 			// Close extra pages (about:blank) so CDP /json only shows the test page.
 			// This prevents WipRemoteVmConnection from connecting to the wrong page.
@@ -206,13 +232,6 @@ export class PlaywrightStrategy extends TestStrategy
 					}
 				}
 			}
-
-			onStatus('Building test bundle...');
-			const { code: testsCodeBundle, map: sourceMap } = await this.#buildTestBundle(options);
-			const tracer = sourceMap ? new TraceMap(sourceMap as any) : null;
-
-			const report: TestToken[] = [];
-			const consoleLogs: ConsoleLog[] = [];
 
 			page.on('console', async (message) => {
 				try
@@ -254,29 +273,8 @@ export class PlaywrightStrategy extends TestStrategy
 						}
 					}
 
-					const [key, value] = values;
-					if (key === 'unit_report_token')
-					{
-						try
-						{
-							const token = JSON.parse(value);
-							if (token.id === 'TEST_FAILED' && token.error?.stack && tracer)
-							{
-								token.error.stack = this.#mapStack(token.error.stack, tracer);
-							}
-							report.push(token);
-							options.onToken?.(token);
-						}
-						catch (error)
-						{
-							console.error(error);
-						}
-					}
-					else
-					{
-						const type = message.type();
-						consoleLogs.push({ type, text: values.join(' ') });
-					}
+					const type = message.type();
+					consoleLogs.push({ type, text: values.join(' ') });
 				}
 				catch (err)
 				{
@@ -333,8 +331,7 @@ export class PlaywrightStrategy extends TestStrategy
 				// Wait for external debugger to connect BEFORE injecting test scripts.
 				// This ensures the debugger receives scriptParsed events and can bind breakpoints.
 				const fs = await import('node:fs');
-				const os = await import('node:os');
-				const signalDir = path.join(os.tmpdir(), 'chef-debug-signal');
+				const signalDir = '/tmp/chef-debug-signal';
 				fs.mkdirSync(signalDir, { recursive: true });
 
 				const readyFile = path.join(signalDir, 'ready');
@@ -373,13 +370,13 @@ export class PlaywrightStrategy extends TestStrategy
 				return new Promise((resolve) => {
 					// @ts-ignore
 					globalThis.mocha.run(() => {
+						// @ts-ignore
 						resolve({ stats: globalThis.mocha.stats });
 					});
 				});
 			});
 
-			// Wait for pending console events to be processed
-			await new Promise(resolve => setTimeout(resolve, 100));
+			// Tokens arrive via exposeFunction (CDP) — already received by this point
 
 			const keepOpen = isDebug || !!cdpPort;
 

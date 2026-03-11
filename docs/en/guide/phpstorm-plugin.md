@@ -2,8 +2,9 @@
 
 The **Bitrix Chef** plugin adds PhpStorm integration with the `@bitrix/chef` CLI tool:
 
-- **Run tests** — green Run/Debug arrows on `describe`/`it` blocks
-- **Debug tests** — Debug with breakpoints in source TypeScript/JavaScript code
+- **Run unit tests** — green Run/Debug arrows on `describe`/`it` blocks
+- **Run e2e tests** — green Run arrows on Playwright `test()`/`test.describe()` blocks
+- **Debug unit tests** — Debug with breakpoints in source TypeScript/JavaScript code
 - **bundle.config** — custom icon for `bundle.config.js`/`bundle.config.ts`
 - **Create extensions** — New → Bitrix Extension
 
@@ -36,7 +37,7 @@ Updates will be delivered automatically.
 3. Select the downloaded ZIP
 4. Restart PhpStorm
 
-## Running tests
+## Running unit tests
 
 In `*.test.ts` / `*.test.js` files, green arrows will appear next to `describe` and `it`:
 
@@ -45,7 +46,13 @@ In `*.test.ts` / `*.test.js` files, green arrows will appear next to `describe` 
 
 Results are displayed in PhpStorm's standard test tree with code navigation support.
 
-## Debugging tests
+## Running e2e tests
+
+In `*.spec.ts` / `*.spec.js` files, green **▶ Run** arrows will appear next to Playwright's `test()` and `test.describe()` calls.
+
+E2e test results are also displayed in PhpStorm's test tree.
+
+## Debugging unit tests
 
 1. Set a breakpoint in a source file (`.ts` or `.js`)
 2. Click **Debug** (🐛) next to the test

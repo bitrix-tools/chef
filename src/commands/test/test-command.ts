@@ -93,9 +93,6 @@ function runTestsTeamcity({ extensions, args, type }: RunTestsOptions): void
 		.on('done', async () => {
 			await queue.onIdle();
 
-			// Wait for any remaining async console events
-			await new Promise(resolve => setTimeout(resolve, 500));
-
 			reporter.finish();
 
 			// Flush stdout so all TeamCity messages reach the IDE

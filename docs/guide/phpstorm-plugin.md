@@ -2,8 +2,9 @@
 
 Плагин **Bitrix Chef** добавляет в PhpStorm интеграцию с CLI-инструментом `@bitrix/chef`:
 
-- **Запуск тестов** — зелёные стрелки Run/Debug на `describe`/`it` блоках
-- **Отладка тестов** — Debug с breakpoints в исходном TypeScript/JavaScript коде
+- **Запуск unit-тестов** — зелёные стрелки Run/Debug на `describe`/`it` блоках
+- **Запуск e2e-тестов** — зелёные стрелки Run на `test()`/`test.describe()` блоках Playwright
+- **Отладка unit-тестов** — Debug с breakpoints в исходном TypeScript/JavaScript коде
 - **bundle.config** — кастомная иконка для `bundle.config.js`/`bundle.config.ts`
 - **Создание расширений** — New → Bitrix Extension
 
@@ -36,7 +37,7 @@
 3. Выберите скачанный ZIP
 4. Перезапустите PhpStorm
 
-## Запуск тестов
+## Запуск unit-тестов
 
 В файлах `*.test.ts` / `*.test.js` рядом с `describe` и `it` появятся зелёные стрелки:
 
@@ -45,7 +46,13 @@
 
 Результаты отображаются в стандартном дереве тестов PhpStorm с поддержкой навигации к коду.
 
-## Отладка тестов
+## Запуск e2e-тестов
+
+В файлах `*.spec.ts` / `*.spec.js` рядом с `test()` и `test.describe()` (Playwright API) появятся зелёные стрелки **▶ Run**.
+
+Результаты e2e-тестов также отображаются в дереве тестов PhpStorm.
+
+## Отладка unit-тестов
 
 1. Поставьте breakpoint в исходном файле (`.ts` или `.js`)
 2. Нажмите **Debug** (🐛) рядом с тестом
