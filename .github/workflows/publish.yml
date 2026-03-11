@@ -49,23 +49,13 @@ jobs:
       - name: Build package
         run: npm run build
 
-      - name: Determine npm tag
-        id: npm-tag
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          if echo "$VERSION" | grep -q '-'; then
-            echo "tag=beta" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=latest" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Publish to npm
         run: |
           if [ "${{ inputs.dry-run }}" = "true" ] && [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "Dry-run mode"
-            npm publish --provenance --access public --tag ${{ steps.npm-tag.outputs.tag }} --dry-run
+            npm publish --provenance --access public --tag latest --dry-run
           else
-            npm publish --provenance --access public --tag ${{ steps.npm-tag.outputs.tag }}
+            npm publish --provenance --access public --tag latest
           fi
 
   changelog:
