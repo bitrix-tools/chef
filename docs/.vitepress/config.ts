@@ -1,45 +1,109 @@
 import { defineConfig } from 'vitepress'
 
-const guideSidebarRu = [
-  { text: 'Начало работы', link: '/guide/getting-started' },
-  { text: 'Возможности', link: '/guide/features' },
-  { text: 'JS-расширение', link: '/guide/extension' },
-  { text: 'Команды', link: '/guide/commands' },
-  { text: 'TypeScript', link: '/guide/typescript' },
-  { text: 'Vue 3', link: '/guide/vue' },
-  { text: 'Тестирование', link: '/guide/testing' },
-  { text: 'Тестирование Vue 3', link: '/guide/testing-vue' },
-  { text: 'Production-сборка', link: '/guide/production' },
-  { text: 'Flow.js → TypeScript', link: '/guide/flow-to-ts' },
-  { text: 'Миграция с @bitrix/cli', link: '/guide/migration' },
-  { text: 'Плагин PhpStorm', link: '/guide/phpstorm-plugin' },
+const sidebarRu = [
+  {
+    text: 'Введение',
+    items: [
+      { text: 'Начало работы', link: '/guide/getting-started' },
+      { text: 'Возможности', link: '/guide/features' },
+      { text: 'JS-расширение', link: '/guide/extension' },
+      { text: 'Команды', link: '/guide/commands' },
+    ],
+  },
+  {
+    text: 'Сборка',
+    items: [
+      { text: 'TypeScript', link: '/guide/typescript' },
+      { text: 'Vue 3', link: '/guide/vue' },
+      { text: 'Production-сборка', link: '/guide/production' },
+    ],
+  },
+  {
+    text: 'Тестирование',
+    items: [
+      { text: 'Обзор', link: '/guide/testing' },
+      { text: 'Unit-тесты', link: '/guide/testing-unit' },
+      { text: 'Unit-тесты Vue 3', link: '/guide/testing-vue' },
+      { text: 'E2E-тесты', link: '/guide/testing-e2e' },
+      { text: 'E2E-тесты Vue 3', link: '/guide/testing-e2e-vue' },
+      { text: 'Component Sandbox', link: '/guide/testing-sandbox' },
+    ],
+  },
+  {
+    text: 'Миграция',
+    items: [
+      { text: 'Flow.js → TypeScript', link: '/guide/flow-to-ts' },
+      { text: '@bitrix/cli → @bitrix/chef', link: '/guide/migration' },
+    ],
+  },
+  {
+    text: 'Интеграции',
+    items: [
+      { text: 'PhpStorm', link: '/guide/phpstorm-plugin' },
+      { text: 'VS Code', link: '/guide/vscode' },
+    ],
+  },
+  {
+    text: 'Конфигурация',
+    items: [
+      { text: 'bundle.config', link: '/config/bundle-config' },
+      { text: 'chef.config', link: '/config/chef-config' },
+      { text: 'Browserslist', link: '/config/browserslist' },
+    ],
+  },
 ]
 
-const configSidebarRu = [
-  { text: 'bundle.config', link: '/config/bundle-config' },
-  { text: 'chef.config', link: '/config/chef-config' },
-  { text: 'Browserslist', link: '/config/browserslist' },
-]
-
-const guideSidebarEn = [
-  { text: 'Getting Started', link: '/en/guide/getting-started' },
-  { text: 'Features', link: '/en/guide/features' },
-  { text: 'JS Extension', link: '/en/guide/extension' },
-  { text: 'Commands', link: '/en/guide/commands' },
-  { text: 'TypeScript', link: '/en/guide/typescript' },
-  { text: 'Vue 3', link: '/en/guide/vue' },
-  { text: 'Testing', link: '/en/guide/testing' },
-  { text: 'Testing Vue 3', link: '/en/guide/testing-vue' },
-  { text: 'Production Build', link: '/en/guide/production' },
-  { text: 'Flow.js → TypeScript', link: '/en/guide/flow-to-ts' },
-  { text: 'Migration from @bitrix/cli', link: '/en/guide/migration' },
-  { text: 'PhpStorm Plugin', link: '/en/guide/phpstorm-plugin' },
-]
-
-const configSidebarEn = [
-  { text: 'bundle.config', link: '/en/config/bundle-config' },
-  { text: 'chef.config', link: '/en/config/chef-config' },
-  { text: 'Browserslist', link: '/en/config/browserslist' },
+const sidebarEn = [
+  {
+    text: 'Introduction',
+    items: [
+      { text: 'Getting Started', link: '/en/guide/getting-started' },
+      { text: 'Features', link: '/en/guide/features' },
+      { text: 'JS Extension', link: '/en/guide/extension' },
+      { text: 'Commands', link: '/en/guide/commands' },
+    ],
+  },
+  {
+    text: 'Build',
+    items: [
+      { text: 'TypeScript', link: '/en/guide/typescript' },
+      { text: 'Vue 3', link: '/en/guide/vue' },
+      { text: 'Production Build', link: '/en/guide/production' },
+    ],
+  },
+  {
+    text: 'Testing',
+    items: [
+      { text: 'Overview', link: '/en/guide/testing' },
+      { text: 'Unit Tests', link: '/en/guide/testing-unit' },
+      { text: 'Unit Tests Vue 3', link: '/en/guide/testing-vue' },
+      { text: 'E2E Tests', link: '/en/guide/testing-e2e' },
+      { text: 'E2E Tests Vue 3', link: '/en/guide/testing-e2e-vue' },
+      { text: 'Component Sandbox', link: '/en/guide/testing-sandbox' },
+    ],
+  },
+  {
+    text: 'Migration',
+    items: [
+      { text: 'Flow.js → TypeScript', link: '/en/guide/flow-to-ts' },
+      { text: '@bitrix/cli → @bitrix/chef', link: '/en/guide/migration' },
+    ],
+  },
+  {
+    text: 'Integrations',
+    items: [
+      { text: 'PhpStorm', link: '/en/guide/phpstorm-plugin' },
+      { text: 'VS Code', link: '/en/guide/vscode' },
+    ],
+  },
+  {
+    text: 'Config',
+    items: [
+      { text: 'bundle.config', link: '/en/config/bundle-config' },
+      { text: 'chef.config', link: '/en/config/chef-config' },
+      { text: 'Browserslist', link: '/en/config/browserslist' },
+    ],
+  },
 ]
 
 export default defineConfig({
@@ -65,10 +129,7 @@ export default defineConfig({
           { text: 'Config', link: '/en/config/bundle-config' },
           { text: 'Commands', link: '/en/guide/commands' },
         ],
-        sidebar: [
-          { text: 'Guide', items: guideSidebarEn },
-          { text: 'Config', items: configSidebarEn },
-        ],
+        sidebar: sidebarEn,
         footer: {
           message: 'Released under the MIT License.',
           copyright: 'Made for Bitrix developers',
@@ -87,10 +148,7 @@ export default defineConfig({
       { text: 'Команды', link: '/guide/commands' },
     ],
 
-    sidebar: [
-      { text: 'Руководство', items: guideSidebarRu },
-      { text: 'Конфигурация', items: configSidebarRu },
-    ],
+    sidebar: sidebarRu,
 
     socialLinks: [
       { icon: 'github', link: 'https://github.com/bitrix-tools/chef' },

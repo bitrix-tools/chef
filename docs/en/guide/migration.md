@@ -1,4 +1,4 @@
-# Migration from @bitrix/cli
+# @bitrix/cli → @bitrix/chef
 
 This guide helps you migrate from `@bitrix/cli` to `@bitrix/chef`. Chef is a rewritten tool with the same purpose: building, testing, and maintaining Bitrix JS extensions.
 

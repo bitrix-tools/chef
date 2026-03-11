@@ -1,4 +1,4 @@
-# PhpStorm Plugin
+# PhpStorm
 
 The **Bitrix Chef** plugin adds PhpStorm integration with the `@bitrix/chef` CLI tool:
 

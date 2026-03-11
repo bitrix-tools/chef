@@ -1,4 +1,4 @@
-# Плагин для PhpStorm
+# PhpStorm
 
 Плагин **Bitrix Chef** добавляет в PhpStorm интеграцию с CLI-инструментом `@bitrix/chef`:
 
