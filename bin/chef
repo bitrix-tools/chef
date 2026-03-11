@@ -10,7 +10,7 @@ require('tsx').globalPreload();
 
 if (fs.existsSync(path.resolve(import.meta.dirname, '../dist/cli.js')))
 {
-		require('../dist/cli.js');
+		await import('../dist/cli.js');
 }
 else
 {
