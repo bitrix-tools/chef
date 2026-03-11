@@ -285,6 +285,52 @@ test('should load items via ajax', async ({ page }) => {
 });
 ```
 
+### Component Sandbox
+
+Для e2e-тестирования визуальных компонентов без привязки к конкретной странице используйте `component-wrapper.php`. Эта страница загружает расширение со всеми зависимостями и предоставляет пустой `<div id="sandbox">` для монтирования компонентов. Авторизация не требуется — страница доступна без неё:
+
+```ts
+import { test, expect } from '@playwright/test';
+
+test('button renders correctly', async ({ page }) => {
+  await page.goto('/dev/ui/cli/component-wrapper.php?extension=ui.buttons');
+
+  // Инжектим компонент через page.evaluate
+  await page.evaluate(() => {
+    const btn = new BX.UI.Button({ text: 'Click me', color: 'success' });
+    document.getElementById('sandbox').appendChild(btn.render());
+  });
+
+  await expect(page.locator('.ui-btn-success')).toBeVisible();
+  await expect(page.locator('.ui-btn-success')).toHaveText('Click me');
+});
+```
+
+Для Vue-компонентов:
+
+```ts
+import { test, expect } from '@playwright/test';
+
+test('counter component', async ({ page }) => {
+  await page.goto('/dev/ui/cli/component-wrapper.php?extension=vendor.my-app');
+
+  await page.evaluate(() => {
+    const { BitrixVue } = BX.Vue3;
+    const { Counter } = BX.Vendor.MyApp;
+    BitrixVue.createApp(Counter, { initial: 5 }).mount('#sandbox');
+  });
+
+  await expect(page.locator('[data-testid="count"]')).toHaveText('5');
+  await page.click('[data-testid="increment"]');
+  await expect(page.locator('[data-testid="count"]')).toHaveText('6');
+});
+```
+
+::: tip Когда использовать
+- **Конкретная страница** (`page.goto('/my-page/')`) — когда тестируете поведение на реальной странице продукта
+- **Component Sandbox** — когда тестируете визуальный компонент в изоляции, без привязки к конкретному роуту
+:::
+
 ## Запуск тестов
 
 ```bash
