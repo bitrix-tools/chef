@@ -670,6 +670,7 @@ export class RollupBuildStrategy extends BuildStrategy
 					'source-code.js': options.code,
 				}),
 				RollupBuildStrategy.createNpmRemapPlugin(dependenciesRef),
+				RollupBuildStrategy.createEnvReplacePlugin(false),
 				...(options.standalone ? [RollupBuildStrategy.createStandalonePlugin()] : []),
 				await (async () => {
 					if (options.typescript)

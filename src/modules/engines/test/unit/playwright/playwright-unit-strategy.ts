@@ -262,6 +262,11 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 					// @ts-ignore
 					reporter: ProxyReporter,
 					checkLeaks: true,
+					globals: [
+						// Vue 3 creates these globals when first mounted
+						'__VUE__',
+						'__VUE_DEVTOOLS_HOOK_REPLAY__',
+					],
 					timeout,
 					inlineDiffs: true,
 					color: true,
