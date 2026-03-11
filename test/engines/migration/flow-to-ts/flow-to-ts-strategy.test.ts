@@ -280,6 +280,434 @@ describe('FlowToTsStrategy', () => {
 		);
 	});
 
+	it('Should convert mixed to unknown', async () => {
+		const source = code`
+			function test(value: mixed): boolean
+			{
+				return true;
+			}
+		`;
+
+		const converted = await migrate(source);
+
+		assert.include(converted, 'value: unknown');
+		assert.notInclude(converted, 'mixed');
+	});
+
+	it('Should convert $Values<T> to T[keyof T]', async () => {
+		const source = code`
+			type Status = $Values<StatusEnum>;
+		`;
+
+		const converted = await migrate(source);
+
+		assert.include(converted, 'StatusEnum[keyof StatusEnum]');
+		assert.notInclude(converted, '$Values');
+	});
+
+	it('Should convert $Keys<T> to keyof T', async () => {
+		const source = code`
+			function getSetting(name: $Keys<Options>): any
+			{
+				return null;
+			}
+		`;
+
+		const converted = await migrate(source);
+
+		assert.include(converted, 'keyof Options');
+		assert.notInclude(converted, '$Keys');
+	});
+
+	it('Should convert $Diff<T, U> to Omit<T, keyof U>', async () => {
+		const source = code`
+			type Result = $Diff<FullOptions, DefaultOptions>;
+		`;
+
+		const converted = await migrate(source);
+
+		assert.include(converted, 'Omit<FullOptions, keyof DefaultOptions>');
+		assert.notInclude(converted, '$Diff');
+	});
+
+	it('Should convert $Call<F> to ReturnType<F>', async () => {
+		const source = code`
+			type Result = $Call<typeof myFn>;
+		`;
+
+		const converted = await migrate(source);
+
+		assert.include(converted, 'ReturnType');
+		assert.notInclude(converted, '$Call');
+	});
+
+	it('Should convert $NonMaybeType<T> to NonNullable<T>', async () => {
+		const source = code`
+			type Strict = $NonMaybeType<MaybeValue>;
+		`;
+
+		const converted = await migrate(source);
+
+		assert.include(converted, 'NonNullable<MaybeValue>');
+		assert.notInclude(converted, '$NonMaybeType');
+	});
+
+	it('Should convert Class<T> to constructor type', async () => {
+		const source = code`
+			type Factory = Class<MyService>;
+		`;
+
+		const converted = await migrate(source);
+
+		assert.include(converted, 'new (...args: any[]) => MyService');
+		assert.notInclude(converted, 'Class<');
+	});
+
+	it('Should convert Object<K, V> to Record<K, V>', async () => {
+		const source = code`
+			const data: Object<string, any> = {};
+		`;
+
+		const converted = await migrate(source);
+
+		assert.include(converted, 'Record<string, any>');
+		assert.notInclude(converted, 'Object<');
+	});
+
+	it('Should convert declare type to type', async () => {
+		const source = code`
+			declare type UserData = {
+				id: number,
+				name: string,
+			};
+		`;
+
+		const converted = await migrate(source);
+
+		assert.include(converted, 'type UserData');
+		assert.notInclude(converted, 'declare type');
+	});
+
+	it('Should remove %checks predicate', async () => {
+		const source = code`
+			function isValid(value: any): boolean %checks
+			{
+				return typeof value === 'string';
+			}
+		`;
+
+		const converted = await migrate(source);
+
+		assert.include(converted, 'boolean');
+		assert.notInclude(converted, '%checks');
+	});
+
+	it('Should convert Flow index signature [string: name] to [name: string]', async () => {
+		const source = code`
+			type Questions = {
+				[string: questionId]: QuestionData,
+			};
+		`;
+
+		const converted = await migrate(source);
+
+		assert.include(converted, '[questionId: string]');
+		assert.notInclude(converted, '[string: questionId]');
+	});
+
+	it('Should convert mixed in various positions', async () => {
+		const source = code`
+			function test(a: mixed, b: mixed): mixed
+			{
+				return a;
+			}
+
+			type Config = {
+				value: mixed,
+				items: Array<mixed>,
+			};
+
+			const x: mixed = null;
+		`;
+
+		const converted = await migrate(source);
+
+		assert.notInclude(converted, 'mixed');
+		assert.include(converted, 'unknown');
+	});
+
+	it('Should handle $Values in class properties and function params', async () => {
+		const source = code`
+			type State = $Values<ProcessState>;
+
+			class Foo
+			{
+				state: $Values<ProcessState> = 'idle';
+
+				setState(newState: $Values<ProcessState>): void
+				{}
+			}
+		`;
+
+		const converted = await migrate(source);
+
+		assert.notInclude(converted, '$Values');
+	});
+
+	it('Should handle $Keys in various positions', async () => {
+		const source = code`
+			type Key = $Keys<Options>;
+
+			function get(name: $Keys<Options>): any
+			{
+				return null;
+			}
+
+			function set(name: $Keys<Options>, value: any): void
+			{}
+		`;
+
+		const converted = await migrate(source);
+
+		assert.notInclude(converted, '$Keys');
+	});
+
+	it('Should handle Class<T> in arrays and unions', async () => {
+		const source = code`
+			type FilterOption = Class<Filter> | string;
+			type FilterList = Array<Class<Filter>>;
+		`;
+
+		const converted = await migrate(source);
+
+		assert.notInclude(converted, 'Class<');
+		assert.include(converted, '(new (...args: any[]) => Filter) | string');
+	});
+
+	it('Should convert [$Keys<T>] to mapped type [K in keyof T]', async () => {
+		const source = code`
+			type Handlers = {
+				[$Keys<ProcessCallback>]: (any) => void,
+			};
+		`;
+
+		const converted = await migrate(source);
+
+		assert.include(converted, '[K in keyof ProcessCallback]');
+		assert.notInclude(converted, '$Keys');
+	});
+
+	it('Should handle Object<K, V> with nested generics', async () => {
+		const source = code`
+			const map: Object<string, Object<string, number>> = {};
+		`;
+
+		const converted = await migrate(source);
+
+		assert.notInclude(converted, 'Object<');
+		assert.include(converted, 'Record<');
+	});
+
+	it('Should handle declare type with complex shape', async () => {
+		const source = code`
+			declare type StageParams = {
+				id: number,
+				name: string,
+				color: ?string,
+				items: Array<number>,
+			};
+		`;
+
+		const converted = await migrate(source);
+
+		assert.notInclude(converted, 'declare type');
+		assert.include(converted, 'type StageParams');
+		assert.include(converted, 'string | null | undefined');
+	});
+
+	it('Should handle nested index signatures', async () => {
+		const source = code`
+			type Questions = {
+				[string: questionId]: {
+					ANSWERS: {
+						[string: answerId]: AnswerData,
+					},
+				},
+			};
+		`;
+
+		const converted = await migrate(source);
+
+		assert.include(converted, '[questionId: string]');
+		assert.include(converted, '[answerId: string]');
+		assert.notInclude(converted, '[string:');
+	});
+
+	it('Should combine multiple Flow features in one file', async () => {
+		const source = code`
+			// @flow
+			import typeof Type from 'main.core';
+
+			declare type Options = {
+				name: string,
+				value: mixed,
+				callback: ?Function,
+			};
+
+			opaque type ID = number;
+
+			export class Widget
+			{
+				+name: string = '';
+				-internal: number = 0;
+				data: Object<string, any> = {};
+
+				getOption(key: $Keys<Options>): mixed
+				{
+					return null;
+				}
+			}
+		`;
+
+		const converted = await migrate(source);
+
+		assert.notInclude(converted, '@flow');
+		assert.notInclude(converted, 'import typeof');
+		assert.notInclude(converted, 'declare type');
+		assert.notInclude(converted, 'mixed');
+		assert.notInclude(converted, 'opaque');
+		assert.notInclude(converted, 'Object<');
+		assert.notInclude(converted, '$Keys');
+		assert.include(converted, 'readonly name');
+		assert.include(converted, 'unknown');
+		assert.include(converted, 'Record<');
+		assert.include(converted, 'keyof Options');
+	});
+
+	it('Should add names to anonymous function type params', async () => {
+		const source = code`
+			type Handler = (string, number) => void;
+			type Callback = any => {};
+		`;
+
+		const converted = await migrate(source);
+
+		assert.include(converted, 'arg0: string');
+		assert.include(converted, 'arg1: number');
+		assert.include(converted, 'arg0: any');
+		assert.notInclude(converted, '(string,');
+	});
+
+	it('Should handle function types in object type properties', async () => {
+		const source = code`
+			type ProcessCallback = {
+				StateChanged: ($Values<ProcessState>, string) => void,
+				RequestStart: FormData => void,
+				RequestStop: any => void,
+			};
+		`;
+
+		const converted = await migrate(source);
+
+		assert.notInclude(converted, '$Values');
+		assert.include(converted, 'arg0');
+	});
+
+	it('Should remove optional marker from params with default values', async () => {
+		const source = code`
+			export class Widget
+			{
+				getSetting(name: string, defaultVal?: any = null): any
+				{
+					return null;
+				}
+			}
+		`;
+
+		const converted = await migrate(source);
+
+		assert.notInclude(converted, '?:');
+		assert.notInclude(converted, '?: any');
+		assert.include(converted, '= null');
+	});
+
+	it('Should convert spread types to intersection type', async () => {
+		const source = code`
+			type UseBlockDiagram = {
+				...State,
+				...UseGetters,
+				...UseHooks,
+				...UseActions,
+			};
+		`;
+
+		const converted = await migrate(source);
+
+		assert.notInclude(converted, '...');
+		assert.include(converted, 'State');
+		assert.include(converted, 'UseGetters');
+		assert.include(converted, '&');
+	});
+
+	it('Should convert spread types with properties to intersection', async () => {
+		const source = code`
+			type MenuOptions = {
+				...BaseOptions,
+				contentAttribute: ?string,
+			};
+		`;
+
+		const converted = await migrate(source);
+
+		assert.notInclude(converted, '...');
+		assert.include(converted, 'BaseOptions &');
+		assert.include(converted, 'contentAttribute');
+	});
+
+	it('Should convert {...} to Record<string, any>', async () => {
+		const source = code`
+			export const PORT_TYPES: {...} = {
+				INPUT: 'input',
+				OUTPUT: 'output',
+			};
+		`;
+
+		const converted = await migrate(source);
+
+		assert.notInclude(converted, '{...}');
+		assert.include(converted, 'Record<string, any>');
+	});
+
+	it('Should handle nullable function type (?function)', async () => {
+		const source = code`
+			export class Timer
+			{
+				onEnd: ?function;
+				onUpdate: ?Function;
+			}
+		`;
+
+		const converted = await migrate(source);
+
+		assert.include(converted, 'null');
+	});
+
+	it('Should remove type annotation from for-of variable', async () => {
+		const source = code`
+			function process(items: Array<string>): void
+			{
+				for (const item: string of items)
+				{
+					console.log(item);
+				}
+			}
+		`;
+
+		const converted = await migrate(source);
+
+		assert.notInclude(converted, 'item: string of');
+	});
+
 	it('Should return original code on parse error', async () => {
 		const source = '{{invalid code';
 		const result = await strategy.migrate({ code: source });

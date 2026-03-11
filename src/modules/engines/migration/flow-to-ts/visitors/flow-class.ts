@@ -1,6 +1,38 @@
 import type { TraverseOptions } from '@babel/traverse';
 
 export const flowClassVisitor: TraverseOptions = {
+	// for (const x: Type of ...) → for (const x of ...)
+	ForOfStatement(path)
+	{
+		const left = path.node.left;
+		if (left.type === 'VariableDeclaration')
+		{
+			for (const declarator of left.declarations)
+			{
+				if (declarator.id.type === 'Identifier' && declarator.id.typeAnnotation)
+				{
+					delete declarator.id.typeAnnotation;
+				}
+			}
+		}
+	},
+
+	// for (const x: Type in ...) → for (const x in ...)
+	ForInStatement(path)
+	{
+		const left = path.node.left;
+		if (left.type === 'VariableDeclaration')
+		{
+			for (const declarator of left.declarations)
+			{
+				if (declarator.id.type === 'Identifier' && declarator.id.typeAnnotation)
+				{
+					delete declarator.id.typeAnnotation;
+				}
+			}
+		}
+	},
+
 	ClassProperty({ node })
 	{
 		if (node.variance && node.variance.kind === 'plus')

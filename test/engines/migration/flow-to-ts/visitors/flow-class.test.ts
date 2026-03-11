@@ -24,4 +24,18 @@ describe('flowClassVisitor', () => {
 		assert.notInclude(result, ': string');
 		assert.include(result, '[key, value]');
 	});
+
+	it('should remove type annotation from for-of variable', () => {
+		const result = applyVisitor('for (const item: string of items) {}', flowClassVisitor);
+
+		assert.notInclude(result, ': string');
+		assert.include(result, 'const item of');
+	});
+
+	it('should remove type annotation from for-in variable', () => {
+		const result = applyVisitor('for (const key: string in obj) {}', flowClassVisitor);
+
+		assert.notInclude(result, ': string');
+		assert.include(result, 'const key in');
+	});
 });

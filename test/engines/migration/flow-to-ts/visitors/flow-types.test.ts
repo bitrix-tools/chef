@@ -51,4 +51,79 @@ describe('flowTypesVisitor', () => {
 		assert.include(result, 'null');
 		assert.include(result, 'void');
 	});
+
+	it('should convert mixed to unknown', () => {
+		const result = applyVisitor('function test(value: mixed): boolean { return true; }', flowTypesVisitor);
+
+		assert.include(result, 'unknown');
+		assert.notInclude(result, 'mixed');
+	});
+
+	it('should convert $NonMaybeType<T> to NonNullable<T>', () => {
+		const result = applyVisitor('type X = $NonMaybeType<Y>;', flowTypesVisitor);
+
+		assert.include(result, 'NonNullable<Y>');
+	});
+
+	it('should convert declare type to type', () => {
+		const result = applyVisitor('declare type Foo = { id: number };', flowTypesVisitor);
+
+		assert.include(result, 'type Foo');
+		assert.notInclude(result, 'declare');
+	});
+
+	it('should remove %checks predicate', () => {
+		const result = applyVisitor('function isValid(x: any): boolean %checks { return true; }', flowTypesVisitor);
+
+		assert.notInclude(result, '%checks');
+		assert.include(result, 'boolean');
+	});
+
+	it('should add names to anonymous function type params', () => {
+		const result = applyVisitor('type Fn = (string, number) => void;', flowTypesVisitor);
+
+		assert.include(result, 'arg0: string');
+		assert.include(result, 'arg1: number');
+	});
+
+	it('should add name to single anonymous function type param', () => {
+		const result = applyVisitor('type Fn = any => {};', flowTypesVisitor);
+
+		assert.include(result, 'arg0: any');
+	});
+
+	it('should not rename already named function type params', () => {
+		const result = applyVisitor('type Fn = (name: string) => void;', flowTypesVisitor);
+
+		assert.include(result, 'name: string');
+		assert.notInclude(result, 'arg0');
+	});
+
+	it('should remove optional marker from params with default values', () => {
+		const result = applyVisitor('function test(val?: any = null) {}', flowTypesVisitor);
+
+		assert.notInclude(result, '?');
+		assert.include(result, 'val');
+		assert.include(result, '= null');
+	});
+
+	it('should remove optional from class method params with defaults', () => {
+		const result = applyVisitor('class Foo { test(val?: string = "x") {} }', flowTypesVisitor);
+
+		assert.notInclude(result, '?');
+	});
+
+	it('should convert spread types to intersection', () => {
+		const result = applyVisitor('type T = { ...State, ...Getters };', flowTypesVisitor);
+
+		assert.include(result, 'State & Getters');
+		assert.notInclude(result, '...');
+	});
+
+	it('should convert spread type with regular properties to intersection', () => {
+		const result = applyVisitor('type T = { ...State, name: string };', flowTypesVisitor);
+
+		assert.include(result, 'State &');
+		assert.include(result, 'name: string');
+	});
 });
