@@ -1,5 +1,3 @@
-import * as path from 'node:path';
-
 import fg from 'fast-glob';
 
 import { ChefConfigManager } from '../config/project/chef-config-manager';

@@ -1,7 +1,6 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Environment } from '../../environment/environment';
 import { TemplateManager } from './template-manager';
 import { PackageFactoryProvider } from '../packages/providers/package-factory-provider';
 import { PackageResolver } from '../packages/package-resolver';

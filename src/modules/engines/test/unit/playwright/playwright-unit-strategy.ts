@@ -9,7 +9,6 @@ import { mapStack } from './map-stack';
 import { embedSourceMap } from './embed-source-map';
 import { signalReady, waitForDebugger } from './debug-signal';
 
-import type { PlaywrightTestConfig } from '@playwright/test';
 import type { SourceMap } from 'rollup';
 import type {
 	UnitTestOptions,

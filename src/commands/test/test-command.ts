@@ -10,7 +10,6 @@ import { createShutdown } from '../../utils/create-shutdown';
 import { TaskRunner } from '../../modules/task/task';
 import { runUnitTestsTask } from './tasks/run-unit-tests-task';
 import { runEndToEndTestsTask } from './tasks/run-e2e-tests-task';
-import { createReporter } from './create-reporter';
 import { TeamcityReporter } from '../../modules/engines/test/teamcity-reporter';
 
 import type { BasePackage } from '../../modules/packages/base-package';
