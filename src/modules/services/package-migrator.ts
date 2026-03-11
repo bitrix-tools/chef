@@ -1,8 +1,8 @@
 import * as fs from 'node:fs/promises';
 
 import { hgRename } from '../../utils/vcs/hg/rename';
-import { convertFlowToTs } from '../../utils/flow-to-ts';
 
+import type { MigrationEngine } from '../engines/migration/migration-engine';
 import type { BasePackage } from '../packages/base-package';
 
 export type RenameFileResult = {
@@ -42,8 +42,15 @@ export class PackageMigrator
 		try
 		{
 			const sourceCode = await fs.readFile(filePath, 'utf8');
-			const typeScriptCode = await convertFlowToTs(sourceCode);
-			await fs.writeFile(filePath, typeScriptCode, 'utf8');
+			const engine = await PackageMigrator.#getMigrationEngine();
+			const result = await engine.migrate({ code: sourceCode });
+
+			if (!result.success)
+			{
+				return { path: filePath, success: false };
+			}
+
+			await fs.writeFile(filePath, result.code, 'utf8');
 
 			return { path: filePath, success: true };
 		}
@@ -77,5 +84,22 @@ export class PackageMigrator
 		const renameResult = await hgRename(bundleConfigJsPath, bundleConfigTsPath);
 
 		return renameResult.status === 'ok';
+	}
+
+	static #enginePromise: Promise<MigrationEngine> | null = null;
+
+	static #getMigrationEngine(): Promise<MigrationEngine>
+	{
+		if (!PackageMigrator.#enginePromise)
+		{
+			PackageMigrator.#enginePromise = (async () => {
+				const { MigrationEngine } = await import('../engines/migration/migration-engine');
+				const { FlowToTsStrategy } = await import('../engines/migration/flow-to-ts/flow-to-ts-strategy');
+
+				return new MigrationEngine(new FlowToTsStrategy());
+			})();
+		}
+
+		return PackageMigrator.#enginePromise;
 	}
 }

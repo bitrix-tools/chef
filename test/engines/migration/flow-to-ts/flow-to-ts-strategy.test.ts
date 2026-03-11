@@ -1,19 +1,29 @@
 import { it, describe } from 'mocha';
 import { assert } from 'chai';
 
-import { code } from '../../test-utils/code';
-import { convertFlowToTs } from '../../../src/utils/flow-to-ts';
+import { code } from '../../../test-utils/code';
+import { FlowToTsStrategy } from '../../../../src/modules/engines/migration/flow-to-ts/flow-to-ts-strategy';
 
-describe('utils/flow-to-ts', () => {
+const strategy = new FlowToTsStrategy();
+
+async function migrate(source: string): Promise<string>
+{
+	const result = await strategy.migrate({ code: source });
+	assert.isTrue(result.success);
+
+	return result.code;
+}
+
+describe('FlowToTsStrategy', () => {
 	it('Should remove @flow leading comment', async () => {
 		const source = code`
 			// @flow
 			// // @flow
-			
+
 			import { Type } from 'main.core';
 		`;
 
-		const converted = await convertFlowToTs(source);
+		const converted = await migrate(source);
 
 		assert.equal(
 			converted,
@@ -33,7 +43,7 @@ describe('utils/flow-to-ts', () => {
 			export class TestFlow3 {}
 		`;
 
-		const converted = await convertFlowToTs(source);
+		const converted = await migrate(source);
 
 		assert.equal(
 			converted,
@@ -56,7 +66,7 @@ describe('utils/flow-to-ts', () => {
 			import typeof Type from 'main.core';
 			import typeof { Type2 } from 'main.core';
 			import { typeof Type3 } from 'main.core';
-			import { 
+			import {
 				typeof Type4,
 				typeof Runtime,
 				Tag,
@@ -65,7 +75,7 @@ describe('utils/flow-to-ts', () => {
 			 } from 'main.core';
 		`;
 
-		const converted = await convertFlowToTs(source);
+		const converted = await migrate(source);
 
 		assert.equal(
 			converted,
@@ -84,7 +94,7 @@ describe('utils/flow-to-ts', () => {
 			{
 				return 222;
 			}
-			
+
 			const name: * = 'name';
 			type TestType = {
 				name: *;
@@ -92,7 +102,7 @@ describe('utils/flow-to-ts', () => {
 			};
 		`;
 
-		const converted = await convertFlowToTs(source);
+		const converted = await migrate(source);
 
 		assert.equal(
 			converted,
@@ -101,7 +111,7 @@ describe('utils/flow-to-ts', () => {
 				{
 					return 222;
 				}
-				
+
 				const name: any = 'name';
 				type TestType = {
 					name: any;
@@ -117,13 +127,13 @@ describe('utils/flow-to-ts', () => {
 			{
 				+covariant: string = 'testFlow';
 				-contravariant: string = 'testFlow2';
-			
+
 				static +staticCovariant: string = 'testFlow3';
 				static -contravariant: string = 'testFlow4';
 			}
 		`;
 
-		const converted = await convertFlowToTs(source);
+		const converted = await migrate(source);
 
 		assert.equal(
 			converted,
@@ -132,7 +142,7 @@ describe('utils/flow-to-ts', () => {
 				{
 					readonly covariant: string = 'testFlow';
 					contravariant: string = 'testFlow2';
-				
+
 					static readonly staticCovariant: string = 'testFlow3';
 					static contravariant: string = 'testFlow4';
 				}
@@ -147,11 +157,11 @@ describe('utils/flow-to-ts', () => {
 				name: string,
 				interval: number,
 			};
-			
+
 			export opaque type IncludeBoundariesValue = 'all' | 'left' | 'right' | 'none';
 		`;
 
-		const converted = await convertFlowToTs(source);
+		const converted = await migrate(source);
 
 		assert.equal(
 			converted,
@@ -161,7 +171,7 @@ describe('utils/flow-to-ts', () => {
 					name: string;
 					interval: number;
 				};
-				
+
 				export type IncludeBoundariesValue = 'all' | 'left' | 'right' | 'none';
 			`,
 		);
@@ -174,23 +184,23 @@ describe('utils/flow-to-ts', () => {
 			{}
 			function uType3(name: $Exact<TestFlow>, test: number): $Exact<TestFlow>
 			{}
-			
+
 			const uType4: $Shape<TestFlow> = {};
 			function uType5(name: $Shape<TestFlow>): $Shape<TestFlow>
 			{}
 			function uType6(name: $Shape<TestFlow>, test: string): $Shape<TestFlow>
 			{}
-			
+
 			const uType7: $ReadOnly<TestFlow> = {};
 			function uType8(name: $ReadOnly<TestFlow>): $ReadOnly<TestFlow>
 			{}
 			function uType9(name: $ReadOnly<TestFlow>, test: string): $ReadOnly<TestFlow>
 			{}
-			
+
 			const uType10: $ReadOnlyArray<string> = [];
 		`;
 
-		const converted = await convertFlowToTs(source);
+		const converted = await migrate(source);
 
 		assert.equal(
 			converted,
@@ -200,19 +210,19 @@ describe('utils/flow-to-ts', () => {
 				{}
 				function uType3(name: TestFlow, test: number): TestFlow
 				{}
-				
+
 				const uType4: Partial<TestFlow> = {};
 				function uType5(name: Partial<TestFlow>): Partial<TestFlow>
 				{}
 				function uType6(name: Partial<TestFlow>, test: string): Partial<TestFlow>
 				{}
-				
+
 				const uType7: Readonly<TestFlow> = {};
 				function uType8(name: Readonly<TestFlow>): Readonly<TestFlow>
 				{}
 				function uType9(name: Readonly<TestFlow>, test: string): Readonly<TestFlow>
 				{}
-				
+
 				const uType10: ReadonlyArray<string> = [];
 			`,
 		);
@@ -222,32 +232,32 @@ describe('utils/flow-to-ts', () => {
 		const source = code`
 			function test(): ?MyType
 			{}
-			
+
 			const test2: ?MyType = null;
-			
+
 			type CustomType = {
 				test: ?MyType,
 			};
-			
+
 			const arr = (param: ?MyType): ?MyType => {};
 			const arr2 = (param: ?MyType): ?MyType | TestType => {};
 			const arr3 = (param: ?MyType | Type): Type | ?MyType | TestType => {};
 		`;
 
-		const converted = await convertFlowToTs(source);
+		const converted = await migrate(source);
 
 		assert.equal(
 			converted,
 			code`
 				function test(): MyType | null | undefined
 				{}
-				
+
 				const test2: MyType | null | undefined = null;
-				
+
 				type CustomType = {
 					test: MyType | null | undefined;
 				};
-				
+
 				const arr = (param: MyType | null | undefined): MyType | null | undefined => {};
 				const arr2 = (param: MyType | null | undefined): (MyType | null | undefined) | TestType => {};
 				const arr3 = (param: (MyType | null | undefined) | Type): Type | (MyType | null | undefined) | TestType => {};
@@ -260,7 +270,7 @@ describe('utils/flow-to-ts', () => {
 			const [key: string, value: string = ''] = prop;
 		`;
 
-		const converted = await convertFlowToTs(source);
+		const converted = await migrate(source);
 
 		assert.equal(
 			converted,
@@ -268,5 +278,13 @@ describe('utils/flow-to-ts', () => {
 				const [key, value = ''] = prop;
 			`,
 		);
+	});
+
+	it('Should return original code on parse error', async () => {
+		const source = '{{invalid code';
+		const result = await strategy.migrate({ code: source });
+
+		assert.isFalse(result.success);
+		assert.equal(result.code, source);
 	});
 });
