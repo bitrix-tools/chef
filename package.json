@@ -22,6 +22,7 @@
     "build": "tsup-node ./src/cli.ts --format esm --splitting=false",
     "test": "tsx --import=tsx/esm ./node_modules/.bin/mocha './test/**/*.test.ts' --inline-diffs --color=true",
     "test:watch": "tsx watch --import=tsx/esm ./node_modules/.bin/mocha './test/**/*.test.ts' --inline-diffs --color=true",
+    "release": "tsx scripts/release.ts",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs"
