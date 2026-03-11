@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.0-beta.14 <Badge type="tip" text="3/11/2026" />
+
+Added TypeScript type-checking during build. Errors are displayed with a code snippet, underline, and a clickable file link. If errors are found, the build stops before Rollup starts.
+
 ## v0.0.0-beta.13 <Badge type="tip" text="3/11/2026" />
 
 - Fixed chef init when installed from npm
