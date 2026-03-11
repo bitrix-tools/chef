@@ -77,10 +77,12 @@ export function buildTask(extension: BasePackage, args: Record<string, any>): Ta
 			{
 				context.fail('Build failed');
 				result.errors.forEach((error) => {
-					context.border(error.message, 'red', 2);
+					const message = error.message?.replace(/^\[plugin [^\]]+\]\s*/, '') ?? '';
+					const indented = message.split("\n").map((line) => `  ${line}`).join("\n");
+					context.log(indented);
 					if (error.frame)
 					{
-						context.border(error?.frame, 'red', 2);
+						context.log(error.frame);
 					}
 				});
 

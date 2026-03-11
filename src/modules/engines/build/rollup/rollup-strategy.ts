@@ -196,7 +196,12 @@ export class RollupBuildStrategy extends BuildStrategy
 		}
 		catch (error)
 		{
-			console.error(error);
+			const isPluginError = error instanceof Error && 'plugin' in error;
+			if (!isPluginError)
+			{
+				console.error(error);
+			}
+
 			return {
 				dependencies: [],
 				bundles: [],
