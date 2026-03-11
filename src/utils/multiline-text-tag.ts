@@ -12,34 +12,29 @@ export function multiline(strings: TemplateStringsArray, ...values: any[]): stri
 
 	const lines = rawText.split('\n');
 
-	let minIndent = 100;
-	for (let i = 0; i < lines.length; i++)
+	let minIndent = Infinity;
+	for (const line of lines)
 	{
-		const line = lines[i];
-		const trimmedLine = line.trim();
-
-		if (trimmedLine === '')
+		if (line.trim() === '')
 		{
 			continue;
 		}
 
-		const leadingWhitespaceMatch = line.match(/^\t*/);
-		const leadingWhitespaceLength = leadingWhitespaceMatch ? leadingWhitespaceMatch[0].length : 0;
+		const match = line.match(/^[\t ]*/);
+		const indent = match ? match[0].length : 0;
 
-		if (leadingWhitespaceLength < minIndent)
+		if (indent < minIndent)
 		{
-			minIndent = leadingWhitespaceLength;
+			minIndent = indent;
 		}
 	}
 
-	const indentedLines = lines.map((line) => {
-		if (line.startsWith('\t'.repeat(minIndent)))
-		{
-			return line.substring(minIndent);
-		}
+	if (minIndent === Infinity)
+	{
+		minIndent = 0;
+	}
 
-		return line;
-	});
+	const dedented = lines.map((line) => line.substring(minIndent));
 
-	return indentedLines.join('\n').trim();
+	return dedented.join('\n').trim();
 }

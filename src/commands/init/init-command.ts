@@ -61,25 +61,25 @@ const initTestsCommand = new Command('tests')
 			return acc;
 		}, '');
 
-		const message = multiline`
-			${filesChangedText.trimEnd().split('\n').join('\n\t\t\t').replace(/\n$/, '')}
-
-			${chalk.bold("What these files do:")}
-			  • ${chalk.cyan("playwright.config.ts")} — enables running Mocha unit tests in the browser via Playwright
-			  • ${chalk.cyan(".env.test")} — allows automatic login during tests, avoiding manual auth
-
-			${chalk.bold(`Next step — Edit ${chalk.yellow('.env.test')} with your local credentials:`)}
-			  • ${chalk.cyan('BASE_URL')} — Your local installation address (e.g. http://localhost)
-			  • ${chalk.cyan('LOGIN')} — Your test user login
-			  • ${chalk.cyan('PASSWORD')} — Your test user password
-
-			${chalk.bold('Run tests with:')} ${chalk.green('chef test')}
-			${chalk.bold('More info:')} ${chalk.green('chef test --help')}
-
-			${chalk.bold.red(`!! SECURITY WARNING !!`)}
-			Do NOT commit ${chalk.bold.red('.env.test')} to Git or publish it to production.
-			It contains sensitive credentials and should remain local only.
-		`;
+		const message = [
+			filesChangedText.trimEnd(),
+			'',
+			`${chalk.bold("What these files do:")}`,
+			`  • ${chalk.cyan("playwright.config.ts")} — enables running Mocha unit tests in the browser via Playwright`,
+			`  • ${chalk.cyan(".env.test")} — allows automatic login during tests, avoiding manual auth`,
+			'',
+			`${chalk.bold(`Next step — Edit ${chalk.yellow('.env.test')} with your local credentials:`)}`,
+			`  • ${chalk.cyan('BASE_URL')} — Your local installation address (e.g. http://localhost)`,
+			`  • ${chalk.cyan('LOGIN')} — Your test user login`,
+			`  • ${chalk.cyan('PASSWORD')} — Your test user password`,
+			'',
+			`${chalk.bold('Run tests with:')} ${chalk.green('chef test')}`,
+			`${chalk.bold('More info:')} ${chalk.green('chef test --help')}`,
+			'',
+			`${chalk.bold.red('!! SECURITY WARNING !!')}`,
+			`Do NOT commit ${chalk.bold.red('.env.test')} to Git or publish it to production.`,
+			`It contains sensitive credentials and should remain local only.`,
+		].join('\n');
 
 		console.log(
 			'\n' +
@@ -226,18 +226,24 @@ const initBuildCommand = new Command('build')
 				return 'Partially';
 			})();
 
-			const message = multiline`
-				${filesChangedText.trimEnd().split("\n").join("\n\t\t\t\t\t\t\t").replace(/\n$/, "")}
+			const messageLines = [
+				filesChangedText.trimEnd(),
+				'',
+				`${chalk.bold("Next steps:")}`,
+			];
 
-				${chalk.bold("Next steps:")}${
-					tsConfigStatus === SaveFileStatus.CANCELLED
-						? "\n\t\t\t\t\t\t\t  • Update your existing tsconfig.json to extend aliases.tsconfig.json"
-						: ""
-				}
-				  • You can now import modules using aliases like: import { Button } from 'ui.buttons';
-				  • Run TypeScript/JS compilation: ${chalk.green('chef build')};
-				  • More info: ${chalk.green('chef build --help')};
-			`;
+			if (tsConfigStatus === SaveFileStatus.CANCELLED)
+			{
+				messageLines.push(`  • Update your existing tsconfig.json to extend aliases.tsconfig.json`);
+			}
+
+			messageLines.push(
+				`  • You can now import modules using aliases like: import { Button } from 'ui.buttons';`,
+				`  • Run TypeScript/JS compilation: ${chalk.green('chef build')};`,
+				`  • More info: ${chalk.green('chef build --help')};`,
+			);
+
+			const message = messageLines.join('\n');
 
 			console.log('');
 			console.log(
