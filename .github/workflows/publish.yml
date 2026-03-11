@@ -74,6 +74,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
 
     steps:
       - name: Checkout repository
@@ -106,11 +107,16 @@ jobs:
               const name = r.name || r.tag_name;
               const body = (r.body || '').trim();
 
+              // Release body format: "RU text\n\n---\n\nEN text"
+              const parts = body.split(/\n---\n/);
+              const bodyRu = (parts[0] || '').trim();
+              const bodyEn = (parts[1] || '').trim();
+
               ru += `## ${name} <Badge type="tip" text="${dateRu}" />\n\n`;
-              ru += (body || 'Нет описания.') + '\n\n';
+              ru += (bodyRu || 'Нет описания.') + '\n\n';
 
               en += `## ${name} <Badge type="tip" text="${dateEn}" />\n\n`;
-              en += (body || 'No description.') + '\n\n';
+              en += (bodyEn || bodyRu || 'No description.') + '\n\n';
             }
 
             fs.writeFileSync('docs/changelog.md', ru);
@@ -125,3 +131,14 @@ jobs:
           git diff --cached --quiet && echo "No changes" && exit 0
           git commit -m "docs: update changelog for ${{ github.event.release.tag_name }}"
           git push
+
+      - name: Deploy documentation
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'docs.yml',
+              ref: 'main',
+            });
