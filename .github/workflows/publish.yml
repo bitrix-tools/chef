@@ -1,4 +1,4 @@
-name: Publish Package to npm via Trusted Publisher
+name: Publish Package to npm
 
 on:
   workflow_dispatch:
@@ -19,7 +19,6 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-
     permissions:
       contents: read
       id-token: write
@@ -28,28 +27,97 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js v23.5
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '23.5'
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org/'
-          scope: '@bitrix'
 
       - name: Install dependencies
+        run: rm -f package-lock.json && npm install
+
+      - name: Run tests
+        run: npm test
+
+      - name: Extract version from tag
+        id: version
         run: |
-          rm -rf node_modules package-lock.json
-          npm install
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+            VERSION="${TAG#v}"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update package.json version
+        if: github.event_name == 'release'
+        run: npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
 
       - name: Build package
         run: npm run build
 
-      - name: Publish to npm (Trusted Publisher)
+      - name: Publish to npm
         run: |
           if [ "${{ inputs.dry-run }}" = "true" ] && [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "Running in dry-run mode..."
-            npm publish --dry-run
+            echo "Dry-run mode"
+            npm publish --provenance --access public --dry-run
           else
-            npm publish --access public
+            npm publish --provenance --access public
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  changelog:
+    needs: publish
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Generate changelog
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            const { data: releases } = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+
+            const sorted = releases
+              .filter(r => !r.draft)
+              .sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
+
+            let ru = '# История изменений\n\n';
+            let en = '# Changelog\n\n';
+
+            for (const r of sorted) {
+              const dateRu = new Date(r.published_at).toLocaleDateString('ru-RU');
+              const dateEn = new Date(r.published_at).toLocaleDateString('en-US');
+              const name = r.name || r.tag_name;
+              const body = (r.body || '').trim();
+
+              ru += `## ${name} <Badge type="tip" text="${dateRu}" />\n\n`;
+              ru += (body || 'Нет описания.') + '\n\n';
+
+              en += `## ${name} <Badge type="tip" text="${dateEn}" />\n\n`;
+              en += (body || 'No description.') + '\n\n';
+            }
+
+            fs.writeFileSync('docs/changelog.md', ru);
+            fs.mkdirSync('docs/en', { recursive: true });
+            fs.writeFileSync('docs/en/changelog.md', en);
+
+      - name: Commit and push changelog
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/changelog.md docs/en/changelog.md
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "docs: update changelog for ${{ github.event.release.tag_name }}"
+          git push

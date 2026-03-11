@@ -1,4 +1,8 @@
 import { defineConfig } from 'vitepress'
+import { createRequire } from 'module'
+
+const require = createRequire(import.meta.url)
+const pkg = require('../../package.json')
 
 const sidebarRu = [
   {
@@ -49,6 +53,12 @@ const sidebarRu = [
       { text: 'bundle.config', link: '/config/bundle-config' },
       { text: 'chef.config', link: '/config/chef-config' },
       { text: 'Browserslist', link: '/config/browserslist' },
+    ],
+  },
+  {
+    text: 'Проект',
+    items: [
+      { text: 'История изменений', link: '/changelog' },
     ],
   },
 ]
@@ -104,6 +114,12 @@ const sidebarEn = [
       { text: 'Browserslist', link: '/en/config/browserslist' },
     ],
   },
+  {
+    text: 'Project',
+    items: [
+      { text: 'Changelog', link: '/en/changelog' },
+    ],
+  },
 ]
 
 export default defineConfig({
@@ -128,6 +144,7 @@ export default defineConfig({
           { text: 'Guide', link: '/en/guide/getting-started' },
           { text: 'Config', link: '/en/config/bundle-config' },
           { text: 'Commands', link: '/en/guide/commands' },
+          { text: pkg.version, link: '/en/changelog' },
         ],
         sidebar: sidebarEn,
         footer: {
@@ -146,6 +163,7 @@ export default defineConfig({
       { text: 'Руководство', link: '/guide/getting-started' },
       { text: 'Конфигурация', link: '/config/bundle-config' },
       { text: 'Команды', link: '/guide/commands' },
+      { text: pkg.version, link: '/changelog' },
     ],
 
     sidebar: sidebarRu,
