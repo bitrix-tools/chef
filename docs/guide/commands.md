@@ -156,16 +156,19 @@ chef init tests [options]
 Миграция кода с типизацией Flow.js в TypeScript.
 
 ```bash
-chef flow-to-ts [options]
+chef flow-to-ts [extensions...] [options]
 ```
 
 | Параметр | Описание |
 |----------|----------|
+| `extensions` | Имена расширений или glob-паттерны (`main.core`, `ui.bbcode.*`) |
 | `-p, --path [path]` | Мигрировать конкретную директорию |
 | `--rm-ts` | Удалить существующие `.ts` файлы после миграции |
 | `--rm-js` | Удалить оригинальные `.js` файлы после миграции |
 
 Что делает:
-- Удаляет аннотации типов Flow
-- Переименовывает `.js` файлы в `.ts`
+- Переименовывает `.js` файлы в `.ts` через `hg rename`
 - Конвертирует синтаксис Flow в эквиваленты TypeScript
+- Обновляет `bundle.config.js` → `bundle.config.ts`
+
+Подробнее — в разделе [Flow.js → TypeScript](/guide/flow-to-ts).

@@ -5,6 +5,7 @@ import { Command } from 'commander';
 import PQueue from 'p-queue';
 
 import { PackageFactoryProvider } from '../../modules/packages/providers/package-factory-provider';
+import { PackageResolver } from '../../modules/packages/package-resolver';
 import { findPackages } from '../../utils/package/find-packages';
 import { createPathOption } from '../../shared/options/path-option';
 import { TaskContext, TaskRunner } from '../../modules/task/task';
@@ -15,17 +16,25 @@ export const flowToTsCommand = new Command('flow-to-ts');
 
 flowToTsCommand
 	.description('Migrate Flow-typed JS code to TypeScript in extensions')
+	.argument('[extensions...]', 'Extensions to migrate (e.g. main.core ui.buttons)')
 	.addOption(createPathOption('Start searching for bundle.config.* and Flow sources from this directory'))
 	.option('--rm-ts', 'Remove existing .ts sources after migration', false)
 	.option('--rm-js', 'Remove original .js sources after migration', false)
-	.action((args): void => {
+	.action((extensions: string[], args): void => {
 		const queue = new PQueue({ concurrency: 1 });
 
-		const packageFactory = PackageFactoryProvider.create();
-		const extensionsStream: NodeJS.ReadableStream = findPackages({
-			startDirectory: args.path,
-			packageFactory,
-		});
+		const extensionsStream: NodeJS.ReadableStream = (() => {
+			if (extensions.length > 0)
+			{
+				return PackageResolver.resolveStream(extensions);
+			}
+
+			const packageFactory = PackageFactoryProvider.create();
+			return findPackages({
+				startDirectory: args.path,
+				packageFactory,
+			});
+		})();
 
 		extensionsStream
 			.on('data', async ({ extension }: { extension: BasePackage }) => {

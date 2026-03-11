@@ -156,16 +156,19 @@ See [Testing](/en/guide/testing) for details.
 Migrate Flow.js typed code to TypeScript.
 
 ```bash
-chef flow-to-ts [options]
+chef flow-to-ts [extensions...] [options]
 ```
 
 | Option | Description |
 |--------|-------------|
+| `extensions` | Extension names or glob patterns (`main.core`, `ui.bbcode.*`) |
 | `-p, --path [path]` | Migrate a specific directory |
 | `--rm-ts` | Remove existing `.ts` files after migration |
 | `--rm-js` | Remove original `.js` files after migration |
 
 What it does:
-- Removes Flow type annotations
-- Renames `.js` files to `.ts`
+- Renames `.js` files to `.ts` via `hg rename`
 - Converts Flow syntax to TypeScript equivalents
+- Updates `bundle.config.js` → `bundle.config.ts`
+
+See [Flow.js → TypeScript](/en/guide/flow-to-ts) for details.
