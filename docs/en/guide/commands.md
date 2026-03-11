@@ -92,7 +92,7 @@ chef create <name> [options]
 |--------|-------------|
 | `name` | Extension name (`my.extension`) |
 | `-p, --path [path]` | Create in a specific directory |
-| `-t, --tech [tech]` | Technology: `ts` (default) or `js` |
+| `-t, --tech [tech]` | Technology: `ts` or `js`. Auto-detected from the environment by default |
 | `-f, --force` | Overwrite without confirmation |
 
 ```bash

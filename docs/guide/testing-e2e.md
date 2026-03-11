@@ -1,6 +1,11 @@
 # E2E-тесты
 
-E2E-тесты используют [Playwright Test API](https://playwright.dev/docs/api/class-test) и запускаются в реальном браузере на реальной странице Bitrix.
+E2E-тесты используют [Playwright Test API](https://playwright.dev/docs/api/class-test) и запускаются в реальном браузере. Есть два подхода:
+
+| Подход | Когда использовать | Импорт |
+|--------|--------------------|--------|
+| **[Component Sandbox](/guide/testing-sandbox)** | Тестирование компонента в изоляции | `ui.test.e2e.sandbox` |
+| **Реальный интерфейс** | Тестирование на страницах продукта | `@playwright/test` или `ui.test.e2e.auth` |
 
 ## Структура
 
@@ -12,10 +17,37 @@ local/js/vendor/my-extension/
         └── navigation.spec.ts
 ```
 
-## Базовый тест
+## Component Sandbox
+
+Для тестирования компонентов в изоляции — без привязки к конкретной странице продукта. Подробнее в разделе [Component Sandbox](/guide/testing-sandbox).
 
 ```ts
-// test/e2e/my-extension.spec.ts
+import { test, expect } from 'ui.test.e2e.sandbox';
+
+test('button renders correctly', async ({ sandbox }) => {
+  await sandbox.loadExtension('ui.buttons');
+
+  await sandbox.mount((selector) => {
+    const btn = new BX.UI.Button({ text: 'Click me', color: 'success' });
+    document.querySelector(selector).appendChild(btn.render());
+  });
+
+  await expect(sandbox.page.locator('.ui-btn-success')).toBeVisible();
+  await expect(sandbox.page.locator('.ui-btn-success')).toHaveText('Click me');
+});
+```
+
+Для Vue-компонентов смотрите [E2E-тесты Vue 3](/guide/testing-e2e-vue).
+
+## Реальный интерфейс
+
+Для тестирования на страницах продукта — навигация, формы, взаимодействие с реальным UI.
+
+### Публичные страницы
+
+Страницы, доступные без авторизации:
+
+```ts
 import { test, expect } from '@playwright/test';
 
 test('widget renders on page', async ({ page }) => {
@@ -36,7 +68,7 @@ test('button click shows popup', async ({ page }) => {
 });
 ```
 
-## Тесты с авторизацией
+### Страницы с авторизацией
 
 Для страниц, требующих авторизации, импортируйте `test` из `ui.test.e2e.auth`. Перед каждым тестом будет выполнен автоматический вход с учётными данными из `.env.test`:
 
@@ -51,7 +83,7 @@ test('admin panel is accessible', async ({ page }) => {
 });
 ```
 
-## Работа с формами
+### Работа с формами
 
 ```ts
 import { test, expect } from 'ui.test.e2e.auth';
@@ -67,7 +99,7 @@ test('should save form data', async ({ page }) => {
 });
 ```
 
-## Ожидание AJAX-запросов
+### Ожидание AJAX-запросов
 
 ```ts
 import { test, expect } from 'ui.test.e2e.auth';
@@ -83,3 +115,11 @@ test('should load items via ajax', async ({ page }) => {
   await expect(items).toHaveCount(20);
 });
 ```
+
+## Полезные ссылки
+
+- [Writing Tests](https://playwright.dev/docs/writing-tests) — основы написания тестов
+- [Locators](https://playwright.dev/docs/locators) — поиск элементов на странице
+- [Assertions](https://playwright.dev/docs/test-assertions) — проверки (`expect`)
+- [Actions](https://playwright.dev/docs/input) — клики, ввод текста, загрузка файлов
+- [Auto-waiting](https://playwright.dev/docs/actionability) — как Playwright ждёт готовности элементов

@@ -1,62 +1,77 @@
 # Component Sandbox
 
-To e2e-test visual components without tying tests to a specific page, use `component-wrapper.php`. This page loads the extension with all its dependencies and provides an empty `<div id="sandbox">` for mounting components. No authentication required — the page is accessible without it.
+The `ui.test.e2e.sandbox` fixture simplifies e2e testing of visual components. It loads the extension with all its dependencies and provides a container for mounting components. No authentication required.
 
-## How it works
+## API
 
-1. Open `component-wrapper.php?extension=<name>` — all JS/CSS for the extension are loaded
-2. Mount components via `page.evaluate()`
-3. Verify visual behavior with Playwright
+The fixture provides a `sandbox` object:
+
+- `sandbox.setLang(lang)` — sets the language for loading the extension
+- `sandbox.loadExtension(extension)` — loads the extension (string or array of strings)
+- `sandbox.mount(callback)` — mounts a component, passes the container CSS selector to the callback
+- `sandbox.page` — access to Playwright `page`
 
 ## Regular Components
 
 ```ts
-import { test, expect } from '@playwright/test';
+import { test, expect } from 'ui.test.e2e.sandbox';
 
-test('button renders correctly', async ({ page }) => {
-  await page.goto('/dev/ui/cli/component-wrapper.php?extension=ui.buttons');
+test('button renders correctly', async ({ sandbox }) => {
+  await sandbox.loadExtension('ui.buttons');
 
-  await page.evaluate(() => {
+  await sandbox.mount((selector) => {
     const btn = new BX.UI.Button({ text: 'Click me', color: 'success' });
-    document.getElementById('sandbox').appendChild(btn.render());
+    document.querySelector(selector).appendChild(btn.render());
   });
 
-  await expect(page.locator('.ui-btn-success')).toBeVisible();
-  await expect(page.locator('.ui-btn-success')).toHaveText('Click me');
+  await expect(sandbox.page.locator('.ui-btn-success')).toBeVisible();
 });
 ```
 
 ## Vue Components
 
 ```ts
-import { test, expect } from '@playwright/test';
+import { test, expect } from 'ui.test.e2e.sandbox';
 
-test('counter component', async ({ page }) => {
-  await page.goto('/dev/ui/cli/component-wrapper.php?extension=vendor.my-app');
+test('counter component', async ({ sandbox }) => {
+  await sandbox.loadExtension('vendor.my-app');
 
-  await page.evaluate(() => {
+  await sandbox.mount((selector) => {
     const { BitrixVue } = BX.Vue3;
     const { Counter } = BX.Vendor.MyApp;
-    BitrixVue.createApp(Counter, { initial: 5 }).mount('#sandbox');
+    BitrixVue.createApp(Counter, { initial: 0 }).mount(selector);
   });
 
-  await expect(page.locator('[data-testid="count"]')).toHaveText('5');
-  await page.click('[data-testid="increment"]');
-  await expect(page.locator('[data-testid="count"]')).toHaveText('6');
+  await sandbox.page.click('[data-testid="increment"]');
+  await expect(sandbox.page.locator('[data-testid="count"]')).toHaveText('1');
 });
 ```
 
 ## Multiple Extensions
 
-You can load multiple extensions separated by commas:
-
 ```ts
-await page.goto('/dev/ui/cli/component-wrapper.php?extension=ui.buttons,ui.icons');
+await sandbox.loadExtension(['ui.buttons', 'ui.icons']);
 ```
 
-## When to Use
+## Language
 
-| Approach | When |
-|----------|------|
-| **Specific page** (`page.goto('/my-page/')`) | Testing behavior on an actual product page |
-| **Component Sandbox** | Testing a visual component in isolation, without depending on a route |
+If needed, you can specify the language — it will be used when loading the extension:
+
+```ts
+sandbox.setLang('en');
+await sandbox.loadExtension('vendor.my-app');
+```
+
+## Combining with `page`
+
+`sandbox.page` is the same Playwright `page`. You can destructure both:
+
+```ts
+test('combined example', async ({ page, sandbox }) => {
+  await sandbox.loadExtension('ui.buttons');
+  await sandbox.mount((selector) => { /* ... */ });
+
+  // page and sandbox.page are the same object
+  await expect(page.locator('.ui-btn')).toBeVisible();
+});
+```

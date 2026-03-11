@@ -40,7 +40,7 @@ const sidebarRu = [
     text: 'Интеграции',
     items: [
       { text: 'PhpStorm', link: '/guide/phpstorm-plugin' },
-      { text: 'VS Code', link: '/guide/vscode' },
+      { text: 'VS Code <span class="VPBadge info">скоро</span>', link: '/guide/vscode' },
     ],
   },
   {
@@ -93,7 +93,7 @@ const sidebarEn = [
     text: 'Integrations',
     items: [
       { text: 'PhpStorm', link: '/en/guide/phpstorm-plugin' },
-      { text: 'VS Code', link: '/en/guide/vscode' },
+      { text: 'VS Code <span class="VPBadge info">soon</span>', link: '/en/guide/vscode' },
     ],
   },
   {

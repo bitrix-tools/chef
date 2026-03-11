@@ -4,8 +4,8 @@ A guide to e2e testing extensions that use Vue 3 (`ui.vue3`). Tests run via Play
 
 ## How it works
 
-1. Open [Component Sandbox](/en/guide/testing-sandbox) with the required extension
-2. Mount a Vue component via `page.evaluate()` and `BitrixVue.createApp()`
+1. Load the extension via [sandbox.loadExtension()](/en/guide/testing-sandbox)
+2. Mount a Vue component via `sandbox.mount()` and `BitrixVue.createApp()`
 3. Interact with the component via Playwright (clicks, text input)
 4. Verify the result with `expect`
 
@@ -22,18 +22,18 @@ local/js/vendor/my-app/
 ## Mounting a component
 
 ```ts
-import { test, expect } from '@playwright/test';
+import { test, expect } from 'ui.test.e2e.sandbox';
 
-test('should render counter', async ({ page }) => {
-  await page.goto('/dev/ui/cli/component-wrapper.php?extension=vendor.my-app');
+test('should render counter', async ({ sandbox }) => {
+  await sandbox.loadExtension('vendor.my-app');
 
-  await page.evaluate(() => {
+  await sandbox.mount((selector) => {
     const { BitrixVue } = BX.Vue3;
     const { Counter } = BX.Vendor.MyApp;
-    BitrixVue.createApp(Counter, { initial: 5 }).mount('#sandbox');
+    BitrixVue.createApp(Counter, { initial: 5 }).mount(selector);
   });
 
-  await expect(page.locator('[data-testid="count"]')).toHaveText('5');
+  await expect(sandbox.page.locator('[data-testid="count"]')).toHaveText('5');
 });
 ```
 
@@ -42,29 +42,29 @@ test('should render counter', async ({ page }) => {
 ### Clicks
 
 ```ts
-test('should increment on click', async ({ page }) => {
-  await page.goto('/dev/ui/cli/component-wrapper.php?extension=vendor.my-app');
+test('should increment on click', async ({ sandbox }) => {
+  await sandbox.loadExtension('vendor.my-app');
 
-  await page.evaluate(() => {
+  await sandbox.mount((selector) => {
     const { BitrixVue } = BX.Vue3;
     const { Counter } = BX.Vendor.MyApp;
-    BitrixVue.createApp(Counter, { initial: 0 }).mount('#sandbox');
+    BitrixVue.createApp(Counter, { initial: 0 }).mount(selector);
   });
 
-  await page.click('[data-testid="increment"]');
-  await page.click('[data-testid="increment"]');
+  await sandbox.page.click('[data-testid="increment"]');
+  await sandbox.page.click('[data-testid="increment"]');
 
-  await expect(page.locator('[data-testid="count"]')).toHaveText('2');
+  await expect(sandbox.page.locator('[data-testid="count"]')).toHaveText('2');
 });
 ```
 
 ### Text input
 
 ```ts
-test('should filter items by search', async ({ page }) => {
-  await page.goto('/dev/ui/cli/component-wrapper.php?extension=vendor.my-app');
+test('should filter items by search', async ({ sandbox }) => {
+  await sandbox.loadExtension('vendor.my-app');
 
-  await page.evaluate(() => {
+  await sandbox.mount((selector) => {
     const { BitrixVue } = BX.Vue3;
     const { ItemList } = BX.Vendor.MyApp;
     BitrixVue.createApp(ItemList, {
@@ -73,29 +73,29 @@ test('should filter items by search', async ({ page }) => {
         { id: 2, name: 'Banana' },
         { id: 3, name: 'Cherry' },
       ],
-    }).mount('#sandbox');
+    }).mount(selector);
   });
 
-  await page.fill('[data-testid="search"]', 'Ban');
+  await sandbox.page.fill('[data-testid="search"]', 'Ban');
 
-  await expect(page.locator('.item')).toHaveCount(1);
-  await expect(page.locator('.item')).toHaveText('Banana');
+  await expect(sandbox.page.locator('.item')).toHaveCount(1);
+  await expect(sandbox.page.locator('.item')).toHaveText('Banana');
 });
 ```
 
 ### Checking disabled states
 
 ```ts
-test('should disable button at max', async ({ page }) => {
-  await page.goto('/dev/ui/cli/component-wrapper.php?extension=vendor.my-app');
+test('should disable button at max', async ({ sandbox }) => {
+  await sandbox.loadExtension('vendor.my-app');
 
-  await page.evaluate(() => {
+  await sandbox.mount((selector) => {
     const { BitrixVue } = BX.Vue3;
     const { Counter } = BX.Vendor.MyApp;
-    BitrixVue.createApp(Counter, { initial: 5, max: 5 }).mount('#sandbox');
+    BitrixVue.createApp(Counter, { initial: 5, max: 5 }).mount(selector);
   });
 
-  await expect(page.locator('[data-testid="increment"]')).toBeDisabled();
+  await expect(sandbox.page.locator('[data-testid="increment"]')).toBeDisabled();
 });
 ```
 
@@ -104,10 +104,10 @@ test('should disable button at max', async ({ page }) => {
 Vue components are reactive — data changes automatically update the DOM. Playwright waits for updates when asserting:
 
 ```ts
-test('should delete message', async ({ page }) => {
-  await page.goto('/dev/ui/cli/component-wrapper.php?extension=vendor.my-app');
+test('should delete message', async ({ sandbox }) => {
+  await sandbox.loadExtension('vendor.my-app');
 
-  await page.evaluate(() => {
+  await sandbox.mount((selector) => {
     const { BitrixVue, ref } = BX.Vue3;
     const { MessageList } = BX.Vendor.MyApp;
 
@@ -125,53 +125,53 @@ test('should delete message', async ({ page }) => {
         return { messages, onDelete };
       },
       template: '<MessageList :messages="messages" @deleteMessage="onDelete" />',
-    }).mount('#sandbox');
+    }).mount(selector);
   });
 
-  await expect(page.locator('.message-item')).toHaveCount(2);
-  await page.locator('[data-testid="delete"]').first().click();
-  await expect(page.locator('.message-item')).toHaveCount(1);
+  await expect(sandbox.page.locator('.message-item')).toHaveCount(2);
+  await sandbox.page.locator('[data-testid="delete"]').first().click();
+  await expect(sandbox.page.locator('.message-item')).toHaveCount(1);
 });
 ```
 
 ## beforeEach for test groups
 
-Use `test.beforeEach` to avoid duplicating the mount logic:
+Use `test.beforeEach` to avoid duplicating the load and mount logic:
 
 ```ts
-import { test, expect } from '@playwright/test';
+import { test, expect } from 'ui.test.e2e.sandbox';
 
 test.describe('Counter', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/dev/ui/cli/component-wrapper.php?extension=vendor.my-app');
+  test.beforeEach(async ({ sandbox }) => {
+    await sandbox.loadExtension('vendor.my-app');
 
-    await page.evaluate(() => {
+    await sandbox.mount((selector) => {
       const { BitrixVue } = BX.Vue3;
       const { Counter } = BX.Vendor.MyApp;
-      BitrixVue.createApp(Counter, { initial: 0, min: 0, max: 10 }).mount('#sandbox');
+      BitrixVue.createApp(Counter, { initial: 0, min: 0, max: 10 }).mount(selector);
     });
   });
 
-  test('should render initial value', async ({ page }) => {
-    await expect(page.locator('[data-testid="count"]')).toHaveText('0');
+  test('should render initial value', async ({ sandbox }) => {
+    await expect(sandbox.page.locator('[data-testid="count"]')).toHaveText('0');
   });
 
-  test('should increment', async ({ page }) => {
-    await page.click('[data-testid="increment"]');
-    await expect(page.locator('[data-testid="count"]')).toHaveText('1');
+  test('should increment', async ({ sandbox }) => {
+    await sandbox.page.click('[data-testid="increment"]');
+    await expect(sandbox.page.locator('[data-testid="count"]')).toHaveText('1');
   });
 
-  test('should decrement', async ({ page }) => {
-    await page.click('[data-testid="increment"]');
-    await page.click('[data-testid="increment"]');
-    await page.click('[data-testid="decrement"]');
-    await expect(page.locator('[data-testid="count"]')).toHaveText('1');
+  test('should decrement', async ({ sandbox }) => {
+    await sandbox.page.click('[data-testid="increment"]');
+    await sandbox.page.click('[data-testid="increment"]');
+    await sandbox.page.click('[data-testid="decrement"]');
+    await expect(sandbox.page.locator('[data-testid="count"]')).toHaveText('1');
   });
 
-  test('should reset', async ({ page }) => {
-    await page.click('[data-testid="increment"]');
-    await page.click('[data-testid="reset"]');
-    await expect(page.locator('[data-testid="count"]')).toHaveText('0');
+  test('should reset', async ({ sandbox }) => {
+    await sandbox.page.click('[data-testid="increment"]');
+    await sandbox.page.click('[data-testid="reset"]');
+    await expect(sandbox.page.locator('[data-testid="count"]')).toHaveText('0');
   });
 });
 ```
@@ -181,18 +181,18 @@ test.describe('Counter', () => {
 If a component loads data in `onMounted`, wait for elements to appear:
 
 ```ts
-test('should load and display users', async ({ page }) => {
-  await page.goto('/dev/ui/cli/component-wrapper.php?extension=vendor.my-app');
+test('should load and display users', async ({ sandbox }) => {
+  await sandbox.loadExtension('vendor.my-app');
 
-  await page.evaluate(() => {
+  await sandbox.mount((selector) => {
     const { BitrixVue } = BX.Vue3;
     const { UserList } = BX.Vendor.MyApp;
-    BitrixVue.createApp(UserList).mount('#sandbox');
+    BitrixVue.createApp(UserList).mount(selector);
   });
 
   // Wait for data to load and render
-  await expect(page.locator('.user-item').first()).toBeVisible();
-  await expect(page.locator('.user-item')).toHaveCount(10);
+  await expect(sandbox.page.locator('.user-item').first()).toBeVisible();
+  await expect(sandbox.page.locator('.user-item')).toHaveCount(10);
 });
 ```
 
