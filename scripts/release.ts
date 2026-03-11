@@ -13,10 +13,10 @@ if (!type)
 	console.log(`Current version: ${currentVersion}\n`);
 	console.log('Usage: npm run release -- <type>\n');
 	console.log('Types:');
-	console.log('  beta          1.0.0-beta.11 → 1.0.0-beta.12');
-	console.log('  patch         1.0.0-beta.12 → 1.0.1');
-	console.log('  minor         1.0.1 → 1.1.0');
-	console.log('  major         1.1.0 → 2.0.0');
+	console.log('  beta          0.0.0-beta.12 → 0.0.0-beta.13');
+	console.log('  patch         0.0.0-beta.13 → 0.0.0');
+	console.log('  minor         0.0.0 → 0.1.0');
+	console.log('  major         0.1.0 → 1.0.0');
 	console.log('  1.2.3         explicit version');
 	process.exit(1);
 }
