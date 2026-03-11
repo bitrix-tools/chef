@@ -1,11 +1,12 @@
 import chalk from 'chalk';
 import { Command } from 'commander';
+import PQueue from 'p-queue';
+
 import { preparePath } from '../../utils/cli/prepare-path';
 import { PackageFactoryProvider } from '../../modules/packages/providers/package-factory-provider';
 import { PackageResolver } from '../../modules/packages/package-resolver';
 import { findPackages } from '../../utils/package/find-packages';
 import { createShutdown } from '../../utils/create-shutdown';
-import PQueue from 'p-queue';
 import { TaskRunner } from '../../modules/task/task';
 import { runUnitTestsTask } from './tasks/run-unit-tests-task';
 import { runEndToEndTestsTask } from './tasks/run-e2e-tests-task';

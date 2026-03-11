@@ -1,10 +1,11 @@
 import * as path from 'node:path';
 
-import type { BasePackage } from '../packages/base-package';
-import type { LintResult } from '../engines/lint/lint-types';
 import { LintEngine } from '../engines/lint/lint-engine';
 import { ESLintStrategy } from '../engines/lint/eslint/eslint-strategy';
 import { Environment } from '../../environment/environment';
+
+import type { BasePackage } from '../packages/base-package';
+import type { LintResult } from '../engines/lint/lint-types';
 
 export class PackageLinter
 {

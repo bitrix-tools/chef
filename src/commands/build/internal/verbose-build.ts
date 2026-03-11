@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+
 import { TaskRunner } from '../../../modules/task/task';
 import { BasePackage } from '../../../modules/packages/base-package';
 import { lintTask } from '../../../shared/tasks/lint-task';

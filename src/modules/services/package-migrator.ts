@@ -1,8 +1,9 @@
 import * as fs from 'node:fs/promises';
 
-import type { BasePackage } from '../packages/base-package';
 import { hgRename } from '../../utils/vcs/hg/rename';
 import { convertFlowToTs } from '../../utils/flow-to-ts';
+
+import type { BasePackage } from '../packages/base-package';
 
 export type RenameFileResult = {
 	from: string;

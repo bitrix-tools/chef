@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 
 import { LintStrategy } from '../lint-strategy';
+
 import type { LintOptions, LintResult, LintFileResult } from '../lint-types';
 
 export class ESLintStrategy extends LintStrategy

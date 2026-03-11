@@ -1,10 +1,12 @@
+import * as path from 'node:path';
+
+import { createRequire } from 'module';
+
 import { ConfigManager } from '../config-manager';
 import * as bundleConfigStrategies from './strategies/index'
-import * as path from 'node:path';
 import { ConfigStrategy } from '../config-strategy';
 import { BundleConfig, LegacyPluginsConfig } from './bundle-config';
 import { PreparedBundleConfig } from './prepared-bundle-config';
-import { createRequire } from 'module';
 
 export class BundleConfigManager extends ConfigManager<PreparedBundleConfig>
 {

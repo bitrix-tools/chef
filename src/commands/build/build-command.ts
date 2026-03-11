@@ -1,18 +1,16 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
+import PQueue from 'p-queue';
 
 import { watchOption } from './options/watch-option';
 import { createPathOption } from '../../shared/options/path-option';
 import { verboseOption } from './options/verbose-option';
 import { forceOption } from './options/force-option';
 import { productionOption } from './options/production-option';
-import PQueue from 'p-queue';
-
 import { PackageFactoryProvider } from '../../modules/packages/providers/package-factory-provider';
 import { PackageResolver } from '../../modules/packages/package-resolver';
 import { findPackages } from '../../utils/package/find-packages';
 import { createShutdown } from '../../utils/create-shutdown';
-
 import { build } from './internal/build';
 
 import type { FSWatcher } from 'chokidar';

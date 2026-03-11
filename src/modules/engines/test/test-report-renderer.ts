@@ -1,5 +1,7 @@
 import chalk from 'chalk';
+
 import { TASK_STATUS_ICON } from '../../task/icons';
+
 import type { TestToken, ConsoleLog } from './test-types';
 
 const SLOW_TEST_THRESHOLD = 75;

@@ -1,6 +1,5 @@
 import { ConfigStrategy } from '../../config-strategy';
 
-
 export const targetsStrategy = {
 	key: 'targets',
 	getDefault(): undefined

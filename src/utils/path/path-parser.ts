@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+
 import { PathIndicators } from './path-indicators';
 import { Environment } from '../../environment/environment';
 

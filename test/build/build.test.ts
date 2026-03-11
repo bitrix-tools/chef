@@ -1,7 +1,9 @@
-import { describe, it, beforeEach, afterEach } from 'mocha';
-import { assert } from 'chai';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
+
+import { describe, it, beforeEach, afterEach } from 'mocha';
+import { assert } from 'chai';
+
 import { BuildEngine } from '../../src/modules/engines/build/build-engine';
 import { RollupBuildStrategy } from '../../src/modules/engines/build/rollup/rollup-strategy';
 import { BundleConfigManager } from '../../src/modules/config/bundle/bundle-config-manager';

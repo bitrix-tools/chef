@@ -4,6 +4,7 @@ import * as sinon from 'sinon';
 
 import { E2ETestEngine } from '../../../../src/modules/engines/test/e2e/e2e-test-engine';
 import { E2ETestStrategy } from '../../../../src/modules/engines/test/e2e/e2e-test-strategy';
+
 import type { E2ETestOptions, TestResult } from '../../../../src/modules/engines/test/test-types';
 
 class MockStrategy extends E2ETestStrategy

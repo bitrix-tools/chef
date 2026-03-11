@@ -1,7 +1,9 @@
+import chalk from 'chalk';
+
 import { findCircularDependencies } from '../../../utils/package/find-circular-dependencies';
+
 import type { BasePackage } from '../../../modules/packages/base-package';
 import type { Task } from '../../../modules/task/task';
-import chalk from 'chalk';
 
 export function circularDependenciesTask(extension: BasePackage): Task
 {

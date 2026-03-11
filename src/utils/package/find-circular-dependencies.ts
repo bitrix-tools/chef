@@ -1,4 +1,5 @@
 import { PackageResolver } from '../../modules/packages/package-resolver';
+
 import type { BasePackage } from '../../modules/packages/base-package';
 
 export type CircularDependency = string[];

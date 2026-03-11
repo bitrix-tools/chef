@@ -3,13 +3,14 @@ import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 
 import { E2ETestStrategy } from '../e2e-test-strategy';
+import { parseTokenStream } from '../parse-token-stream';
+
 import type {
 	E2ETestOptions,
 	TestResult,
 	TestToken,
 	ConsoleLog,
 } from '../../test-types';
-import { parseTokenStream } from '../parse-token-stream';
 
 const STREAMING_REPORTER_PATH = path.resolve(
 	path.dirname(fileURLToPath(import.meta.url)),

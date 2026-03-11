@@ -1,4 +1,5 @@
 import { ConfigStrategy } from '../../config-strategy';
+
 import type { BundleConfig } from '../bundle-config';
 
 export const concatStrategy = {

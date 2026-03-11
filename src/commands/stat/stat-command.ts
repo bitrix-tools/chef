@@ -1,6 +1,8 @@
 import { Command } from 'commander';
-import { createPathOption } from '../../shared/options/path-option';
 import PQueue from 'p-queue';
+import chalk from 'chalk';
+
+import { createPathOption } from '../../shared/options/path-option';
 import { findPackages } from '../../utils/package/find-packages';
 import { PackageFactory } from '../../modules/packages/package-factory';
 import { PackageResolver } from '../../modules/packages/package-resolver';
@@ -9,7 +11,6 @@ import { sourceStrategies } from '../../modules/packages/strategies/source';
 import { projectStrategies } from '../../modules/packages/strategies/project';
 import { defaultStrategy } from '../../modules/packages/strategies/default-strategy';
 import { TaskRunner } from '../../modules/task/task';
-import chalk from 'chalk';
 import { directDependenciesTask } from '../../shared/tasks/direct-dependencies-task';
 import { dependenciesTreeTask } from '../../shared/tasks/dependencies-tree-task';
 import { circularDependenciesTask } from './tasks/circular-dependencies-task';

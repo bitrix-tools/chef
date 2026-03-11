@@ -2,6 +2,7 @@ import { describe, it } from 'mocha';
 import { assert } from 'chai';
 
 import { buildSuiteTree } from '../../../src/modules/engines/test/test-report-renderer';
+
 import type { TestToken } from '../../../src/modules/engines/test/test-types';
 
 describe('buildSuiteTree', () => {

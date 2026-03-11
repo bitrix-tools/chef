@@ -1,8 +1,9 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 
-import type { BasePackage } from '../packages/base-package';
 import { PackageResolver } from '../packages/package-resolver';
+
+import type { BasePackage } from '../packages/base-package';
 
 export class PackageSizeCalculator
 {

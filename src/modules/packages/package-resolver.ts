@@ -1,11 +1,14 @@
-import type { BasePackage } from './base-package';
-import { Environment } from '../../environment/environment';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { Readable, Transform, PassThrough } from 'node:stream';
+
 import fg from 'fast-glob';
+
+import { Environment } from '../../environment/environment';
 import { PackageFactoryProvider } from './providers/package-factory-provider';
 import { MemoryCache } from '../../utils/memory-cache';
+
+import type { BasePackage } from './base-package';
 
 const isExtensionName = (name: string) => {
 	return /^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)+$/.test(name);

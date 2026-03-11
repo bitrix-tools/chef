@@ -1,6 +1,7 @@
+import { createReporter } from '../create-reporter';
+
 import type { BasePackage } from '../../../modules/packages/base-package';
 import type { Task } from '../../../modules/task/task';
-import { createReporter } from '../create-reporter';
 
 export function runEndToEndTestsTask(extension: BasePackage, args: Record<string, any>): Task
 {

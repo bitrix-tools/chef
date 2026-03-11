@@ -1,20 +1,22 @@
 import * as path from 'node:path';
 
+import { TraceMap } from '@jridgewell/trace-mapping';
+
+import { UnitTestStrategy } from '../unit-test-strategy';
+import { PackageBuilder } from '../../../../services/package-builder';
+import { findPlaywrightConfig } from './find-playwright-config';
+import { mapStack } from './map-stack';
+import { embedSourceMap } from './embed-source-map';
+import { signalReady, waitForDebugger } from './debug-signal';
+
 import type { PlaywrightTestConfig } from '@playwright/test';
 import type { SourceMap } from 'rollup';
-import { TraceMap } from '@jridgewell/trace-mapping';
-import { UnitTestStrategy } from '../unit-test-strategy';
 import type {
 	UnitTestOptions,
 	TestResult,
 	TestToken,
 	ConsoleLog,
 } from '../../test-types';
-import { PackageBuilder } from '../../../../services/package-builder';
-import { findPlaywrightConfig } from './find-playwright-config';
-import { mapStack } from './map-stack';
-import { embedSourceMap } from './embed-source-map';
-import { signalReady, waitForDebugger } from './debug-signal';
 
 export class PlaywrightUnitStrategy extends UnitTestStrategy
 {

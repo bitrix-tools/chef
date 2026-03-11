@@ -25,6 +25,16 @@ function message(name: string, attrs: Record<string, string | number | boolean |
 	return `##teamcity[${name} ${parts.join(' ')}]`;
 }
 
+function stringify(value: unknown): string
+{
+	if (typeof value === 'string')
+	{
+		return value;
+	}
+
+	return JSON.stringify(value, null, 2) ?? String(value);
+}
+
 export class TeamcityReporter
 {
 	#passed = 0;
@@ -160,14 +170,4 @@ export class TeamcityReporter
 
 		return { passed: this.#passed, failed: this.#failed };
 	}
-}
-
-function stringify(value: unknown): string
-{
-	if (typeof value === 'string')
-	{
-		return value;
-	}
-
-	return JSON.stringify(value, null, 2) ?? String(value);
 }

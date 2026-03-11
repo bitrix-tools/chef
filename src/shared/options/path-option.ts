@@ -1,4 +1,5 @@
 import { Option } from 'commander';
+
 import { preparePath } from '../../utils/cli/prepare-path';
 
 export function createPathOption(description: string): Option

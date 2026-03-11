@@ -1,5 +1,18 @@
 export type BrowserType = 'chromium' | 'firefox' | 'webkit';
 
+export type TestToken = {
+	id: 'SUITE_START' | 'SUITE_END' | 'TEST_PASSED' | 'TEST_FAILED' | 'TEST_PENDING';
+	title?: string;
+	suite?: string[];
+	root?: boolean;
+	duration?: number;
+	speed?: string;
+	error?: { message: string; stack?: string };
+	showDiff?: boolean;
+	actual?: unknown;
+	expected?: unknown;
+};
+
 export type UnitTestOptions = {
 	packageName: string;
 	packageRoot: string;
@@ -30,19 +43,6 @@ export type E2ETestOptions = {
 	onToken?: (token: TestToken, browser?: string) => void;
 	onStatus?: (status: string) => void;
 	onBegin?: (info: { totalTests: number; browserCount: number }) => void;
-};
-
-export type TestToken = {
-	id: 'SUITE_START' | 'SUITE_END' | 'TEST_PASSED' | 'TEST_FAILED' | 'TEST_PENDING';
-	title?: string;
-	suite?: string[];
-	root?: boolean;
-	duration?: number;
-	speed?: string;
-	error?: { message: string; stack?: string };
-	showDiff?: boolean;
-	actual?: unknown;
-	expected?: unknown;
 };
 
 export type ConsoleLog = {

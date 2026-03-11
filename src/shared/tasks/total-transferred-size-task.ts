@@ -1,5 +1,6 @@
 import { formatSize } from '../../utils/format-size';
 import { TASK_STATUS_ICON } from '../../modules/task/icons';
+
 import type { BasePackage } from '../../modules/packages/base-package';
 import type { Task } from '../../modules/task/task';
 

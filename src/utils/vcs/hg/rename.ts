@@ -1,4 +1,5 @@
 import { spawnSync } from 'child_process';
+
 import { Environment } from '../../../environment/environment';
 
 type RenameResult = {

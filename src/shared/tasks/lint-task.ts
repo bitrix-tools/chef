@@ -1,7 +1,8 @@
-import type { BasePackage } from '../../modules/packages/base-package';
-import type { Task } from '../../modules/task/task';
 import { summaryFormatter } from '../../modules/engines/lint/summary-formatter';
 import { verboseFormatter } from '../../modules/engines/lint/verbose-formatter';
+
+import type { BasePackage } from '../../modules/packages/base-package';
+import type { Task } from '../../modules/task/task';
 
 export function lintTask(extension: BasePackage, args?: Record<string, any>): Task
 {

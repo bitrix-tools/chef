@@ -1,6 +1,5 @@
 import type { BuildResult, BuildOptions, BuildCodeOptions, BuildCodeResult } from './build-types';
 
-
 export abstract class BuildStrategy
 {
 	static sortDependencies(dependencies: string[]): string[]

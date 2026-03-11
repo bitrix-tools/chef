@@ -1,5 +1,7 @@
 import chalk from 'chalk';
+
 import { formatSize } from './format-size';
+
 import type { DependencyNode } from '../modules/packages/types/dependency-node';
 
 export function generateTreeString(tree: Array<DependencyNode>, prefix = ''): string

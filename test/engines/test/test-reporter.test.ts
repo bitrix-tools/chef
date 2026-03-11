@@ -2,6 +2,7 @@ import { describe, it, beforeEach, afterEach } from 'mocha';
 import { assert } from 'chai';
 
 import { TestReporter, stripAnsi, hasLocalFilePath } from '../../../src/modules/engines/test/test-reporter';
+
 import type { TestToken } from '../../../src/modules/engines/test/test-types';
 
 describe('stripAnsi', () => {

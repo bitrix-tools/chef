@@ -1,8 +1,9 @@
-import { describe, it, beforeEach, afterEach } from 'mocha';
-import { assert } from 'chai';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
+
+import { describe, it, beforeEach, afterEach } from 'mocha';
+import { assert } from 'chai';
 import * as sinon from 'sinon';
 
 import { PackageCreator } from '../../src/modules/services/package-creator';

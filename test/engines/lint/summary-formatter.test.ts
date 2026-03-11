@@ -2,6 +2,7 @@ import { describe, it } from 'mocha';
 import { assert } from 'chai';
 
 import { summaryFormatter } from '../../../src/modules/engines/lint/summary-formatter';
+
 import type { LintResult } from '../../../src/modules/engines/lint/lint-types';
 
 function createLintResult(errors: number, warnings: number): LintResult

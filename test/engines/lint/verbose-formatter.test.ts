@@ -2,6 +2,7 @@ import { describe, it } from 'mocha';
 import { assert } from 'chai';
 
 import { verboseFormatter } from '../../../src/modules/engines/lint/verbose-formatter';
+
 import type { LintResult, LintFileResult } from '../../../src/modules/engines/lint/lint-types';
 
 function createLintResult(files: LintFileResult[]): LintResult

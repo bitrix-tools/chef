@@ -1,6 +1,7 @@
+import * as path from 'node:path';
+
 import { it, describe } from 'mocha';
 import { assert } from 'chai';
-import * as path from 'node:path';
 
 describe('modules/packages/public-path-logic', () => {
 

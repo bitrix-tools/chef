@@ -1,18 +1,18 @@
 import * as path from 'node:path';
 import * as fs from 'node:fs';
-import fg from 'fast-glob';
 
+import fg from 'fast-glob';
 import browserslist from 'browserslist';
 
 import { BundleConfigManager } from '../config/bundle/bundle-config-manager';
 import { PhpConfigManager } from '../config/php/php-config-manager';
 import { MemoryCache } from '../../utils/memory-cache';
-import type { LintResult } from '../engines/lint/lint-types';
 import { flattenTree } from '../../utils/flatten-tree';
 import { buildDependenciesTree } from '../../utils/package/build-dependencies-tree';
-
 import { Environment } from '../../environment/environment';
 import { PackageSizeCalculator } from '../services/package-size-calculator';
+
+import type { LintResult } from '../engines/lint/lint-types';
 import type { BuildResult } from '../engines/build/build-types';
 import type { DependencyNode } from './types/dependency-node';
 

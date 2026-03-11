@@ -1,10 +1,11 @@
-import type { BasePackage } from '../packages/base-package';
-import type { TestResult } from '../engines/test/test-types';
 import { UnitTestEngine } from '../engines/test/unit/unit-test-engine';
 import { PlaywrightUnitStrategy } from '../engines/test/unit/playwright/playwright-unit-strategy';
 import { E2ETestEngine } from '../engines/test/e2e/e2e-test-engine';
 import { PlaywrightE2EStrategy } from '../engines/test/e2e/playwright/playwright-e2e-strategy';
 import { Environment } from '../../environment/environment';
+
+import type { BasePackage } from '../packages/base-package';
+import type { TestResult } from '../engines/test/test-types';
 
 export class PackageTestRunner
 {

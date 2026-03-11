@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import table from 'text-table';
+
 import type { LintResult, LintFormatterLevel, LintMessage } from './lint-types';
 
 function truncateWords(str: string, maxLength: number): string

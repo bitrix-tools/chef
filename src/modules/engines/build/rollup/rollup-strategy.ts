@@ -13,8 +13,6 @@ import {
 	type OutputChunk,
 } from 'rollup';
 
-import type { ParsedCommandLine } from 'typescript';
-
 import { Environment } from '../../../../environment/environment';
 import { PackageResolver } from '../../../packages/package-resolver';
 import { isExternalDependencyName } from '../../../../utils/is-external-dependency-name';
@@ -22,6 +20,7 @@ import { BuildStrategy } from '../build-strategy';
 import { FileFinder } from '../../../../utils/file-finder';
 import concatPlugin from './plugins/concat';
 
+import type { ParsedCommandLine } from 'typescript';
 import type {
 	BuildResult,
 	BuildOptions,
@@ -29,7 +28,6 @@ import type {
 	BuildCodeOptions,
 	BuildCodeResult,
 } from '../build-types';
-
 
 export class RollupBuildStrategy extends BuildStrategy
 {

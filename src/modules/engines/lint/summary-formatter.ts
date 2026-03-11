@@ -1,5 +1,6 @@
-import type { LintResult, LintFormatterLevel } from './lint-types';
 import { pluralize } from '../../../utils/pluralize';
+
+import type { LintResult, LintFormatterLevel } from './lint-types';
 
 export function summaryFormatter(result: LintResult): { title: string; text: string; level: LintFormatterLevel }
 {

@@ -1,10 +1,11 @@
 import chalk from 'chalk';
 import boxen from 'boxen';
 
+import { createReporter } from '../create-reporter';
+
 import type { BasePackage } from '../../../modules/packages/base-package';
 import type { Task } from '../../../modules/task/task';
 import type { ConsoleLog } from '../../../modules/engines/test/test-types';
-import { createReporter } from '../create-reporter';
 
 const PROJECT_TO_BROWSER: Record<string, string> = {
 	chromium: 'chromium',
@@ -19,6 +20,80 @@ const BROWSER_LABEL: Record<string, string> = {
 };
 
 const DEFAULT_BROWSERS = ['chromium', 'firefox', 'webkit'];
+
+function createDebugTask(extension: BasePackage, args: Record<string, any>, browsers: string[]): Task
+{
+	const browserTasks: Task[] = browsers.map((browserType) => {
+		const label = BROWSER_LABEL[browserType] ?? browserType;
+
+		return {
+			title: label,
+			run: async (context): Promise<any> => {
+				const reporter = createReporter(args.reporter);
+
+				context.succeed(label);
+
+				const testResult = await extension.runUnitTests({
+					...args,
+					browserType,
+					onToken: (token) => reporter.handleToken(token),
+				});
+
+				if (testResult.errors.length > 0)
+				{
+					testResult.errors.forEach((error: Error) => {
+						context.border(error.message, 'red', 2);
+					});
+					return false;
+				}
+
+				if (testResult.report.length > 0)
+				{
+					reporter.finish(testResult.consoleLogs);
+				}
+
+				if (testResult.debugCleanup)
+				{
+					await testResult.debugCleanup();
+				}
+
+				return true;
+			},
+		};
+	});
+
+	const browserNames = browsers.map((b) => BROWSER_LABEL[b] ?? b);
+	const browserList = browserNames.length === 1
+		? browserNames[0]
+		: browserNames.slice(0, -1).join(', ') + ' and ' + browserNames.at(-1);
+
+	const debugMessage = [
+		`${browserList} will open with ${chalk.bold('DevTools')} enabled.`,
+		'',
+		`${chalk.bold('What you can do:')}`,
+		`  • Set breakpoints in source code and test files`,
+		`  • Inspect DOM, network requests, and console output`,
+		`  • Step through code using the ${chalk.bold('Sources')} panel`,
+		`  • Sourcemaps are enabled — debug the original code, not the bundle`,
+		'',
+		`${chalk.bold('To finish:')} close the browser window or press ${chalk.bold('Ctrl+C')}`,
+	].join('\n');
+
+	return {
+		title: 'Unit tests',
+		run: async (context) => {
+			context.succeed('Unit tests');
+			console.log('');
+			console.log(boxen(debugMessage, {
+				padding: 1,
+				borderStyle: 'round',
+				borderColor: 'cyan',
+				title: chalk.bold.cyan('Debug Mode'),
+			}));
+		},
+		subtasks: browserTasks,
+	};
+}
 
 export function runUnitTestsTask(extension: BasePackage, args: Record<string, any>): Task
 {
@@ -96,79 +171,5 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 
 			return failed === 0;
 		},
-	};
-}
-
-function createDebugTask(extension: BasePackage, args: Record<string, any>, browsers: string[]): Task
-{
-	const browserTasks: Task[] = browsers.map((browserType) => {
-		const label = BROWSER_LABEL[browserType] ?? browserType;
-
-		return {
-			title: label,
-			run: async (context): Promise<any> => {
-				const reporter = createReporter(args.reporter);
-
-				context.succeed(label);
-
-				const testResult = await extension.runUnitTests({
-					...args,
-					browserType,
-					onToken: (token) => reporter.handleToken(token),
-				});
-
-				if (testResult.errors.length > 0)
-				{
-					testResult.errors.forEach((error: Error) => {
-						context.border(error.message, 'red', 2);
-					});
-					return false;
-				}
-
-				if (testResult.report.length > 0)
-				{
-					reporter.finish(testResult.consoleLogs);
-				}
-
-				if (testResult.debugCleanup)
-				{
-					await testResult.debugCleanup();
-				}
-
-				return true;
-			},
-		};
-	});
-
-	const browserNames = browsers.map((b) => BROWSER_LABEL[b] ?? b);
-	const browserList = browserNames.length === 1
-		? browserNames[0]
-		: browserNames.slice(0, -1).join(', ') + ' and ' + browserNames.at(-1);
-
-	const debugMessage = [
-		`${browserList} will open with ${chalk.bold('DevTools')} enabled.`,
-		'',
-		`${chalk.bold('What you can do:')}`,
-		`  • Set breakpoints in source code and test files`,
-		`  • Inspect DOM, network requests, and console output`,
-		`  • Step through code using the ${chalk.bold('Sources')} panel`,
-		`  • Sourcemaps are enabled — debug the original code, not the bundle`,
-		'',
-		`${chalk.bold('To finish:')} close the browser window or press ${chalk.bold('Ctrl+C')}`,
-	].join('\n');
-
-	return {
-		title: 'Unit tests',
-		run: async (context) => {
-			context.succeed('Unit tests');
-			console.log('');
-			console.log(boxen(debugMessage, {
-				padding: 1,
-				borderStyle: 'round',
-				borderColor: 'cyan',
-				title: chalk.bold.cyan('Debug Mode'),
-			}));
-		},
-		subtasks: browserTasks,
 	};
 }

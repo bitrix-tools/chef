@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+
 import { hasIndicators } from './has-indicators';
 
 export function findRootByIndicator(startDir: string, indicators: string[]): string {

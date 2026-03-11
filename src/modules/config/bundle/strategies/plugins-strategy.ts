@@ -1,6 +1,6 @@
-import type { Plugin } from 'rollup';
 import { ConfigStrategy } from '../../config-strategy';
 
+import type { Plugin } from 'rollup';
 
 export const pluginsStrategy = {
 	key: 'plugins',

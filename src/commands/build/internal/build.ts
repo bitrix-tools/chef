@@ -1,8 +1,9 @@
+import chalk from 'chalk';
+
 import { verboseBuild } from './verbose-build';
 import { plainBuild } from './plain-build';
 import { BasePackage } from '../../../modules/packages/base-package';
 import { PackageResolver } from '../../../modules/packages/package-resolver';
-import chalk from 'chalk';
 import { TASK_STATUS_ICON } from '../../../modules/task/icons';
 
 async function runRebuild(extension: BasePackage, args: Record<string, any>): Promise<void>

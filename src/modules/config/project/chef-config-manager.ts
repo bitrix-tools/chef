@@ -1,7 +1,10 @@
 import path from 'node:path';
 import fs from 'node:fs';
+
 import { createRequire } from 'module';
+
 import { Environment } from '../../../environment/environment';
+
 import type { ChefConfig } from './chef-config';
 
 export class ChefConfigManager

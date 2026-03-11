@@ -1,8 +1,10 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+
 import { confirm } from '@inquirer/prompts';
-import { fileExistsAsync } from './file-exists-async';
 import chalk from 'chalk';
+
+import { fileExistsAsync } from './file-exists-async';
 
 export enum SaveFileStatus {
 	CREATED = 'created',

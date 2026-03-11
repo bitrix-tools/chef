@@ -1,5 +1,7 @@
 import * as path from 'node:path';
+
 import { Command, program } from 'commander';
+
 import { Environment } from './environment/environment';
 
 async function loadAndRun(loader: () => Promise<Record<string, unknown>>): Promise<void>

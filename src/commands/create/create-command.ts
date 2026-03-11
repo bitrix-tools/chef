@@ -1,6 +1,7 @@
-import { Command } from 'commander';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+
+import { Command } from 'commander';
 import { confirm } from '@inquirer/prompts';
 import chalk from 'chalk';
 

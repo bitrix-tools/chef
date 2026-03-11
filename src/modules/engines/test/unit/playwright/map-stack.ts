@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+
 import { originalPositionFor, type TraceMap } from '@jridgewell/trace-mapping';
 
 // Match bundle frames including the full URL prefix:

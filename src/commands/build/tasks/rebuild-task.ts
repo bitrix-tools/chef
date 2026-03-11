@@ -1,8 +1,10 @@
 import chalk from 'chalk';
-import type { Task } from '../../../modules/task/task';
-import type { BasePackage } from '../../../modules/packages/base-package';
+
 import { PackageResolver } from '../../../modules/packages/package-resolver';
 import { TASK_STATUS_ICON } from '../../../modules/task/icons';
+
+import type { Task } from '../../../modules/task/task';
+import type { BasePackage } from '../../../modules/packages/base-package';
 
 type RebuildResult = {
 	name: string;

@@ -1,6 +1,7 @@
+import { buildSuiteTree } from '../../../modules/engines/test/test-report-renderer';
+
 import type { BasePackage } from '../../../modules/packages/base-package';
 import type { Task } from '../../../modules/task/task';
-import { buildSuiteTree } from '../../../modules/engines/test/test-report-renderer';
 
 export function e2eTestsTask(extension: BasePackage): Task
 {

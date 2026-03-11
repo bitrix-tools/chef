@@ -1,4 +1,5 @@
 import { type Return } from 'php-parser';
+
 import { parsePhpCodeToAst } from './internal/parse-php-code-to-ast';
 import { returnNodeToJsObject } from './internal/return-node-to-js-object';
 

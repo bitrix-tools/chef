@@ -1,5 +1,6 @@
-import type { PlaywrightTestConfig } from '@playwright/test';
 import { FileFinder } from '../../../../../utils/file-finder';
+
+import type { PlaywrightTestConfig } from '@playwright/test';
 
 function findPlaywrightConfigPath(packageRoot: string, projectRoot: string): string | null
 {
