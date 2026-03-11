@@ -2,5 +2,13 @@
 
 ## v0.0.0-beta.12 <Badge type="tip" text="11.03.2026" />
 
-**Full Changelog**: https://github.com/bitrix-tools/chef/commits/v0.0.0-beta.12
-
+- Интеграция с PhpStorm — запуск и отладка тестов, TeamCity reporter, CDP debugging
+- Новый тестовый reporter с live-обновлением статуса по браузерам
+- Кэширование тестовых бандлов между браузерами и Rollup-модулей между расширениями
+- Конфиг проекта `chef.config.ts` — запрет расширений, дефолты, enforce-правила
+- Автозамена переменных окружения в сборке
+- Улучшенная миграция Flow → TypeScript с новыми трансформациями типов
+- Production-сборка (`--production`), standalone-бандлы, кастомные Rollup-плагины
+- Ленивая загрузка команд и плагинов — быстрый холодный старт
+- Документация на двух языках с деплоем на GitHub Pages
+- Публикация на npm через Trusted Publisher (OIDC provenance)
