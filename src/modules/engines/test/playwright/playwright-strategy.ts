@@ -24,6 +24,8 @@ const TOKEN_MARKER = '__CHEF_TOKEN__';
 
 export class PlaywrightStrategy extends TestStrategy
 {
+	static #bundleCache = new Map<string, Promise<{ code: string; map: SourceMap | null }>>();
+
 	#getPlaywrightConfigPath(packageRoot: string, projectRoot: string): string | null
 	{
 		const tsVersion = FileFinder.findUpFile({
@@ -84,6 +86,17 @@ export class PlaywrightStrategy extends TestStrategy
 		});
 
 		return { code: buildResult.code, map: buildResult.map ?? null };
+	}
+
+	#getCachedBundle(options: UnitTestOptions): Promise<{ code: string; map: SourceMap | null }>
+	{
+		const cacheKey = options.packageRoot + ':' + (options.file ?? '');
+		if (!PlaywrightStrategy.#bundleCache.has(cacheKey))
+		{
+			PlaywrightStrategy.#bundleCache.set(cacheKey, this.#buildTestBundle(options));
+		}
+
+		return PlaywrightStrategy.#bundleCache.get(cacheKey)!;
 	}
 
 	async runUnitTests(options: UnitTestOptions): Promise<TestResult>
@@ -210,7 +223,7 @@ export class PlaywrightStrategy extends TestStrategy
 				}
 			});
 
-			const { code: testsCodeBundle, map: sourceMap } = await this.#buildTestBundle(options);
+			const { code: testsCodeBundle, map: sourceMap } = await this.#getCachedBundle(options);
 
 			tracer = sourceMap ? new TraceMap(sourceMap as any) : null;
 

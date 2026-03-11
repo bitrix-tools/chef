@@ -33,6 +33,8 @@ import type {
 
 export class RollupBuildStrategy extends BuildStrategy
 {
+	#buildCodeCache: RollupBuild['cache'] = undefined;
+
 	protected static calculateBundlesSize(output: RollupOutput['output']): BundleFileInfo[]
 	{
 		return output.map((chunk) => {
@@ -249,7 +251,11 @@ export class RollupBuildStrategy extends BuildStrategy
 			dependenciesRef,
 		);
 
-		const bundle: RollupBuild = await rollup(rollupInputOptions);
+		const bundle: RollupBuild = await rollup({
+			...rollupInputOptions,
+			cache: this.#buildCodeCache,
+		});
+		this.#buildCodeCache = bundle.cache;
 
 		const outputOptions: OutputOptions = this.#buildRollupBuildCodeOutputOptions(options);
 		const globals = RollupBuildStrategy.makeGlobals(dependenciesRef);
