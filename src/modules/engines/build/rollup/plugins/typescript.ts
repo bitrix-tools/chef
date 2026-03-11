@@ -15,6 +15,89 @@ export interface TypeScriptPluginOptions
 	exclude?: string[];
 }
 
+export interface TypeCheckOptions
+{
+	packageRoot: string;
+	compilerOptions?: CompilerOptions;
+}
+
+export interface TypeCheckResult
+{
+	errors: string[];
+}
+
+const tsExtensions = ['.ts', '.tsx', '.mts', '.cts'];
+
+let oldProgram: import('typescript').Program | undefined;
+
+export async function checkTypes(options: TypeCheckOptions): Promise<TypeCheckResult>
+{
+	const { packageRoot, compilerOptions = {} } = options;
+
+	const sourceDir = path.join(packageRoot, 'src');
+	if (!fs.existsSync(sourceDir))
+	{
+		return { errors: [] };
+	}
+
+	const rootNames = collectSourceFiles(sourceDir, tsExtensions);
+	if (rootNames.length === 0)
+	{
+		return { errors: [] };
+	}
+
+	const { default: ts } = await import('typescript');
+
+	const typeCheckCompilerOptions: CompilerOptions = {
+		...compilerOptions,
+		target: ts.ScriptTarget.ESNext,
+		module: ts.ModuleKind.ESNext,
+		moduleResolution: ts.ModuleResolutionKind.Bundler,
+		allowJs: true,
+		checkJs: false,
+		strict: true,
+		noEmit: true,
+		skipLibCheck: true,
+		declaration: false,
+		declarationMap: false,
+		paths: undefined,
+		baseUrl: undefined,
+	};
+
+	const host = ts.createCompilerHost(typeCheckCompilerOptions, true);
+	const program = ts.createProgram(rootNames, typeCheckCompilerOptions, host, oldProgram);
+	oldProgram = program;
+
+	const sourceFiles = program.getSourceFiles().filter((file) => {
+		return file.fileName.startsWith(packageRoot) && !file.fileName.includes('/node_modules/');
+	});
+
+	const diagnostics: Diagnostic[] = [];
+	for (const sourceFile of sourceFiles)
+	{
+		diagnostics.push(
+			...program.getSyntacticDiagnostics(sourceFile),
+			...program.getSemanticDiagnostics(sourceFile),
+		);
+	}
+
+	// TS2307: Cannot find module — expected for external Bitrix dependencies
+	// TS2304: Cannot find name — can come from unresolved external types
+	const ignoredCodes = new Set([2307, 2304]);
+	const errors = diagnostics.filter(
+		(d) => d.category === ts.DiagnosticCategory.Error && !ignoredCodes.has(d.code),
+	);
+
+	if (errors.length === 0)
+	{
+		return { errors: [] };
+	}
+
+	return {
+		errors: [formatDiagnostics(ts, errors, packageRoot)],
+	};
+}
+
 export default async function typescriptPlugin(options: TypeScriptPluginOptions): Promise<Plugin>
 {
 	const { default: ts } = await import('typescript');
@@ -31,7 +114,7 @@ export default async function typescriptPlugin(options: TypeScriptPluginOptions)
 
 	const filter = createFilter(include, exclude);
 
-	const baseCompilerOptions: CompilerOptions = {
+	const transpileCompilerOptions: CompilerOptions = {
 		...compilerOptions,
 		target: ts.ScriptTarget.ESNext,
 		module: ts.ModuleKind.ESNext,
@@ -39,74 +122,17 @@ export default async function typescriptPlugin(options: TypeScriptPluginOptions)
 		allowJs: true,
 		checkJs: false,
 		strict: true,
+		noEmit: false,
 		declaration: false,
 		declarationMap: false,
 		sourceMap: true,
 		inlineSources: true,
-	};
-
-	const typeCheckCompilerOptions: CompilerOptions = {
-		...baseCompilerOptions,
-		noEmit: true,
-	};
-
-	const transpileCompilerOptions: CompilerOptions = {
-		...baseCompilerOptions,
-		noEmit: false,
 		outDir: path.join(packageRoot, 'dist'),
 		rootDir: packageRoot,
 	};
 
-	const tsExtensions = ['.ts', '.tsx', '.mts', '.cts'];
-
-	let oldProgram: import('typescript').Program | undefined;
-
 	return {
 		name: 'bitrix-typescript',
-
-		buildStart()
-		{
-			const sourceDir = path.join(packageRoot, 'src');
-			if (!fs.existsSync(sourceDir))
-			{
-				return;
-			}
-
-			const rootNames = collectSourceFiles(sourceDir, tsExtensions);
-			if (rootNames.length === 0)
-			{
-				return;
-			}
-
-			const host = ts.createCompilerHost(typeCheckCompilerOptions, true);
-			const program = ts.createProgram(rootNames, typeCheckCompilerOptions, host, oldProgram);
-			oldProgram = program;
-
-			const sourceFiles = program.getSourceFiles().filter((file) => {
-				return file.fileName.startsWith(packageRoot) && !file.fileName.includes('/node_modules/');
-			});
-
-			const diagnostics: Diagnostic[] = [];
-			for (const sourceFile of sourceFiles)
-			{
-				diagnostics.push(
-					...program.getSyntacticDiagnostics(sourceFile),
-					...program.getSemanticDiagnostics(sourceFile),
-				);
-			}
-
-			const errors = diagnostics.filter(
-				(d) => d.category === ts.DiagnosticCategory.Error,
-			);
-
-			if (errors.length === 0)
-			{
-				return;
-			}
-
-			const formatted = formatDiagnostics(ts, errors, packageRoot);
-			this.error(formatted);
-		},
 
 		resolveId(source, importer)
 		{

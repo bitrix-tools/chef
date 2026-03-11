@@ -186,6 +186,21 @@ export class RollupBuildStrategy extends BuildStrategy
 
 	async build(options: BuildOptions): Promise<BuildResult>
 	{
+		if (options.typescript)
+		{
+			const typeCheckResult = await this.#checkTypes(options);
+			if (typeCheckResult.errors.length > 0)
+			{
+				return {
+					dependencies: [],
+					bundles: [],
+					warnings: [],
+					errors: typeCheckResult.errors.map((message) => ({ message })),
+					standalone: options.standalone ?? false,
+				};
+			}
+		}
+
 		const { onWarning, warningsRef, dependenciesRef } = RollupBuildStrategy.createOnWarningHandler();
 		const inputOptions: InputOptions = await this.#buildRollupInputOptions(options, onWarning, dependenciesRef);
 
@@ -286,6 +301,21 @@ export class RollupBuildStrategy extends BuildStrategy
 
 	async generate(options: BuildOptions): Promise<BuildResult>
 	{
+		if (options.typescript)
+		{
+			const typeCheckResult = await this.#checkTypes(options);
+			if (typeCheckResult.errors.length > 0)
+			{
+				return {
+					dependencies: [],
+					bundles: [],
+					warnings: [],
+					errors: typeCheckResult.errors.map((message) => ({ message })),
+					standalone: options.standalone ?? false,
+				};
+			}
+		}
+
 		const { onWarning, warningsRef, dependenciesRef } = RollupBuildStrategy.createOnWarningHandler();
 		const inputOptions: InputOptions = await this.#buildRollupInputOptions(options, onWarning, dependenciesRef);
 
@@ -395,6 +425,15 @@ export class RollupBuildStrategy extends BuildStrategy
 				...(tsConfig?.raw?.exclude ?? []),
 				`${packageRoot}/dist/**`,
 			],
+		});
+	}
+
+	async #checkTypes(options: BuildOptions): Promise<{ errors: string[] }>
+	{
+		const { checkTypes } = await import('./plugins/typescript');
+
+		return checkTypes({
+			packageRoot: options.packageRoot,
 		});
 	}
 
