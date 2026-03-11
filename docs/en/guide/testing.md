@@ -195,6 +195,10 @@ describe('Chat', () => {
 });
 ```
 
+### Testing Vue 3 Components
+
+For extensions using Vue 3 (`ui.vue3`) — see the dedicated guide: [Testing Vue 3](/en/guide/testing-vue).
+
 ## E2E Tests
 
 E2E tests use the [Playwright Test API](https://playwright.dev/docs/api/class-test) and run in a real browser on an actual Bitrix page.

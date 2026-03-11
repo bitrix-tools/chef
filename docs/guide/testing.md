@@ -195,6 +195,10 @@ describe('Chat', () => {
 });
 ```
 
+### Тестирование Vue 3 компонентов
+
+Для расширений с Vue 3 (`ui.vue3`) — отдельное руководство: [Тестирование Vue 3](/guide/testing-vue).
+
 ## E2E-тесты
 
 E2E-тесты используют [Playwright Test API](https://playwright.dev/docs/api/class-test) и запускаются в реальном браузере на реальной странице Bitrix.
