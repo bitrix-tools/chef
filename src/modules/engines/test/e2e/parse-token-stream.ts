@@ -1,0 +1,74 @@
+import type { TestToken } from '../test-types';
+
+const TOKEN_MARKER = '__CHEF_TOKEN__';
+
+export type ParsedEvent =
+	| { type: 'begin'; totalTests: number; browserCount: number }
+	| { type: 'status'; text: string }
+	| { type: 'token'; token: TestToken; browser?: string }
+	| { type: 'end' };
+
+export function parseTokenStream(buffer: string): { events: ParsedEvent[]; remaining: string }
+{
+	const events: ParsedEvent[] = [];
+
+	let startIdx: number;
+	while ((startIdx = buffer.indexOf(TOKEN_MARKER)) !== -1)
+	{
+		const endIdx = buffer.indexOf(TOKEN_MARKER, startIdx + TOKEN_MARKER.length);
+		if (endIdx === -1)
+		{
+			break;
+		}
+
+		const json = buffer.slice(startIdx + TOKEN_MARKER.length, endIdx);
+		buffer = buffer.slice(endIdx + TOKEN_MARKER.length);
+
+		try
+		{
+			const data = JSON.parse(json);
+
+			if (data.id === 'END')
+			{
+				events.push({ type: 'end' });
+				continue;
+			}
+
+			if (data.id === 'BEGIN')
+			{
+				events.push({
+					type: 'begin',
+					totalTests: data.totalTests,
+					browserCount: data.browserCount,
+				});
+				continue;
+			}
+
+			if (data.id === 'STATUS')
+			{
+				events.push({ type: 'status', text: data.text });
+				continue;
+			}
+
+			const token: TestToken = {
+				id: data.id,
+				title: data.title,
+				suite: data.suite,
+				duration: data.duration,
+				error: data.error,
+			};
+
+			events.push({
+				type: 'token',
+				token,
+				browser: data.browser || undefined,
+			});
+		}
+		catch
+		{
+			// Skip malformed tokens
+		}
+	}
+
+	return { events, remaining: buffer };
+}

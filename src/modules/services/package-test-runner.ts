@@ -1,7 +1,9 @@
 import type { BasePackage } from '../packages/base-package';
 import type { TestResult } from '../engines/test/test-types';
-import { TestEngine } from '../engines/test/test-engine';
-import { PlaywrightStrategy } from '../engines/test/playwright/playwright-strategy';
+import { UnitTestEngine } from '../engines/test/unit/unit-test-engine';
+import { PlaywrightUnitStrategy } from '../engines/test/unit/playwright/playwright-unit-strategy';
+import { E2ETestEngine } from '../engines/test/e2e/e2e-test-engine';
+import { PlaywrightE2EStrategy } from '../engines/test/e2e/playwright/playwright-e2e-strategy';
 import { Environment } from '../../environment/environment';
 
 export class PackageTestRunner
@@ -15,9 +17,9 @@ export class PackageTestRunner
 
 	async runUnitTests(args: Record<string, any> = {}): Promise<TestResult>
 	{
-		const engine = new TestEngine(new PlaywrightStrategy());
+		const engine = new UnitTestEngine(new PlaywrightUnitStrategy());
 
-		return engine.runUnitTests({
+		return engine.run({
 			packageName: this.#package.getName(),
 			packageRoot: this.#package.getPath(),
 			projectRoot: Environment.getRoot(),
@@ -38,10 +40,10 @@ export class PackageTestRunner
 
 	async runEndToEndTests(args: Record<string, any> = {}): Promise<TestResult>
 	{
-		const engine = new TestEngine(new PlaywrightStrategy());
+		const engine = new E2ETestEngine(new PlaywrightE2EStrategy());
 		const tests = await this.#package.getEndToEndTests();
 
-		return engine.runEndToEndTests({
+		return engine.run({
 			projectRoot: Environment.getRoot(),
 			testsDirectory: this.#package.getEndToEndTestsDirectoryPath(),
 			hasTests: tests.length > 0,

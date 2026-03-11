@@ -3,7 +3,8 @@ import { assert } from 'chai';
 import * as sinon from 'sinon';
 
 import { PackageTestRunner } from '../../src/modules/services/package-test-runner';
-import { TestEngine } from '../../src/modules/engines/test/test-engine';
+import { UnitTestEngine } from '../../src/modules/engines/test/unit/unit-test-engine';
+import { E2ETestEngine } from '../../src/modules/engines/test/e2e/e2e-test-engine';
 import { Environment } from '../../src/environment/environment';
 
 import type { TestResult } from '../../src/modules/engines/test/test-types';
@@ -68,7 +69,7 @@ describe('PackageTestRunner', () => {
 			});
 
 			const expectedResult = createMockTestResult();
-			const runStub = sandbox.stub(TestEngine.prototype, 'runUnitTests').resolves(expectedResult);
+			const runStub = sandbox.stub(UnitTestEngine.prototype, 'run').resolves(expectedResult);
 
 			const runner = new PackageTestRunner(mockPackage);
 			const result = await runner.runUnitTests({
@@ -99,7 +100,7 @@ describe('PackageTestRunner', () => {
 		it('should pass callbacks to test engine', async () => {
 			const mockPackage = createMockPackage();
 			const expectedResult = createMockTestResult();
-			sandbox.stub(TestEngine.prototype, 'runUnitTests').resolves(expectedResult);
+			sandbox.stub(UnitTestEngine.prototype, 'run').resolves(expectedResult);
 
 			const onToken = sinon.stub();
 			const onStatus = sinon.stub();
@@ -107,19 +108,19 @@ describe('PackageTestRunner', () => {
 			const runner = new PackageTestRunner(mockPackage);
 			await runner.runUnitTests({ onToken, onStatus });
 
-			const options = (TestEngine.prototype.runUnitTests as sinon.SinonStub).firstCall.args[0];
+			const options = (UnitTestEngine.prototype.run as sinon.SinonStub).firstCall.args[0];
 			assert.strictEqual(options.onToken, onToken);
 			assert.strictEqual(options.onStatus, onStatus);
 		});
 
 		it('should use default empty args', async () => {
 			const mockPackage = createMockPackage();
-			sandbox.stub(TestEngine.prototype, 'runUnitTests').resolves(createMockTestResult());
+			sandbox.stub(UnitTestEngine.prototype, 'run').resolves(createMockTestResult());
 
 			const runner = new PackageTestRunner(mockPackage);
 			await runner.runUnitTests();
 
-			const options = (TestEngine.prototype.runUnitTests as sinon.SinonStub).firstCall.args[0];
+			const options = (UnitTestEngine.prototype.run as sinon.SinonStub).firstCall.args[0];
 			assert.isUndefined(options.browserType);
 			assert.isUndefined(options.headed);
 			assert.isUndefined(options.debug);
@@ -134,7 +135,7 @@ describe('PackageTestRunner', () => {
 			});
 
 			const expectedResult = createMockTestResult();
-			const runStub = sandbox.stub(TestEngine.prototype, 'runEndToEndTests').resolves(expectedResult);
+			const runStub = sandbox.stub(E2ETestEngine.prototype, 'run').resolves(expectedResult);
 
 			const runner = new PackageTestRunner(mockPackage);
 			const result = await runner.runEndToEndTests({
@@ -156,24 +157,24 @@ describe('PackageTestRunner', () => {
 
 		it('should set hasTests to false when no e2e tests found', async () => {
 			const mockPackage = createMockPackage({ e2eTests: [] });
-			sandbox.stub(TestEngine.prototype, 'runEndToEndTests').resolves(createMockTestResult());
+			sandbox.stub(E2ETestEngine.prototype, 'run').resolves(createMockTestResult());
 
 			const runner = new PackageTestRunner(mockPackage);
 			await runner.runEndToEndTests();
 
-			const options = (TestEngine.prototype.runEndToEndTests as sinon.SinonStub).firstCall.args[0];
+			const options = (E2ETestEngine.prototype.run as sinon.SinonStub).firstCall.args[0];
 			assert.isFalse(options.hasTests);
 		});
 
 		it('should pass onBegin callback', async () => {
 			const mockPackage = createMockPackage();
-			sandbox.stub(TestEngine.prototype, 'runEndToEndTests').resolves(createMockTestResult());
+			sandbox.stub(E2ETestEngine.prototype, 'run').resolves(createMockTestResult());
 
 			const onBegin = sinon.stub();
 			const runner = new PackageTestRunner(mockPackage);
 			await runner.runEndToEndTests({ onBegin });
 
-			const options = (TestEngine.prototype.runEndToEndTests as sinon.SinonStub).firstCall.args[0];
+			const options = (E2ETestEngine.prototype.run as sinon.SinonStub).firstCall.args[0];
 			assert.strictEqual(options.onBegin, onBegin);
 		});
 	});

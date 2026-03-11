@@ -1,68 +1,24 @@
 import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { spawn } from 'node:child_process';
 
 import type { PlaywrightTestConfig } from '@playwright/test';
 import type { SourceMap } from 'rollup';
-import { TraceMap, originalPositionFor } from '@jridgewell/trace-mapping';
-import { TestStrategy } from '../test-strategy';
+import { TraceMap } from '@jridgewell/trace-mapping';
+import { UnitTestStrategy } from '../unit-test-strategy';
 import type {
 	UnitTestOptions,
-	E2ETestOptions,
 	TestResult,
 	TestToken,
 	ConsoleLog,
-} from '../test-types';
-import { FileFinder } from '../../../../utils/file-finder';
-import { PackageBuilder } from '../../../services/package-builder';
+} from '../../test-types';
+import { PackageBuilder } from '../../../../services/package-builder';
+import { findPlaywrightConfig } from './find-playwright-config';
+import { mapStack } from './map-stack';
+import { embedSourceMap } from './embed-source-map';
+import { signalReady, waitForDebugger } from './debug-signal';
 
-const STREAMING_REPORTER_PATH = path.resolve(
-	path.dirname(fileURLToPath(import.meta.url)),
-	'streaming-reporter.ts',
-);
-const TOKEN_MARKER = '__CHEF_TOKEN__';
-
-export class PlaywrightStrategy extends TestStrategy
+export class PlaywrightUnitStrategy extends UnitTestStrategy
 {
 	static #bundleCache = new Map<string, Promise<{ code: string; map: SourceMap | null }>>();
-
-	#getPlaywrightConfigPath(packageRoot: string, projectRoot: string): string | null
-	{
-		const tsVersion = FileFinder.findUpFile({
-			fileName: 'playwright.config.ts',
-			fromDir: packageRoot,
-			rootDir: projectRoot,
-		});
-
-		if (tsVersion)
-		{
-			return tsVersion;
-		}
-
-		return FileFinder.findUpFile({
-			fileName: 'playwright.config.js',
-			fromDir: packageRoot,
-			rootDir: projectRoot,
-		});
-	}
-
-	async #getPlaywrightConfig(packageRoot: string, projectRoot: string): Promise<PlaywrightTestConfig | null>
-	{
-		const configPath = this.#getPlaywrightConfigPath(packageRoot, projectRoot);
-		if (configPath === null)
-		{
-			return null;
-		}
-
-		const configModule = await import(configPath);
-
-		return (
-			configModule.default.default
-			|| configModule.default
-			|| configModule
-			|| null
-		);
-	}
 
 	async #buildTestBundle(options: UnitTestOptions): Promise<{ code: string; map: SourceMap | null }>
 	{
@@ -91,17 +47,17 @@ export class PlaywrightStrategy extends TestStrategy
 	#getCachedBundle(options: UnitTestOptions): Promise<{ code: string; map: SourceMap | null }>
 	{
 		const cacheKey = options.packageRoot + ':' + (options.file ?? '');
-		if (!PlaywrightStrategy.#bundleCache.has(cacheKey))
+		if (!PlaywrightUnitStrategy.#bundleCache.has(cacheKey))
 		{
-			PlaywrightStrategy.#bundleCache.set(cacheKey, this.#buildTestBundle(options));
+			PlaywrightUnitStrategy.#bundleCache.set(cacheKey, this.#buildTestBundle(options));
 		}
 
-		return PlaywrightStrategy.#bundleCache.get(cacheKey)!;
+		return PlaywrightUnitStrategy.#bundleCache.get(cacheKey)!;
 	}
 
-	async runUnitTests(options: UnitTestOptions): Promise<TestResult>
+	async run(options: UnitTestOptions): Promise<TestResult>
 	{
-		const playwrightConfig = await this.#getPlaywrightConfig(options.packageRoot, options.projectRoot);
+		const playwrightConfig = await findPlaywrightConfig(options.packageRoot, options.projectRoot);
 		if (playwrightConfig === null)
 		{
 			return {
@@ -212,7 +168,7 @@ export class PlaywrightStrategy extends TestStrategy
 					const token = JSON.parse(data) as TestToken;
 					if (token.id === 'TEST_FAILED' && token.error?.stack && tracer)
 					{
-						token.error.stack = this.#mapStack(token.error.stack, tracer);
+						token.error.stack = mapStack(token.error.stack, tracer);
 					}
 					report.push(token);
 					options.onToken?.(token);
@@ -314,62 +270,16 @@ export class PlaywrightStrategy extends TestStrategy
 
 			onStatus('Running tests...');
 
-			const codeWithSourceMap = (() => {
-				if (!sourceMap || !cdpPort)
-				{
-					return testsCodeBundle;
-				}
-
-				// Ensure sources use file:// URLs so PhpStorm can map them to local files
-				const mapWithFileUrls = {
-					...sourceMap,
-					sources: (sourceMap.sources ?? []).map((source: string) => {
-						if (source.startsWith('/'))
-						{
-							return `file://${source}`;
-						}
-
-						return source;
-					}),
-				};
-
-				return testsCodeBundle
-					+ '\n//# sourceURL=chef-test-bundle.js'
-					+ '\n//# sourceMappingURL=data:application/json;base64,'
-					+ Buffer.from(JSON.stringify(mapWithFileUrls)).toString('base64');
-			})();
+			const codeWithSourceMap = sourceMap && cdpPort
+				? embedSourceMap(testsCodeBundle, sourceMap)
+				: testsCodeBundle;
 
 			if (cdpPort)
 			{
 				// Wait for external debugger to connect BEFORE injecting test scripts.
 				// This ensures the debugger receives scriptParsed events and can bind breakpoints.
-				const fs = await import('node:fs');
-				const signalDir = '/tmp/chef-debug-signal';
-				fs.mkdirSync(signalDir, { recursive: true });
-
-				const readyFile = path.join(signalDir, 'ready');
-				const runFile = path.join(signalDir, 'run');
-
-				try { fs.unlinkSync(readyFile); } catch {}
-				try { fs.unlinkSync(runFile); } catch {}
-
-				// Signal that page is ready for debugger to connect
-				fs.writeFileSync(readyFile, String(cdpPort));
-
-				// Wait for debugger to connect
-				await new Promise<void>((resolve) => {
-					const check = () => {
-						if (fs.existsSync(runFile))
-						{
-							try { fs.unlinkSync(readyFile); } catch {}
-							try { fs.unlinkSync(runFile); } catch {}
-							resolve();
-							return;
-						}
-						setTimeout(check, 100);
-					};
-					check();
-				});
+				signalReady(cdpPort);
+				await waitForDebugger();
 			}
 
 			// Inject test scripts (after debugger is connected when cdpPort is set)
@@ -439,171 +349,4 @@ export class PlaywrightStrategy extends TestStrategy
 		}
 	}
 
-	async runEndToEndTests(options: E2ETestOptions): Promise<TestResult>
-	{
-		if (!options.hasTests)
-		{
-			return {
-				report: [],
-				stats: {},
-				consoleLogs: [],
-				errors: [],
-			};
-		}
-
-		const onStatus = options.onStatus ?? (() => {});
-		const onToken = options.onToken ?? (() => {});
-		const onBegin = options.onBegin ?? (() => {});
-		const args = ['playwright', 'test', `--reporter=${STREAMING_REPORTER_PATH}`];
-
-		if (options.headed)
-		{
-			args.push('--headed');
-		}
-
-		if (options.debug)
-		{
-			args.push('--debug');
-		}
-
-		if (options.grep)
-		{
-			args.push(`--grep=${options.grep}`);
-		}
-
-		if (options.project)
-		{
-			const projects = Array.isArray(options.project) ? options.project : [options.project];
-			for (const project of projects)
-			{
-				args.push(`--project=${project}`);
-			}
-		}
-
-		if (options.file)
-		{
-			args.push(options.file);
-		}
-
-		onStatus('Running Playwright...');
-
-		const childProcess = spawn('npx', args, {
-			stdio: ['inherit', 'pipe', 'pipe'],
-			cwd: options.projectRoot,
-			env: {
-				...global.process.env,
-				TESTS_DIR: options.testsDirectory,
-			},
-		});
-
-		const report: TestToken[] = [];
-		const consoleLogs: ConsoleLog[] = [];
-		const errors: Error[] = [];
-		let stdoutBuffer = '';
-
-		childProcess.stdout.on('data', (data: Buffer) => {
-			stdoutBuffer += data.toString();
-
-			let startIdx: number;
-			while ((startIdx = stdoutBuffer.indexOf(TOKEN_MARKER)) !== -1)
-			{
-				const endIdx = stdoutBuffer.indexOf(TOKEN_MARKER, startIdx + TOKEN_MARKER.length);
-				if (endIdx === -1)
-				{
-					break;
-				}
-
-				const json = stdoutBuffer.slice(startIdx + TOKEN_MARKER.length, endIdx);
-				stdoutBuffer = stdoutBuffer.slice(endIdx + TOKEN_MARKER.length);
-
-				try
-				{
-					const data = JSON.parse(json);
-					if (data.id === 'END')
-					{
-						continue;
-					}
-
-					if (data.id === 'BEGIN')
-					{
-						onBegin({ totalTests: data.totalTests, browserCount: data.browserCount });
-						onStatus(`Running ${data.totalTests} tests...`);
-						continue;
-					}
-
-					if (data.id === 'STATUS')
-					{
-						onStatus(data.text);
-						continue;
-					}
-
-					const browser: string | undefined = data.browser || undefined;
-					const token: TestToken = {
-						id: data.id,
-						title: data.title,
-						suite: data.suite,
-						duration: data.duration,
-						error: data.error,
-					};
-					report.push(token);
-					onToken(token, browser);
-				}
-				catch
-				{
-					// Skip malformed tokens
-				}
-			}
-		});
-
-		childProcess.stderr.on('data', (data: Buffer) => {
-			const text = data.toString().trim();
-			if (text)
-			{
-				consoleLogs.push({ type: 'error', text });
-			}
-		});
-
-		return new Promise((resolve) => {
-			childProcess.on('close', (code) => {
-				if (report.length === 0 && code !== 0)
-				{
-					const stderrText = consoleLogs.map((l) => l.text).join('\n').trim();
-					errors.push(new Error(stderrText || 'Playwright exited with errors'));
-				}
-
-				resolve({
-					report,
-					stats: {},
-					consoleLogs: report.length > 0 ? consoleLogs : [],
-					errors,
-				});
-			});
-		});
-	}
-
-	#mapStack(stack: string, tracer: TraceMap): string
-	{
-		// Match bundle frames including the full URL prefix:
-		// Chromium: "at fn (<anonymous>:53:13)"
-		// Firefox: "@http://host/dev/ui/cli/mocha-wrapper.php:53:13"
-		// WebKit: "http://host/dev/ui/cli/mocha-wrapper.php:53:13"
-		const bundleFramePattern = /(?:https?:\/\/\S*)?(?:<anonymous>|injectedScript|mocha-wrapper\.php):(\d+):(\d+)/g;
-
-		return stack.replace(bundleFramePattern, (match, lineStr: string, colStr: string) => {
-			const line = Number(lineStr);
-			const column = Number(colStr);
-
-			const pos = originalPositionFor(tracer, { line, column });
-			if (pos.source)
-			{
-				const source = pos.source.startsWith('/')
-					? pos.source
-					: path.resolve(pos.source);
-
-				return `${source}:${pos.line}:${pos.column + 1}`;
-			}
-
-			return match;
-		});
-	}
 }
