@@ -39,19 +39,6 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Extract version from tag
-        id: version
-        run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            TAG="${{ github.event.release.tag_name }}"
-            VERSION="${TAG#v}"
-            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Update package.json version
-        if: github.event_name == 'release'
-        run: npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
-
       - name: Build package
         run: npm run build
 
