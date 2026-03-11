@@ -51,11 +51,12 @@ export class TestReporter
 	readonly #browserStatuses = new Map<string, string>();
 	readonly #countedTests = new Set<string>();
 	readonly #liveLines = new Map<string, LiveLine>();
+	readonly #lines: LiveLine[] = [];
 	readonly #startTime: number;
 	#spinner: Ora;
 	#hasResults = false;
-	#currentRow = 0;
 	#expectedBrowsers = 1;
+	#viewportHeight = 0;
 
 	#passed = 0;
 	#failed = 0;
@@ -80,6 +81,11 @@ export class TestReporter
 	stop(): void
 	{
 		this.#spinner.stop();
+
+		if (isTTY)
+		{
+			process.stdout.write('\x1B[?25h');
+		}
 	}
 
 	updateStatus(status: string, browser?: string): void
@@ -232,6 +238,13 @@ export class TestReporter
 		{
 			this.#hasResults = true;
 			this.#spinner.stop();
+
+			// Leave room for task runner lines above and status bar below.
+			// Use a generous margin so the viewport never exceeds terminal height.
+			this.#viewportHeight = Math.max(3, (process.stdout.rows ?? 24) - 6);
+
+			// Hide cursor during live rendering
+			process.stdout.write('\x1B[?25l');
 		}
 
 		const browsers = new Map<string, BrowserStatus>();
@@ -245,36 +258,91 @@ export class TestReporter
 			fullPath,
 			duration,
 			browsers,
-			row: this.#currentRow,
+			row: this.#lines.length,
 		};
 		this.#liveLines.set(key, live);
-		this.#currentRow++;
+		this.#lines.push(live);
 
-		process.stdout.write(this.#formatLine(live) + '\n');
+		if (!isTTY)
+		{
+			process.stdout.write(this.#formatLine(live) + '\n');
+			return;
+		}
+
+		this.#renderViewport();
 	}
 
-	#updateLine(live: LiveLine): void
+	#updateLine(_live: LiveLine): void
 	{
 		if (!isTTY)
 		{
 			return;
 		}
 
-		const rowsUp = this.#currentRow - live.row;
-		if (rowsUp <= 0)
+		this.#renderViewport();
+	}
+
+	#viewportRenderedLines = 0;
+
+	#renderViewport(): void
+	{
+		const total = this.#lines.length;
+		const visibleCount = Math.min(total, this.#viewportHeight);
+
+		// Visible test lines (tail of the list)
+		const startIndex = total - visibleCount;
+		const visibleLines: string[] = [];
+		for (let i = startIndex; i < total; i++)
 		{
-			return;
+			visibleLines.push(this.#formatLine(this.#lines[i]));
 		}
 
-		const line = this.#formatLine(live);
+		visibleLines.push('');
+		visibleLines.push(this.#formatStatusBar());
 
-		// Move cursor up, clear line, write, move cursor back down
-		process.stdout.write(
-			`\x1B[${rowsUp}A` // move up
-			+ '\x1B[2K\x1B[0G' // clear line, go to column 0
-			+ line // write content
-			+ `\x1B[${rowsUp}E`, // move back down
-		);
+		// Move cursor to the beginning of the previously rendered block
+		if (this.#viewportRenderedLines > 0)
+		{
+			process.stdout.write(`\x1B[${this.#viewportRenderedLines - 1}A\r`);
+		}
+
+		// Write lines, using \r\n to ensure we stay aligned
+		let output = '';
+		for (let i = 0; i < visibleLines.length; i++)
+		{
+			if (i > 0)
+			{
+				output += '\n';
+			}
+
+			output += '\x1B[2K' + visibleLines[i];
+		}
+
+		process.stdout.write(output);
+		this.#viewportRenderedLines = visibleLines.length;
+	}
+
+	#formatStatusBar(): string
+	{
+		const total = this.#passed + this.#failed + this.#pending;
+		const parts: string[] = [];
+
+		if (this.#passed > 0)
+		{
+			parts.push(chalk.green(`✓ ${this.#passed}`));
+		}
+		if (this.#failed > 0)
+		{
+			parts.push(chalk.red(`✗ ${this.#failed}`));
+		}
+		if (this.#pending > 0)
+		{
+			parts.push(chalk.yellow(`○ ${this.#pending}`));
+		}
+
+		const elapsed = formatDuration(Date.now() - this.#startTime);
+
+		return `${PREFIX} ${parts.join(chalk.gray('  '))} ${chalk.gray(`of ${total}`)} ${chalk.gray('·')} ${elapsed}`;
 	}
 
 	#formatLine(live: LiveLine): string
@@ -372,6 +440,22 @@ export class TestReporter
 		const total = this.#passed + this.#failed + this.#pending;
 
 		this.#spinner.stop();
+
+		// Clear live viewport and print full report
+		if (isTTY && this.#viewportRenderedLines > 0)
+		{
+			// Move to start of viewport block and clear everything below
+			process.stdout.write(`\x1B[${this.#viewportRenderedLines - 1}A\r\x1B[0J`);
+			this.#viewportRenderedLines = 0;
+
+			// Show cursor again
+			process.stdout.write('\x1B[?25h');
+		}
+
+		for (const live of this.#lines)
+		{
+			process.stdout.write(this.#formatLine(live) + '\n');
+		}
 
 		const lines: string[] = [];
 
@@ -557,13 +641,13 @@ function styleErrorMessage(message: string): string[]
 	return result;
 }
 
-function stripAnsi(text: string): string
+export function stripAnsi(text: string): string
 {
 	// eslint-disable-next-line no-control-regex
 	return text.replace(/\x1B\[[0-9;]*m/g, '');
 }
 
-function hasLocalFilePath(stack?: string): boolean
+export function hasLocalFilePath(stack?: string): boolean
 {
 	if (!stack)
 	{
