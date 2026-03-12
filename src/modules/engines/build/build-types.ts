@@ -69,6 +69,7 @@ export interface BuildCodeResult {
 	warnings: BuildDiagnostic[];
 	errors: BuildDiagnostic[];
 	code: string;
+	css: string;
 	dependencies: string[];
 	map?: import('rollup').SourceMap | null;
 }

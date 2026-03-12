@@ -357,9 +357,13 @@ export class RollupBuildStrategy extends BuildStrategy
 		await bundle.close();
 
 		const outputEntry = result.output.at(0) as OutputChunk;
+		const cssAsset = result.output.find(
+			(item) => item.type === 'asset' && item.fileName.endsWith('.css'),
+		);
 
 		return {
 			code: outputEntry?.code,
+			css: (cssAsset?.type === 'asset' ? cssAsset.source as string : '') ?? '',
 			map: outputEntry?.map ?? null,
 			dependencies: [...dependenciesRef],
 			warnings: [...warningsRef],
@@ -777,6 +781,11 @@ export class RollupBuildStrategy extends BuildStrategy
 
 					return null;
 				})(),
+				(await import('./plugins/css')).default({
+					extract: 'bundle.css',
+					targets: options.targets,
+					packageRoot: options.packageRoot,
+				}),
 				nodeResolve({
 					browser: true,
 				}),
@@ -804,6 +813,7 @@ export class RollupBuildStrategy extends BuildStrategy
 			format: 'iife',
 			banner: '/* eslint-disable */',
 			extend: true,
+			intro: options.standalone ? 'var global = globalThis; var exports = {}; var module = { exports: exports };' : undefined,
 			sourcemap: options.sourcemap ?? false,
 		};
 	}

@@ -19,11 +19,17 @@ import type {
 	ConsoleLog,
 } from '../../test-types';
 
+type TestBundle = {
+	code: string;
+	map: SourceMap | null;
+	css: string;
+};
+
 export class PlaywrightUnitStrategy extends UnitTestStrategy
 {
-	static #bundleCache = new Map<string, Promise<{ code: string; map: SourceMap | null }>>();
+	static #bundleCache = new Map<string, Promise<TestBundle>>();
 
-	async #buildTestBundle(options: UnitTestOptions): Promise<{ code: string; map: SourceMap | null }>
+	async #buildTestBundle(options: UnitTestOptions): Promise<TestBundle>
 	{
 		const filteredTests = options.file
 			? options.testFiles.filter((filePath) => filePath.includes(path.basename(options.file)))
@@ -41,13 +47,18 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 			publicPath: options.publicPath,
 			typescript: options.typescript,
 			namespace: 'BX.TestsBundle',
+			standalone: true,
 			sourcemap: true,
 		});
 
-		return { code: buildResult.code, map: buildResult.map ?? null };
+		return {
+			code: buildResult.code,
+			map: buildResult.map ?? null,
+			css: buildResult.css,
+		};
 	}
 
-	#getCachedBundle(options: UnitTestOptions): Promise<{ code: string; map: SourceMap | null }>
+	#getCachedBundle(options: UnitTestOptions): Promise<TestBundle>
 	{
 		const cacheKey = options.packageRoot + ':' + (options.file ?? '');
 		if (!PlaywrightUnitStrategy.#bundleCache.has(cacheKey))
@@ -182,7 +193,7 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 				}
 			});
 
-			const { code: testsCodeBundle, map: sourceMap } = await this.#getCachedBundle(options);
+			const { code: testsCodeBundle, map: sourceMap, css } = await this.#getCachedBundle(options);
 
 			tracer = sourceMap ? new TraceMap(sourceMap as any) : null;
 
@@ -288,6 +299,11 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 				// This ensures the debugger receives scriptParsed events and can bind breakpoints.
 				signalReady(cdpPort);
 				await waitForDebugger();
+			}
+
+			if (css)
+			{
+				await page.addStyleTag({ content: css });
 			}
 
 			// Inject test scripts (after debugger is connected when cdpPort is set)
