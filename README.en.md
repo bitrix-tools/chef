@@ -101,6 +101,7 @@ export default {
 | `resolveNodeModules` | `boolean` | Resolve dependencies from node_modules |
 | `babel` | `boolean` | Enable/disable Babel (default: true) |
 | `rebuild` | `string[]` | Extensions to rebuild after building the current one |
+| `emitDeclaration` | `boolean` | Generate `.d.ts` with namespace declarations (default: true) |
 
 > JavaScript configuration (`bundle.config.js`) is also supported.
 
@@ -169,6 +170,7 @@ local/js/vendor/extension/
 │   └── extension.ts           # Entry point (named after extension)
 ├── dist/
 │   ├── extension.bundle.js    # Compiled bundle
+│   ├── extension.bundle.d.ts  # Type declarations (TypeScript)
 │   └── extension.bundle.css   # Compiled styles
 └── test/
     ├── unit/                  # Unit tests (Mocha + Chai)

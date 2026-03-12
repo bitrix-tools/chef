@@ -59,6 +59,7 @@ export default {
     targets: 'last 2 versions',
     sourceMaps: true,
     treeshake: true,
+    emitDeclaration: true,
   },
 };
 ```
@@ -73,6 +74,7 @@ export default {
     targets: 'baseline widely available',
     sourceMaps: false,
     babel: true,
+    emitDeclaration: true,
   },
 };
 ```

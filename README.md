@@ -101,6 +101,7 @@ export default {
 | `resolveNodeModules` | `boolean` | Резолв зависимостей из node_modules |
 | `babel` | `boolean` | Включение/отключение Babel (по умолчанию: true) |
 | `rebuild` | `string[]` | Расширения для пересборки после сборки текущего |
+| `emitDeclaration` | `boolean` | Генерация `.d.ts` с namespace-декларациями (по умолчанию: true) |
 
 > Также поддерживается JavaScript-конфигурация (`bundle.config.js`).
 
@@ -169,6 +170,7 @@ local/js/vendor/extension/
 │   └── extension.ts           # Точка входа (имя совпадает с расширением)
 ├── dist/
 │   ├── extension.bundle.js    # Скомпилированный бандл
+│   ├── extension.bundle.d.ts  # Декларации типов (TypeScript)
 │   └── extension.bundle.css   # Скомпилированные стили
 └── test/
     ├── unit/                  # Unit-тесты (Mocha + Chai)

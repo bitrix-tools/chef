@@ -34,6 +34,7 @@ export default {
 | `protected` | `boolean` | Protect from rebuilding |
 | `rebuild` | `string[]` | Rebuild dependent extensions |
 | `transformClasses` | `boolean` | Transpile classes |
+| `emitDeclaration` | `boolean` | Generate `.d.ts` with namespace declarations (default: `true`) |
 
 ## Plugins
 
@@ -130,6 +131,31 @@ export default {
 ::: warning
 Without Babel, the code won't be transpiled for target browsers. Only use this option if you're sure the input code is already compatible with the required browsers.
 :::
+
+## Type Declarations
+
+When building TypeScript extensions, Chef automatically generates a `.d.ts` file with ambient namespace declarations alongside the bundle. This enables IDE hints when accessing exports via namespace, e.g. `new BX.UI.Bbcode.App()`.
+
+```
+dist/
+├── app.bundle.js      # Compiled bundle (comments stripped)
+└── app.bundle.d.ts    # Type declarations with JSDoc
+```
+
+JSDoc comments from source files are preserved in `.d.ts` for IDE hints, but stripped from the runtime bundle to reduce size.
+
+Declaration generation only works for TypeScript extensions with a `namespace` other than `window`.
+
+To disable:
+
+```ts
+export default {
+  input: './src/index.ts',
+  output: './dist/my.bundle.js',
+  namespace: 'BX.My',
+  emitDeclaration: false,
+};
+```
 
 ## Environment Variables
 
