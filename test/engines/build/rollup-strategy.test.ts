@@ -32,6 +32,11 @@ class TestableRollupStrategy extends RollupBuildStrategy
 	{
 		return RollupBuildStrategy.calculateBundlesSize(output);
 	}
+
+	static testCreateOxcMinifyPlugin(options: import('oxc-minify').MinifyOptions = {})
+	{
+		return RollupBuildStrategy.createOxcMinifyPlugin(options);
+	}
 }
 
 describe('RollupBuildStrategy', () => {
@@ -178,6 +183,41 @@ describe('RollupBuildStrategy', () => {
 
 			assert.isNull((plugin as any).resolveId('other.js'));
 			assert.isNull((plugin as any).load('other.js'));
+		});
+	});
+
+	describe('createOxcMinifyPlugin', () => {
+		it('should minify JavaScript code', async () => {
+			const plugin = TestableRollupStrategy.testCreateOxcMinifyPlugin();
+			const chunk = { fileName: 'app.js' };
+			const code = 'const message = "hello";\nconsole.log(message);\n';
+
+			const result = await (plugin as any).renderChunk(code, chunk);
+
+			assert.isNotNull(result);
+			assert.isString(result.code);
+			assert.isBelow(result.code.length, code.length);
+		});
+
+		it('should preserve functionality after minification', async () => {
+			const plugin = TestableRollupStrategy.testCreateOxcMinifyPlugin();
+			const chunk = { fileName: 'app.js' };
+			const code = 'function add(a, b) { return a + b; }\n';
+
+			const result = await (plugin as any).renderChunk(code, chunk);
+
+			assert.include(result.code, 'return');
+		});
+
+		it('should handle empty options', async () => {
+			const plugin = TestableRollupStrategy.testCreateOxcMinifyPlugin({});
+			const chunk = { fileName: 'app.js' };
+			const code = 'const x = 1;\n';
+
+			const result = await (plugin as any).renderChunk(code, chunk);
+
+			assert.isNotNull(result);
+			assert.isString(result.code);
 		});
 	});
 

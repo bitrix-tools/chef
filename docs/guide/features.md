@@ -196,7 +196,7 @@ chef build -p local/js/ui          # Или явно указать директ
    - [TypeScript](https://www.typescriptlang.org/) — компиляция `.ts` файлов
    - [Babel](https://babeljs.io/) — транспиляция в целевые браузеры
    - [PostCSS](https://postcss.org/) — автопрефиксы, SVG-оптимизация, инлайн-картинки
-   - [Terser](https://terser.org/) — минификация (если включена)
+   - [OXC](https://oxc.rs/) — минификация (если включена)
 3. **Обновление `config.php`** — анализ импортов и запись зависимостей в `rel`
 4. **Source maps** — генерация карт исходников (если включена)
 

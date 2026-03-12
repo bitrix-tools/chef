@@ -196,7 +196,7 @@ When running `chef build`, for each package:
    - [TypeScript](https://www.typescriptlang.org/) — compile `.ts` files
    - [Babel](https://babeljs.io/) — transpile to target browsers
    - [PostCSS](https://postcss.org/) — autoprefixes, SVG optimization, inline images
-   - [Terser](https://terser.org/) — minification (if enabled)
+   - [OXC](https://oxc.rs/) — minification (if enabled)
 3. **Update `config.php`** — analyze imports and write dependencies to `rel`
 4. **Source maps** — generate source maps (if enabled)
 

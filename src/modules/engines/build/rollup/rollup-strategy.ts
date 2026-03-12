@@ -184,6 +184,27 @@ export class RollupBuildStrategy extends BuildStrategy
 		}
 	}
 
+	protected static createOxcMinifyPlugin(options: import('oxc-minify').MinifyOptions): Plugin
+	{
+		return {
+			name: 'oxc-minify',
+			async renderChunk(code, chunk) {
+				const { minify } = await import('oxc-minify');
+				const result = await minify(chunk.fileName, code, options);
+
+				if (result.errors.length > 0)
+				{
+					throw new Error(result.errors.map((e) => e.message).join('\n'));
+				}
+
+				return {
+					code: result.code,
+					map: result.map ?? null,
+				};
+			},
+		};
+	}
+
 	async build(options: BuildOptions): Promise<BuildResult>
 	{
 		if (options.typescript)
@@ -463,9 +484,6 @@ export class RollupBuildStrategy extends BuildStrategy
 		]);
 
 		const babelPlugin = await this.#loadBabelPlugin(options);
-		const terserPlugin = options.minify
-			? (await import('@rollup/plugin-terser')).default
-			: null;
 
 		return {
 			nodeResolve,
@@ -474,7 +492,6 @@ export class RollupBuildStrategy extends BuildStrategy
 			urlPlugin,
 			cssPlugin,
 			babelPlugin,
-			terserPlugin,
 		};
 	}
 
@@ -548,7 +565,6 @@ export class RollupBuildStrategy extends BuildStrategy
 			urlPlugin,
 			cssPlugin,
 			babelPlugin,
-			terserPlugin,
 		} = await this.#loadBuildPlugins(options);
 
 		return {
@@ -641,7 +657,7 @@ export class RollupBuildStrategy extends BuildStrategy
 					),
 				}),
 				...(options.customPlugins ?? []),
-				...(terserPlugin ? [terserPlugin(typeof options.minify === 'object' ? options.minify : {})] : []),
+				...(options.minify ? [RollupBuildStrategy.createOxcMinifyPlugin(typeof options.minify === 'object' ? options.minify : {})] : []),
 			],
 			onwarn: onWarn,
 			treeshake: {

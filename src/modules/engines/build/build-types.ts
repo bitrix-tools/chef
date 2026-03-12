@@ -1,5 +1,5 @@
 import type { RollupLog, Plugin } from 'rollup';
-import type { MinifyOptions } from 'terser';
+import type { MinifyOptions } from 'oxc-minify';
 
 export interface BundleFileInfo {
 	fileName: string;

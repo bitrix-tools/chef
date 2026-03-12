@@ -1,6 +1,6 @@
 import { ConfigStrategy } from '../../config-strategy';
 
-import type { MinifyOptions } from 'terser';
+import type { MinifyOptions } from 'oxc-minify';
 
 export const minificationStrategy = {
 	key: 'minification',
