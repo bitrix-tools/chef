@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import chalk from 'chalk';
 import { Command } from 'commander';
-import PQueue from 'p-queue';
+import { SequentialQueue } from '../../utils/sequential-queue';
 
 import { PackageFactoryProvider } from '../../modules/packages/providers/package-factory-provider';
 import { PackageResolver } from '../../modules/packages/package-resolver';
@@ -21,7 +21,7 @@ flowToTsCommand
 	.option('--rm-ts', 'Remove existing .ts sources after migration', false)
 	.option('--rm-js', 'Remove original .js sources after migration', false)
 	.action((extensions: string[], args): void => {
-		const queue = new PQueue({ concurrency: 1 });
+		const queue = new SequentialQueue();
 
 		const extensionsStream: NodeJS.ReadableStream = (() => {
 			if (extensions.length > 0)

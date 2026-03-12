@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import { Command } from 'commander';
-import PQueue from 'p-queue';
+import { SequentialQueue } from '../../utils/sequential-queue';
 
 import { preparePath } from '../../utils/cli/prepare-path';
 import { PackageFactoryProvider } from '../../modules/packages/providers/package-factory-provider';
@@ -37,7 +37,7 @@ function createExtensionsStream(extensions: string[], args: Record<string, any>)
 
 function runTestsTeamcity({ extensions, args, type }: RunTestsOptions): void
 {
-	const queue = new PQueue({ concurrency: 1 });
+	const queue = new SequentialQueue();
 	const extensionsStream = createExtensionsStream(extensions, args);
 	const reporter = new TeamcityReporter();
 
@@ -115,7 +115,7 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 		return runTestsTeamcity({ extensions, args, type });
 	}
 
-	const queue = new PQueue({ concurrency: 1 });
+	const queue = new SequentialQueue();
 	const extensionsStream = createExtensionsStream(extensions, args);
 
 	const watchers: Array<FSWatcher> = [];

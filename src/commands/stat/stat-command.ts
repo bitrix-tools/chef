@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import PQueue from 'p-queue';
+import { SequentialQueue } from '../../utils/sequential-queue';
 import chalk from 'chalk';
 
 import { createPathOption } from '../../shared/options/path-option';
@@ -28,7 +28,7 @@ statCommand
 	.argument('[extensions...]', 'Extensions to analyze (e.g. main.core ui.buttons)')
 	.addOption(createPathOption('Scan for extensions and stats starting from this directory'))
 	.action(async (extensions: string[], args) => {
-		const queue = new PQueue({ concurrency: 1 });
+		const queue = new SequentialQueue();
 
 		const extensionsStream: NodeJS.ReadableStream = (() => {
 			if (extensions.length > 0)

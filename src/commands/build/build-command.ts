@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
-import PQueue from 'p-queue';
+import { SequentialQueue } from '../../utils/sequential-queue';
 
 import { watchOption } from './options/watch-option';
 import { createPathOption } from '../../shared/options/path-option';
@@ -27,7 +27,7 @@ buildCommand
 	.addOption(forceOption)
 	.addOption(productionOption)
 	.action(async (extensions: string[], args) => {
-		const queue = new PQueue({ concurrency: 1 });
+		const queue = new SequentialQueue();
 
 		const extensionsStream: NodeJS.ReadableStream = (() => {
 			if (extensions.length > 0)
