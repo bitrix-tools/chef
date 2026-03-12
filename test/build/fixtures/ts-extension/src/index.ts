@@ -3,10 +3,12 @@ interface User {
 	age: number;
 }
 
+/** Service for managing users */
 export class UserService
 {
 	#users: User[] = [];
 
+	/** Adds a user to the collection */
 	add(user: User): void
 	{
 		this.#users.push(user);

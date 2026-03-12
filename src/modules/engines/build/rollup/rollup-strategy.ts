@@ -19,6 +19,7 @@ import { BuildStrategy } from '../build-strategy';
 import { CF } from '../../../../diagnostics/diagnostic-codes';
 import { FileFinder } from '../../../../utils/file-finder';
 import concatPlugin from './plugins/concat';
+import stripCommentsPlugin from './plugins/strip-comments';
 
 import type { ParsedCommandLine } from 'typescript';
 import type {
@@ -704,6 +705,7 @@ export class RollupBuildStrategy extends BuildStrategy
 					),
 				}),
 				...(options.customPlugins ?? []),
+				stripCommentsPlugin({ banner: '/* eslint-disable */' }),
 				...(options.minify ? [RollupBuildStrategy.createOxcMinifyPlugin(typeof options.minify === 'object' ? options.minify : {})] : []),
 			],
 			onwarn: onWarn,
