@@ -12,6 +12,7 @@ const sidebarRu = [
       { text: 'Возможности', link: '/guide/features' },
       { text: 'JS-расширение', link: '/guide/extension' },
       { text: 'Команды', link: '/guide/commands' },
+      { text: 'Коды ошибок', link: '/guide/errors' },
     ],
   },
   {
@@ -71,6 +72,7 @@ const sidebarEn = [
       { text: 'Features', link: '/en/guide/features' },
       { text: 'JS Extension', link: '/en/guide/extension' },
       { text: 'Commands', link: '/en/guide/commands' },
+      { text: 'Error Codes', link: '/en/guide/errors' },
     ],
   },
   {
