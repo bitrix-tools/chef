@@ -1,11 +1,11 @@
 import path from 'node:path';
 import fs from 'node:fs';
 
-import chalk from 'chalk';
 import { createFilter } from '@rollup/pluginutils';
 
 import type { Plugin } from 'rollup';
 import type { CompilerOptions, Diagnostic } from 'typescript';
+import type { BuildDiagnostic } from '../../build-types';
 
 export interface TypeScriptPluginOptions
 {
@@ -23,7 +23,7 @@ export interface TypeCheckOptions
 
 export interface TypeCheckResult
 {
-	errors: string[];
+	errors: BuildDiagnostic[];
 }
 
 const tsExtensions = ['.ts', '.tsx', '.mts', '.cts'];
@@ -94,7 +94,7 @@ export async function checkTypes(options: TypeCheckOptions): Promise<TypeCheckRe
 	}
 
 	return {
-		errors: [formatDiagnostics(ts, errors, packageRoot)],
+		errors: diagnosticsToErrors(ts, errors),
 	};
 }
 
@@ -217,111 +217,25 @@ function collectSourceFiles(directory: string, extensions: string[]): string[]
 	return files;
 }
 
-const CONTEXT_LINES = 2;
-
-function formatDiagnostics(ts: typeof import('typescript'), diagnostics: Diagnostic[], packageRoot: string): string
+function diagnosticsToErrors(ts: typeof import('typescript'), diagnostics: Diagnostic[]): BuildDiagnostic[]
 {
-	const lines: string[] = [];
-
-	for (let index = 0; index < diagnostics.length; index++)
-	{
-		const diagnostic = diagnostics[index];
-		const message = ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
-		const code = chalk.gray(`TS${diagnostic.code}`);
+	return diagnostics.map((diagnostic) => {
+		const message = `TS${diagnostic.code} ${ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')}`;
 
 		if (!diagnostic.file || diagnostic.start === undefined)
 		{
-			lines.push(`${chalk.red('×')} ${code} ${message}`);
-			continue;
+			return { message };
 		}
 
 		const { line, character } = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start);
-		const lineNumber = line + 1;
-		const column = character + 1;
-		const fileLink = `${diagnostic.file.fileName}:${lineNumber}:${column}`;
 
-		lines.push(`${chalk.red('×')} ${code} ${message}`);
-		lines.push('');
-
-		const codeFrame = renderDiagnosticCodeFrame(diagnostic, line, character);
-		for (const frameLine of codeFrame)
-		{
-			lines.push(frameLine);
-		}
-
-		lines.push('');
-		lines.push(`at ${chalk.cyan(fileLink)}`);
-
-		if (index < diagnostics.length - 1)
-		{
-			lines.push('');
-			lines.push(chalk.gray('─'.repeat(40)));
-			lines.push('');
-		}
-	}
-
-	return lines.join('\n');
-}
-
-function renderDiagnosticCodeFrame(diagnostic: Diagnostic, line: number, character: number): string[]
-{
-	if (!diagnostic.file)
-	{
-		return [];
-	}
-
-	const sourceText = diagnostic.file.getFullText();
-	const sourceLines = sourceText.split('\n');
-	const startLine = Math.max(0, line - CONTEXT_LINES);
-	const endLine = Math.min(sourceLines.length - 1, line + CONTEXT_LINES);
-	const padWidth = String(endLine + 1).length;
-	const tabSize = 4;
-	const expandTabs = (str: string) => str.replace(/\t/g, ' '.repeat(tabSize));
-
-	// Find minimum common indent to strip
-	const expandedLines: string[] = [];
-	for (let i = startLine; i <= endLine; i++)
-	{
-		expandedLines.push(expandTabs(sourceLines[i]));
-	}
-
-	const minIndent = expandedLines.reduce((min, expanded) => {
-		if (expanded.trim().length === 0)
-		{
-			return min;
-		}
-
-		const indent = expanded.match(/^(\s*)/)?.[1].length ?? 0;
-
-		return Math.min(min, indent);
-	}, Infinity);
-
-	const strip = minIndent === Infinity ? 0 : minIndent;
-
-	const result: string[] = [];
-
-	for (let i = startLine; i <= endLine; i++)
-	{
-		const lineNum = String(i + 1).padStart(padWidth);
-		const sourceLine = expandedLines[i - startLine].slice(strip);
-
-		if (i === line)
-		{
-			result.push(`${chalk.red('>')} ${chalk.dim(lineNum)} ${chalk.gray('|')} ${sourceLine}`);
-
-			if (diagnostic.length)
-			{
-				const before = sourceLines[i].substring(0, character);
-				const expandedOffset = expandTabs(before).length - strip;
-				const pointer = ' '.repeat(Math.max(0, expandedOffset)) + '^'.repeat(diagnostic.length);
-				result.push(`  ${' '.repeat(padWidth)} ${chalk.gray('|')} ${chalk.red(pointer)}`);
-			}
-		}
-		else
-		{
-			result.push(`  ${chalk.dim(lineNum)} ${chalk.gray('|')} ${chalk.gray(sourceLine)}`);
-		}
-	}
-
-	return result;
+		return {
+			message,
+			loc: {
+				file: diagnostic.file.fileName,
+				line: line + 1,
+				column: character + 1,
+			},
+		};
+	});
 }

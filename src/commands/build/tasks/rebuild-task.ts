@@ -1,9 +1,8 @@
 import chalk from 'chalk';
 
 import { PackageResolver } from '../../../modules/packages/package-resolver';
-import { TASK_STATUS_ICON } from '../../../modules/task/icons';
 
-import type { Task } from '../../../modules/task/task';
+import type { Task, TaskResult, TaskDetail } from '../../../modules/task/task-types';
 import type { BasePackage } from '../../../modules/packages/base-package';
 
 type RebuildResult = {
@@ -21,7 +20,7 @@ export function rebuildTask(extension: BasePackage, args: Record<string, any>): 
 
 	return {
 		title: `Rebuild (${rebuild.join(', ')})`,
-		run: async (context) => {
+		run: async (): Promise<TaskResult> => {
 			const results: RebuildResult[] = [];
 
 			for (const extensionName of rebuild)
@@ -58,28 +57,23 @@ export function rebuildTask(extension: BasePackage, args: Record<string, any>): 
 			const hasFailed = results.some((r) => r.status === 'fail');
 			const hasWarnings = results.some((r) => r.status === 'warn');
 
-			if (hasFailed)
-			{
-				context.fail(`Rebuild (${rebuild.join(', ')})`);
-			}
-			else if (hasWarnings)
-			{
-				context.warn(`Rebuild (${rebuild.join(', ')})`);
-			}
-			else
-			{
-				context.succeed(`Rebuild (${rebuild.join(', ')})`);
-			}
-
-			for (const r of results)
-			{
+			const details: TaskDetail[] = results.map((r) => {
 				const icon = r.status === 'fail'
-					? chalk.red(TASK_STATUS_ICON.fail)
+					? chalk.red('✗')
 					: r.status === 'warn'
-						? chalk.yellow(TASK_STATUS_ICON.warning)
-						: chalk.green(TASK_STATUS_ICON.success);
-				context.log(`  ${icon} ${r.name}`);
-			}
+						? chalk.yellow('○')
+						: chalk.green('✓');
+
+				return { type: 'item', text: `${icon} ${r.name}` };
+			});
+
+			const status = hasFailed ? 'failed' : hasWarnings ? 'warning' : 'passed';
+
+			return {
+				title: `Rebuild (${rebuild.join(', ')})`,
+				status,
+				details,
+			};
 		},
 	};
 }

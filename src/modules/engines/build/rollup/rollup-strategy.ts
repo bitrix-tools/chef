@@ -21,6 +21,7 @@ import concatPlugin from './plugins/concat';
 
 import type { ParsedCommandLine } from 'typescript';
 import type {
+	BuildDiagnostic,
 	BuildResult,
 	BuildOptions,
 	BundleFileInfo,
@@ -116,13 +117,31 @@ export class RollupBuildStrategy extends BuildStrategy
 		};
 	}
 
+	protected static toDiagnostic(error: unknown): BuildDiagnostic
+	{
+		if (error instanceof Error && 'loc' in error)
+		{
+			const loc = (error as any).loc;
+
+			return {
+				message: error.message,
+				frame: (error as any).frame,
+				loc: loc?.file ? { file: loc.file, line: loc.line, column: loc.column } : undefined,
+			};
+		}
+
+		return {
+			message: error instanceof Error ? error.message : String(error),
+		};
+	}
+
 	protected static createOnWarningHandler(): {
-		warningsRef: RollupLog[],
+		warningsRef: BuildDiagnostic[],
 		dependenciesRef: string[],
 		onWarning: WarningHandlerWithDefault,
 	}
 	{
-		const warningsRef: Array<RollupLog> = [];
+		const warningsRef: Array<BuildDiagnostic> = [];
 		const dependenciesRef: Array<string> = [];
 		const onWarning = (warning: RollupLog): void => {
 			if (
@@ -135,7 +154,13 @@ export class RollupBuildStrategy extends BuildStrategy
 				return;
 			}
 
-			warningsRef.push(warning);
+			warningsRef.push({
+				message: warning.message,
+				frame: warning.frame,
+				loc: warning.loc?.file
+					? { file: warning.loc.file, line: warning.loc.line, column: warning.loc.column }
+					: undefined,
+			});
 		};
 
 		return {
@@ -216,7 +241,7 @@ export class RollupBuildStrategy extends BuildStrategy
 					dependencies: [],
 					bundles: [],
 					warnings: [],
-					errors: typeCheckResult.errors.map((message) => ({ message })),
+					errors: typeCheckResult.errors,
 					standalone: options.standalone ?? false,
 				};
 			}
@@ -242,7 +267,7 @@ export class RollupBuildStrategy extends BuildStrategy
 				dependencies: [],
 				bundles: [],
 				warnings: [],
-				errors: [error],
+				errors: [RollupBuildStrategy.toDiagnostic(error)],
 				standalone: options.standalone ?? false,
 			};
 		}
@@ -261,7 +286,7 @@ export class RollupBuildStrategy extends BuildStrategy
 				dependencies: [],
 				bundles: [],
 				warnings: [],
-				errors: [error],
+				errors: [RollupBuildStrategy.toDiagnostic(error)],
 				standalone: options.standalone ?? false,
 			};
 		}
@@ -331,7 +356,7 @@ export class RollupBuildStrategy extends BuildStrategy
 					dependencies: [],
 					bundles: [],
 					warnings: [],
-					errors: typeCheckResult.errors.map((message) => ({ message })),
+					errors: typeCheckResult.errors,
 					standalone: options.standalone ?? false,
 				};
 			}
@@ -351,7 +376,7 @@ export class RollupBuildStrategy extends BuildStrategy
 				dependencies: [],
 				bundles: [],
 				warnings: [],
-				errors: [error],
+				errors: [RollupBuildStrategy.toDiagnostic(error)],
 				standalone: options.standalone ?? false,
 			};
 		}
@@ -370,7 +395,7 @@ export class RollupBuildStrategy extends BuildStrategy
 				dependencies: [],
 				bundles: [],
 				warnings: [],
-				errors: [error],
+				errors: [RollupBuildStrategy.toDiagnostic(error)],
 				standalone: options.standalone ?? false,
 			};
 		}
@@ -449,7 +474,7 @@ export class RollupBuildStrategy extends BuildStrategy
 		});
 	}
 
-	async #checkTypes(options: BuildOptions): Promise<{ errors: string[] }>
+	async #checkTypes(options: BuildOptions): Promise<import('./plugins/typescript').TypeCheckResult>
 	{
 		const { checkTypes } = await import('./plugins/typescript');
 

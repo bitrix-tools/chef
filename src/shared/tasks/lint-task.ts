@@ -2,36 +2,41 @@ import { summaryFormatter } from '../../modules/engines/lint/summary-formatter';
 import { verboseFormatter } from '../../modules/engines/lint/verbose-formatter';
 
 import type { BasePackage } from '../../modules/packages/base-package';
-import type { Task } from '../../modules/task/task';
+import type { Task, TaskResult } from '../../modules/task/task-types';
+
+const STATUS_MAP = {
+	succeed: 'passed',
+	warn: 'warning',
+	fail: 'failed',
+} as const;
 
 export function lintTask(extension: BasePackage, args?: Record<string, any>): Task
 {
 	return {
 		title: 'ESLint analysis...',
-		run: async (context) => {
+		run: async (): Promise<TaskResult> => {
 			const result = await extension.lint();
-			const { text, title, level } = (() => {
-				if (args?.verbose)
-				{
-					const verboseResult = verboseFormatter(result);
-					const summaryResult = summaryFormatter(result);
 
-					return {
-						level: verboseResult.level,
-						text: verboseResult.text,
-						title: summaryResult.title,
-					};
-				}
-
-				return summaryFormatter(result);
-			})();
-
-			context[level](title);
-
-			if (text && text.length > 0)
+			if (args?.verbose)
 			{
-				context.border(text, null, 3);
+				const verboseResult = verboseFormatter(result);
+				const summaryResult = summaryFormatter(result);
+
+				return {
+					title: summaryResult.title,
+					status: STATUS_MAP[verboseResult.level],
+					details: verboseResult.text.length > 0
+						? [{ type: 'block', text: verboseResult.text }]
+						: undefined,
+				};
 			}
+
+			const summaryResult = summaryFormatter(result);
+
+			return {
+				title: summaryResult.title,
+				status: STATUS_MAP[summaryResult.level],
+			};
 		},
 	};
 }

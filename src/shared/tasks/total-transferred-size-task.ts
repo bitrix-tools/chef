@@ -1,23 +1,22 @@
 import { formatSize } from '../../utils/format-size';
-import { TASK_STATUS_ICON } from '../../modules/task/icons';
 
 import type { BasePackage } from '../../modules/packages/base-package';
-import type { Task } from '../../modules/task/task';
+import type { Task, TaskResult, TaskDetail } from '../../modules/task/task-types';
 
 export function totalTransferredSizeTask(extension: BasePackage): Task
 {
 	return {
 		title: 'Total transferred size',
-		run: async (context) => {
+		run: async (): Promise<TaskResult> => {
 			const totalTransferredSize = await extension.getTotalTransferredSize();
-			context.succeed('Total transferred size');
+			const details: TaskDetail[] = [];
 
 			if (totalTransferredSize.js > 0)
 			{
 				const formattedJsSize = formatSize({
 					size: totalTransferredSize.js,
 				});
-				context.log(`    ${TASK_STATUS_ICON.arrowRight} JS: ${formattedJsSize}`);
+				details.push({ type: 'item', text: `→ JS: ${formattedJsSize}` });
 			}
 
 			if (totalTransferredSize.css > 0)
@@ -25,8 +24,14 @@ export function totalTransferredSizeTask(extension: BasePackage): Task
 				const formattedCssSize = formatSize({
 					size: totalTransferredSize.css,
 				});
-				context.log(`    ${TASK_STATUS_ICON.arrowRight} CSS: ${formattedCssSize}`);
+				details.push({ type: 'item', text: `→ CSS: ${formattedCssSize}` });
 			}
+
+			return {
+				title: 'Total transferred size',
+				status: 'passed',
+				details: details.length > 0 ? details : undefined,
+			};
 		},
 	};
 }

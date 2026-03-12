@@ -4,7 +4,7 @@ import boxen from 'boxen';
 import { createReporter } from '../create-reporter';
 
 import type { BasePackage } from '../../../modules/packages/base-package';
-import type { Task } from '../../../modules/task/task';
+import type { Task, TaskResult, TaskDetail } from '../../../modules/task/task-types';
 import type { ConsoleLog } from '../../../modules/engines/test/test-types';
 
 const PROJECT_TO_BROWSER: Record<string, string> = {
@@ -23,45 +23,6 @@ const DEFAULT_BROWSERS = ['chromium', 'firefox', 'webkit'];
 
 function createDebugTask(extension: BasePackage, args: Record<string, any>, browsers: string[]): Task
 {
-	const browserTasks: Task[] = browsers.map((browserType) => {
-		const label = BROWSER_LABEL[browserType] ?? browserType;
-
-		return {
-			title: label,
-			run: async (context): Promise<any> => {
-				const reporter = createReporter(args.reporter);
-
-				context.succeed(label);
-
-				const testResult = await extension.runUnitTests({
-					...args,
-					browserType,
-					onToken: (token) => reporter.handleToken(token),
-				});
-
-				if (testResult.errors.length > 0)
-				{
-					testResult.errors.forEach((error: Error) => {
-						context.border(error.message, 'red', 2);
-					});
-					return false;
-				}
-
-				if (testResult.report.length > 0)
-				{
-					reporter.finish(testResult.consoleLogs);
-				}
-
-				if (testResult.debugCleanup)
-				{
-					await testResult.debugCleanup();
-				}
-
-				return true;
-			},
-		};
-	});
-
 	const browserNames = browsers.map((b) => BROWSER_LABEL[b] ?? b);
 	const browserList = browserNames.length === 1
 		? browserNames[0]
@@ -81,8 +42,7 @@ function createDebugTask(extension: BasePackage, args: Record<string, any>, brow
 
 	return {
 		title: 'Unit tests',
-		run: async (context) => {
-			context.succeed('Unit tests');
+		run: async (): Promise<TaskResult> => {
 			console.log('');
 			console.log(boxen(debugMessage, {
 				padding: 1,
@@ -90,8 +50,49 @@ function createDebugTask(extension: BasePackage, args: Record<string, any>, brow
 				borderColor: 'cyan',
 				title: chalk.bold.cyan('Debug Mode'),
 			}));
+
+			for (const browserType of browsers)
+			{
+				const label = BROWSER_LABEL[browserType] ?? browserType;
+				const reporter = createReporter(args.reporter);
+
+				const testResult = await extension.runUnitTests({
+					...args,
+					browserType,
+					onToken: (token) => reporter.handleToken(token),
+				});
+
+				if (testResult.errors.length > 0)
+				{
+					const details: TaskDetail[] = testResult.errors.map((error: Error) => ({
+						type: 'error' as const,
+						message: error.message,
+						stack: error.stack,
+					}));
+
+					return {
+						title: `Unit tests (${label})`,
+						status: 'failed',
+						details,
+					};
+				}
+
+				if (testResult.report.length > 0)
+				{
+					reporter.finish(testResult.consoleLogs);
+				}
+
+				if (testResult.debugCleanup)
+				{
+					await testResult.debugCleanup();
+				}
+			}
+
+			return {
+				title: 'Unit tests',
+				status: 'passed',
+			};
 		},
-		subtasks: browserTasks,
 	};
 }
 
@@ -116,9 +117,7 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 
 	return {
 		title: 'Unit tests',
-		run: async (context): Promise<any> => {
-			context.succeed('Unit tests');
-
+		run: async (): Promise<TaskResult> => {
 			const reporter = createReporter(args.reporter);
 			reporter.setBrowserCount(browsers.length);
 			const allConsoleLogs: ConsoleLog[] = [];
@@ -155,21 +154,34 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 
 			if (allErrors.length > 0)
 			{
-				allErrors.forEach((error) => {
-					context.border(error.message, 'red', 2);
-				});
+				const details: TaskDetail[] = allErrors.map((error) => ({
+					type: 'error' as const,
+					message: error.message,
+					stack: error.stack,
+				}));
 				console.log('');
-				return false;
+
+				return {
+					title: 'Unit tests',
+					status: 'failed',
+					details,
+				};
 			}
 
 			if (!hasTests)
 			{
-				return true;
+				return {
+					title: 'Unit tests',
+					status: 'passed',
+				};
 			}
 
 			const { failed } = reporter.finish(allConsoleLogs);
 
-			return failed === 0;
+			return {
+				title: 'Unit tests',
+				status: failed === 0 ? 'passed' : 'failed',
+			};
 		},
 	};
 }

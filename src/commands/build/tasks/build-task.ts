@@ -1,113 +1,69 @@
-import chalk from 'chalk';
+import * as path from 'node:path';
 
-import { directDependenciesTask } from '../../../shared/tasks/direct-dependencies-task';
-import { dependenciesTreeTask } from '../../../shared/tasks/dependencies-tree-task';
-import { bundleSizeTask } from '../../../shared/tasks/bundle-size-task';
-import { totalTransferredSizeTask } from '../../../shared/tasks/total-transferred-size-task';
-import { getFileSize } from '../../../utils/get-file-size';
-
-import type { Task } from '../../../modules/task/task';
 import type { BasePackage } from '../../../modules/packages/base-package';
-import type { RollupLog } from 'rollup';
+import type { Task, TaskResult, TaskDetail } from '../../../modules/task/task-types';
+import type { BuildDiagnostic } from '../../../modules/engines/build/build-types';
 
-function formatWarning(warning: RollupLog): string
+function shortenPaths(message: string, relativeRoot: string): string
 {
-	const lines: string[] = [];
-
-	// Add warning code if available
-	if (warning.code)
+	if (!relativeRoot)
 	{
-		lines.push(chalk.yellow.bold(warning.code));
+		return message;
 	}
 
-	// Format the message - wrap long lines
-	const message = warning.message;
-	const maxLineLength = 80;
+	const prefix = relativeRoot.endsWith('/') ? relativeRoot : relativeRoot + '/';
 
-	if (message.length > maxLineLength)
-	{
-		const words = message.split(' ');
-		let currentLine = '';
+	return message.replaceAll(prefix, '');
+}
 
-		for (const word of words)
-		{
-			if (currentLine.length + word.length + 1 > maxLineLength)
-			{
-				lines.push(chalk.yellow(currentLine.trim()));
-				currentLine = word;
-			}
-			else
-			{
-				currentLine += (currentLine ? ' ' : '') + word;
-			}
-		}
+function diagnosticToDetail(log: BuildDiagnostic, root: string, relativeRoot: string): TaskDetail
+{
+	const loc = log.loc?.file
+		? { file: log.loc.file, line: log.loc.line, column: log.loc.column, root }
+		: undefined;
 
-		if (currentLine)
-		{
-			lines.push(chalk.yellow(currentLine.trim()));
-		}
-	}
-	else
-	{
-		lines.push(chalk.yellow(message));
-	}
+	const rawMessage = log.message.replace(/^\[plugin [^\]]+\]\s*/, '');
 
-	// Add location info
-	if (warning.loc?.file)
-	{
-		const location = `${warning.loc.file}:${warning.loc.line}:${warning.loc.column}`;
-		lines.push(chalk.dim(location));
-	}
-
-	return lines.join('\n');
+	return {
+		type: 'error',
+		message: shortenPaths(rawMessage, relativeRoot),
+		frame: log.frame,
+		loc,
+	};
 }
 
 export function buildTask(extension: BasePackage, args: Record<string, any>): Task
 {
-	// Get previous sizes before build
-	const previousJsSize = getFileSize(extension.getOutputJsPath());
-	const previousCssSize = getFileSize(extension.getOutputCssPath());
-
 	return {
 		title: 'Building code...',
-		run: async (context) => {
+		run: async (onUpdate): Promise<TaskResult> => {
 			const result = await extension.build({ production: args.production });
+
+			const root = extension.getPath();
+			const relativeRoot = path.relative(process.cwd(), root);
 
 			if (result.errors.length > 0)
 			{
-				context.fail('Build failed');
-				result.errors.forEach((error) => {
-					const message = error.message?.replace(/^\[plugin [^\]]+\]\s*/, '') ?? '';
-					const indented = message.split("\n").map((line) => `  ${line}`).join("\n");
-					context.log(indented);
-					if (error.frame)
-					{
-						context.log(error.frame);
-					}
-				});
-
-				return { previousJsSize, previousCssSize };
+				return {
+					title: 'Build failed',
+					status: 'failed',
+					details: result.errors.map((log) => diagnosticToDetail(log, root, relativeRoot)),
+				};
 			}
 
 			if (result.warnings.length > 0)
 			{
-				context.warn(`Build completed with ${result.warnings.length} warning${result.warnings.length > 1 ? 's' : ''}`);
-				result.warnings.forEach((warning) => {
-					context.border(formatWarning(warning), 'yellow', 3);
-				});
-			}
-			else
-			{
-				context.succeed('Build successfully');
+				return {
+					title: `Build completed with ${result.warnings.length} warning${result.warnings.length > 1 ? 's' : ''}`,
+					status: 'warning',
+					details: result.warnings.map((log) => diagnosticToDetail(log, root, relativeRoot)),
+				};
 			}
 
-			return { previousJsSize, previousCssSize };
+			return {
+				title: 'Build successfully',
+				status: 'passed',
+			};
 		},
-		subtasks: [
-			bundleSizeTask(extension, args),
-			totalTransferredSizeTask(extension),
-			directDependenciesTask(extension, args),
-			dependenciesTreeTask(extension, args),
-		],
 	};
 }

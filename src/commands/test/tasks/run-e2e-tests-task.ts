@@ -1,15 +1,13 @@
 import { createReporter } from '../create-reporter';
 
 import type { BasePackage } from '../../../modules/packages/base-package';
-import type { Task } from '../../../modules/task/task';
+import type { Task, TaskResult, TaskDetail } from '../../../modules/task/task-types';
 
 export function runEndToEndTestsTask(extension: BasePackage, args: Record<string, any>): Task
 {
 	return {
 		title: 'E2E tests',
-		run: async (context): Promise<any> => {
-			context.succeed('E2E tests');
-
+		run: async (): Promise<TaskResult> => {
 			const reporter = createReporter(args.reporter);
 
 			const testResult = await extension.runEndToEndTests({
@@ -23,23 +21,36 @@ export function runEndToEndTestsTask(extension: BasePackage, args: Record<string
 			{
 				reporter.stop();
 
-				testResult.errors.forEach((error: Error) => {
-					context.border(error.message, 'red', 2);
-				});
+				const details: TaskDetail[] = testResult.errors.map((error: Error) => ({
+					type: 'error' as const,
+					message: error.message,
+					stack: error.stack,
+				}));
 				console.log('');
-				return false;
+
+				return {
+					title: 'E2E tests',
+					status: 'failed',
+					details,
+				};
 			}
 
 			if (testResult.report.length === 0)
 			{
 				reporter.stop();
-				context.warn('No E2E tests found');
-				return true;
+
+				return {
+					title: 'No E2E tests found',
+					status: 'warning',
+				};
 			}
 
 			const { failed } = reporter.finish(testResult.consoleLogs);
 
-			return failed === 0;
+			return {
+				title: 'E2E tests',
+				status: failed === 0 ? 'passed' : 'failed',
+			};
 		},
 	};
 }

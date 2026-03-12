@@ -3,29 +3,35 @@ import chalk from 'chalk';
 import { findCircularDependencies } from '../../../utils/package/find-circular-dependencies';
 
 import type { BasePackage } from '../../../modules/packages/base-package';
-import type { Task } from '../../../modules/task/task';
+import type { Task, TaskResult } from '../../../modules/task/task-types';
 
 export function circularDependenciesTask(extension: BasePackage): Task
 {
 	return {
 		title: 'Circular dependencies',
-		run: async (context) => {
+		run: async (): Promise<TaskResult> => {
 			const cycles = await findCircularDependencies({ target: extension });
 
 			if (cycles.length === 0)
 			{
-				context.succeed('No circular dependencies');
-				return;
+				return {
+					title: 'No circular dependencies',
+					status: 'passed',
+				};
 			}
-
-			context.fail(`Found ${cycles.length} circular ${cycles.length === 1 ? 'dependency' : 'dependencies'}`);
 
 			const rootName = extension.getName();
-			for (const [depName] of cycles)
-			{
+			const details = cycles.map(([depName]) => {
 				const formatted = `${chalk.red(rootName)} ${chalk.grey('→')} ${depName} ${chalk.grey('→')} ${chalk.red(rootName)}`;
-				context.log(`    ${formatted}`);
-			}
+
+				return { type: 'item' as const, text: formatted };
+			});
+
+			return {
+				title: `Found ${cycles.length} circular ${cycles.length === 1 ? 'dependency' : 'dependencies'}`,
+				status: 'failed',
+				details,
+			};
 		},
 	};
 }

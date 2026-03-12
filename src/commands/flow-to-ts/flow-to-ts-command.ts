@@ -8,9 +8,10 @@ import { PackageFactoryProvider } from '../../modules/packages/providers/package
 import { PackageResolver } from '../../modules/packages/package-resolver';
 import { findPackages } from '../../utils/package/find-packages';
 import { createPathOption } from '../../shared/options/path-option';
-import { TaskContext, TaskRunner } from '../../modules/task/task';
+import { TaskRunner } from '../../modules/task/task-runner';
 
 import type { BasePackage } from '../../modules/packages/base-package';
+import type { Task, TaskResult } from '../../modules/task/task-types';
 
 export const flowToTsCommand = new Command('flow-to-ts');
 
@@ -47,107 +48,89 @@ flowToTsCommand
 
 					const migrator = await extension.createMigrator();
 
-					await TaskRunner.run([
-						{
-							title: chalk.bold(`Migrate ${extension.getName()} to TypeScript`),
-							run: async () => {
-								return Promise.resolve();
+					const renameTasks: Task[] = sourceFiles.map((filePath: string) => {
+						const relativeJsPath = path.relative(extension.getPath(), filePath);
+						const relativeTsPath = relativeJsPath.replace(/\.js$/, '.ts');
+
+						return {
+							title: `Rename file: ${relativeJsPath} ...`,
+							run: async (): Promise<TaskResult> => {
+								const result = await migrator.renameFile(filePath);
+
+								return {
+									title: result.success
+										? `File renamed: ${relativeJsPath} --> ${relativeTsPath}`
+										: `Rename failed: ${relativeJsPath}`,
+									status: result.success ? 'passed' : 'failed',
+								};
 							},
-							subtasks: [
+						};
+					});
+
+					const convertTasks: Task[] = sourceFiles.map((filePath: string) => {
+						const tsPath = filePath.replace(/\.js$/, '.ts');
+						const relativeTsPath = path.relative(extension.getPath(), tsPath);
+
+						return {
+							title: `Convert file: ${relativeTsPath} ...`,
+							run: async (): Promise<TaskResult> => {
+								const result = await migrator.convertFile(tsPath);
+
+								return {
+									title: result.success
+										? `File converted: ${relativeTsPath}`
+										: `Conversion failed: ${relativeTsPath}`,
+									status: result.success ? 'passed' : 'failed',
+								};
+							},
+						};
+					});
+
+					const configTasks: Task[] = [
+						{
+							title: 'Change entry point...',
+							run: async (): Promise<TaskResult> => {
+								const updated = await migrator.updateBundleConfigEntryPoint();
+
+								if (updated)
 								{
-									title: 'Rename source files with `hg rename`',
-									run: async () => {
-										return Promise.resolve();
-									},
-									subtasks: sourceFiles.map((filePath: string) => {
-										const relativeJsPath = path.relative(extension.getPath(), filePath);
-										const relativeTsPath = relativeJsPath.replace(/\.js$/, '.ts');
+									const bundleConfig = extension.getBundleConfig();
 
-										return {
-											title: `Rename file: ${relativeJsPath} ...`,
-											run: async (context: TaskContext): Promise<void> => {
-												const result = await migrator.renameFile(filePath);
+									return {
+										title: `Entry point changed to ${bundleConfig.get('input')}`,
+										status: 'passed',
+									};
+								}
 
-												if (result.success)
-												{
-													context.succeed(`File renamed: ${relativeJsPath} --> ${relativeTsPath}`);
-												}
-												else
-												{
-													context.fail(`Rename failed: ${relativeJsPath}`);
-												}
-											},
-										};
-									}),
-								},
-								{
-									title: 'Convert Flow.js syntax to TypeScript syntax',
-									run: async () => {
-										return Promise.resolve();
-									},
-									subtasks: sourceFiles.map((filePath: string) => {
-										const tsPath = filePath.replace(/\.js$/, '.ts');
-										const relativeTsPath = path.relative(extension.getPath(), tsPath);
+								return {
+									title: 'Entry point not set',
+									status: 'warning',
+								};
+							},
+						},
+						{
+							title: 'Rename bundle.config.js...',
+							run: async (): Promise<TaskResult> => {
+								const renamed = await migrator.renameBundleConfig();
 
-										return {
-											title: `Convert file: ${relativeTsPath} ...`,
-											run: async (context: TaskContext): Promise<void> => {
-												const result = await migrator.convertFile(tsPath);
+								return {
+									title: renamed
+										? `Bundle config renamed to bundle.config${chalk.bold.green('.ts')}`
+										: `Rename failed: ${extension.getBundleConfigJsFilePath()}`,
+									status: renamed ? 'passed' : 'failed',
+								};
+							},
+						},
+					];
 
-												if (result.success)
-												{
-													context.succeed(`File converted: ${relativeTsPath}`);
-												}
-												else
-												{
-													context.fail(`Conversion failed: ${relativeTsPath}`);
-												}
-											},
-										};
-									}),
-								},
-								{
-									title: 'Update bundle.config.js',
-									run: async () => {
-										return Promise.resolve();
-									},
-									subtasks: [
-										{
-											title: 'Change entry point...',
-											run: async (context: TaskContext) => {
-												const updated = await migrator.updateBundleConfigEntryPoint();
-
-												if (updated)
-												{
-													const bundleConfig = extension.getBundleConfig();
-													context.succeed(`Entry point changed to ${bundleConfig.get('input')}`);
-												}
-												else
-												{
-													context.warn('Entry point not set');
-												}
-											},
-										},
-										{
-											title: 'Rename bundle.config.js...',
-											run: async (context: TaskContext) => {
-												const renamed = await migrator.renameBundleConfig();
-
-												if (renamed)
-												{
-													context.succeed(`Bundle config renamed to bundle.config${chalk.bold.green('.ts')}`);
-												}
-												else
-												{
-													context.fail(`Rename failed: ${extension.getBundleConfigJsFilePath()}`);
-												}
-											},
-										},
-									],
-								},
-							],
-						}
-					]);
+					await TaskRunner.run({
+						title: `Migrate ${extension.getName()} to TypeScript`,
+						tasks: [
+							...renameTasks,
+							...convertTasks,
+							...configTasks,
+						],
+					});
 				});
 			})
 			.on('done', async () => {

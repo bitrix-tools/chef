@@ -144,11 +144,11 @@ describe('RollupBuildStrategy', () => {
 		it('should collect non-dependency warnings', () => {
 			const { onWarning, dependenciesRef, warningsRef } = TestableRollupStrategy.testCreateOnWarningHandler();
 
-			const warning = { code: 'CIRCULAR_DEPENDENCY', message: 'Circular' } as RollupLog;
-			onWarning(warning, () => {});
+			onWarning({ code: 'CIRCULAR_DEPENDENCY', message: 'Circular' } as RollupLog, () => {});
 
 			assert.isEmpty(dependenciesRef);
-			assert.deepEqual(warningsRef, [warning]);
+			assert.lengthOf(warningsRef, 1);
+			assert.equal(warningsRef[0].message, 'Circular');
 		});
 
 		it('should not treat relative imports as dependencies', () => {

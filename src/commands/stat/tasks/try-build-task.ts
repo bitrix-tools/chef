@@ -1,26 +1,33 @@
 import type { BasePackage } from '../../../modules/packages/base-package';
-import type { Task } from '../../../modules/task/task';
+import type { Task, TaskResult } from '../../../modules/task/task-types';
 
 export function tryBuildTask(extension: BasePackage): Task
 {
 	return {
 		title: 'Find build errors...',
-		run: async (context) => {
+		run: async (): Promise<TaskResult> => {
 			const buildResult = await extension.generate();
-			if (buildResult.errors.length === 0 && buildResult.warnings.length === 0)
-			{
-				context.succeed('No build issues found');
-			}
 
 			if (buildResult.errors.length > 0)
 			{
-				context.fail(`Has build errors --> Run chef build -e=${extension.getName()} for more information`);
+				return {
+					title: `Has build errors --> Run chef build -e=${extension.getName()} for more information`,
+					status: 'failed',
+				};
 			}
 
-			if (buildResult.warnings.length > 0 && buildResult.errors.length === 0)
+			if (buildResult.warnings.length > 0)
 			{
-				context.warn(`Has build warnings --> Run chef build -e=${extension.getName()} for more information`);
+				return {
+					title: `Has build warnings --> Run chef build -e=${extension.getName()} for more information`,
+					status: 'warning',
+				};
 			}
+
+			return {
+				title: 'No build issues found',
+				status: 'passed',
+			};
 		},
 	};
 }

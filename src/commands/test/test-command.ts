@@ -7,12 +7,13 @@ import { PackageFactoryProvider } from '../../modules/packages/providers/package
 import { PackageResolver } from '../../modules/packages/package-resolver';
 import { findPackages } from '../../utils/package/find-packages';
 import { createShutdown } from '../../utils/create-shutdown';
-import { TaskRunner } from '../../modules/task/task';
+import { TaskRunner } from '../../modules/task/task-runner';
 import { runUnitTestsTask } from './tasks/run-unit-tests-task';
 import { runEndToEndTestsTask } from './tasks/run-e2e-tests-task';
 import { TeamcityReporter } from '../../modules/engines/test/teamcity-reporter';
 
 import type { BasePackage } from '../../modules/packages/base-package';
+import type { Task } from '../../modules/task/task-types';
 import type { FSWatcher } from 'chokidar';
 
 type RunTestsOptions = {
@@ -62,7 +63,6 @@ function runTestsTeamcity({ extensions, args, type }: RunTestsOptions): void
 						webkit: 'WebKit',
 					};
 
-					// Run browsers in parallel, flat test list with browser prefix
 					const browserPromises = browsers.map(async (browserType) => {
 						const label = browserLabels[browserType] ?? browserType;
 
@@ -95,17 +95,22 @@ function runTestsTeamcity({ extensions, args, type }: RunTestsOptions): void
 
 			reporter.finish();
 
-			// Flush stdout so all TeamCity messages reach the IDE
 			await new Promise<void>((resolve) => {
 				process.stdout.write('', () => resolve());
 			});
-
-			// Let the process exit naturally (no process.exit to avoid truncating output)
 		})
 		.on('error', (err: Error) => {
 			console.error(err.message);
 			process.exit(1);
 		});
+}
+
+function createTestTasks(extension: BasePackage, args: Record<string, any>, type?: 'unit' | 'e2e'): Task[]
+{
+	return [
+		...(type !== 'e2e' ? [runUnitTestsTask(extension, args)] : []),
+		...(type !== 'unit' ? [runEndToEndTestsTask(extension, args)] : []),
+	];
 }
 
 function runTests({ extensions, args, type }: RunTestsOptions): void
@@ -122,22 +127,13 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 
 	extensionsStream
 		.on('data', async ({ extension }: { extension: BasePackage }) => {
-			const subtasks = [
-				...(type !== 'e2e' ? [runUnitTestsTask(extension, args)] : []),
-				...(type !== 'unit' ? [runEndToEndTestsTask(extension, args)] : []),
-			];
+			const tasks = createTestTasks(extension, args, type);
 
 			await queue.add(async () => {
-				const name = extension.getName();
-				await TaskRunner.run([
-					{
-						title: chalk.bold(name),
-						run: () => {
-							return Promise.resolve();
-						},
-						subtasks,
-					},
-				]);
+				await TaskRunner.run({
+					title: extension.getName(),
+					tasks,
+				});
 			});
 
 			if (args.watch)
@@ -155,15 +151,11 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 
 					watcher.on('change', async () => {
 						await queue.add(async () => {
-							await TaskRunner.run([
-								{
-									title: chalk.bold(name),
-									run: () => {
-										return Promise.resolve();
-									},
-									subtasks,
-								},
-							]);
+							const freshTasks = createTestTasks(extension, args, type);
+							await TaskRunner.run({
+								title: name,
+								tasks: freshTasks,
+							});
 						});
 					});
 				});
@@ -240,7 +232,6 @@ commonOptions(testCommand)
 		runTests({ extensions, args: command.optsWithGlobals() });
 	});
 
-// Splits [extensions..., file?] — file is the last arg if it looks like a filename (contains a dot and no dot-separated segments > 2 chars each)
 function splitExtensionsAndFile(args: string[]): { extensions: string[]; file?: string }
 {
 	if (args.length === 0)
@@ -249,7 +240,6 @@ function splitExtensionsAndFile(args: string[]): { extensions: string[]; file?: 
 	}
 
 	const last = args[args.length - 1];
-	// A test file pattern contains a dot followed by common test extensions
 	const isFile = /\.(test|spec)\.(ts|js)$/.test(last) || /\.(test|spec)$/.test(last);
 	if (isFile)
 	{

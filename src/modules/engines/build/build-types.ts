@@ -1,5 +1,11 @@
-import type { RollupLog, Plugin } from 'rollup';
+import type { Plugin } from 'rollup';
 import type { MinifyOptions } from 'oxc-minify';
+
+export interface BuildDiagnostic {
+	message: string;
+	frame?: string;
+	loc?: { file: string; line: number; column: number };
+}
 
 export interface BundleFileInfo {
 	fileName: string;
@@ -7,8 +13,8 @@ export interface BundleFileInfo {
 }
 
 export interface BuildResult {
-	warnings: RollupLog[];
-	errors: RollupLog[];
+	warnings: BuildDiagnostic[];
+	errors: BuildDiagnostic[];
 	bundles: BundleFileInfo[];
 	dependencies: string[];
 	standalone: boolean;
@@ -58,8 +64,8 @@ export type BuildCodeOptions = {
 };
 
 export interface BuildCodeResult {
-	warnings: RollupLog[];
-	errors: RollupLog[];
+	warnings: BuildDiagnostic[];
+	errors: BuildDiagnostic[];
 	code: string;
 	dependencies: string[];
 	map?: import('rollup').SourceMap | null;

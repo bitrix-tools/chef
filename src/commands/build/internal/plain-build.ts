@@ -2,53 +2,52 @@ import * as path from 'node:path';
 
 import chalk from 'chalk';
 
-import { TaskRunner } from '../../../modules/task/task';
-import { BasePackage } from '../../../modules/packages/base-package';
+import { TaskRunner } from '../../../modules/task/task-runner';
 import { formatSizeWithDelta } from '../../../utils/format-size';
 import { getFileSize } from '../../../utils/get-file-size';
+import { rebuildTask } from '../tasks/rebuild-task';
+
+import type { BasePackage } from '../../../modules/packages/base-package';
+import type { Task, TaskResult, TaskDetail } from '../../../modules/task/task-types';
 
 export function plainBuild(extension: BasePackage, args: Record<string, any>): Promise<any>
 {
 	const name = extension.getName();
 
-	// Get previous sizes before build
 	const jsPath = extension.getOutputJsPath();
 	const cssPath = extension.getOutputCssPath();
 	const previousJsSize = getFileSize(jsPath);
 	const previousCssSize = getFileSize(cssPath);
 
-	return TaskRunner.runTask({
-		title: chalk.bold(name),
-		run: async (context) => {
+	const plainBuildTask: Task = {
+		title: `Building ${name}...`,
+		run: async (): Promise<TaskResult> => {
 			const result = await extension.build({ production: args.production });
+
+			const root = extension.getPath();
+			const relativeRoot = path.relative(process.cwd(), root);
+			const pathPrefix = relativeRoot ? relativeRoot + '/' : '';
 
 			if (result.errors.length > 0)
 			{
-				context.fail(chalk.bold(name));
+				const details: TaskDetail[] = result.errors.map((error) => ({
+					type: 'error' as const,
+					message: error.message.replace(/^\[plugin [^\]]+\]\s*/, '').replaceAll(pathPrefix, ''),
+					frame: error.frame,
+					loc: error.loc?.file
+						? { file: error.loc.file, line: error.loc.line, column: error.loc.column, root }
+						: undefined,
+				}));
 
-				result.errors.forEach((error) => {
-					const message = error.message?.replace(/^\[plugin [^\]]+\]\s*/, '') ?? '';
-					const indented = message.split("\n").map((line) => `  ${line}`).join("\n");
-					context.log(indented);
-					if (error.frame)
-					{
-						context.log(error.frame);
-					}
-				});
-
-				return;
+				return {
+					title: chalk.bold(name),
+					status: 'failed',
+					details,
+				};
 			}
 
-			if (result.warnings.length > 0)
-			{
-				context.warn(chalk.bold(name));
-			}
-			else
-			{
-				context.succeed(chalk.bold(name));
-			}
+			const details: TaskDetail[] = [];
 
-			// Show bundle sizes (read from disk to get actual sizes including CSS)
 			const currentJsSize = getFileSize(jsPath);
 			const currentCssSize = getFileSize(cssPath);
 
@@ -56,27 +55,52 @@ export function plainBuild(extension: BasePackage, args: Record<string, any>): P
 			{
 				const jsFileName = path.basename(jsPath);
 				const sizeInfo = formatSizeWithDelta(currentJsSize, previousJsSize);
-				context.log(`  ${chalk.dim('└─')} ${jsFileName}  ${sizeInfo}`);
+				details.push({ type: 'item', text: `${jsFileName}  ${sizeInfo}` });
 			}
 
 			if (currentCssSize !== null)
 			{
 				const cssFileName = path.basename(cssPath);
 				const sizeInfo = formatSizeWithDelta(currentCssSize, previousCssSize);
-				context.log(`  ${chalk.dim('└─')} ${cssFileName}  ${sizeInfo}`);
+				details.push({ type: 'item', text: `${cssFileName}  ${sizeInfo}` });
 			}
 
-			// Show warnings after sizes
 			if (result.warnings.length > 0)
 			{
-				result.warnings.forEach((error) => {
-					context.border(error.message, 'yellow', 2);
-					if (error.frame)
-					{
-						context.border(error?.frame, 'yellow', 2);
-					}
-				});
+				for (const warning of result.warnings)
+				{
+					details.push({
+						type: 'error',
+						message: warning.message.replaceAll(pathPrefix, ''),
+						frame: warning.frame,
+						loc: warning.loc?.file
+							? { file: warning.loc.file, line: warning.loc.line, column: warning.loc.column, root }
+							: undefined,
+					});
+				}
+
+				return {
+					title: chalk.bold(name),
+					status: 'warning',
+					details: details.length > 0 ? details : undefined,
+				};
 			}
+
+			return {
+				title: chalk.bold(name),
+				status: 'passed',
+				details: details.length > 0 ? details : undefined,
+			};
 		},
+	};
+
+	const tasks: Task[] = [
+		plainBuildTask,
+		rebuildTask(extension, args),
+	].filter((task): task is Task => task !== null);
+
+	return TaskRunner.run({
+		title: name,
+		tasks,
 	});
 }

@@ -1,6 +1,5 @@
 import { Command } from 'commander';
 import { SequentialQueue } from '../../utils/sequential-queue';
-import chalk from 'chalk';
 
 import { createPathOption } from '../../shared/options/path-option';
 import { findPackages } from '../../utils/package/find-packages';
@@ -10,7 +9,7 @@ import { Environment } from '../../environment/environment';
 import { sourceStrategies } from '../../modules/packages/strategies/source';
 import { projectStrategies } from '../../modules/packages/strategies/project';
 import { defaultStrategy } from '../../modules/packages/strategies/default-strategy';
-import { TaskRunner } from '../../modules/task/task';
+import { TaskRunner } from '../../modules/task/task-runner';
 import { directDependenciesTask } from '../../shared/tasks/direct-dependencies-task';
 import { dependenciesTreeTask } from '../../shared/tasks/dependencies-tree-task';
 import { circularDependenciesTask } from './tasks/circular-dependencies-task';
@@ -48,27 +47,20 @@ statCommand
 		extensionsStream
 			.on('data', ({ extension }) => {
 				queue.add(async () => {
-					const name = extension.getName();
-
-					await TaskRunner.run([
-						{
-							title: chalk.bold(name),
-							run: () => {
-								return Promise.resolve();
-							},
-							subtasks: [
-								lintTask(extension),
-								tryBuildTask(extension),
-								unitTestsTask(extension),
-								e2eTestsTask(extension),
-								directDependenciesTask(extension, args),
-								dependenciesTreeTask(extension, args),
-								circularDependenciesTask(extension),
-								bundleSizeTask(extension, args),
-								totalTransferredSizeTask(extension),
-							],
-						},
-					]);
+					await TaskRunner.run({
+						title: extension.getName(),
+						tasks: [
+							lintTask(extension),
+							tryBuildTask(extension),
+							unitTestsTask(extension),
+							e2eTestsTask(extension),
+							directDependenciesTask(extension),
+							dependenciesTreeTask(extension),
+							circularDependenciesTask(extension),
+							bundleSizeTask(extension),
+							totalTransferredSizeTask(extension),
+						],
+					});
 				});
 			})
 			.on('done', async () => {
