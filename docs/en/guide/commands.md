@@ -20,10 +20,18 @@ chef build [extensions...] [options]
 ```bash
 chef build main.core ui.buttons    # Build specific extensions
 chef build main.core -w            # Build and watch for changes
-chef build ui.bbcode.*             # Build extensions matching pattern
+chef build ui.bbcode.*             # Build direct children
+chef build im.v2.**                # Build all nested extensions
 chef build                         # Build all in current directory
 chef build ui.buttons --production # Production build
 ```
+
+### Glob patterns
+
+| Pattern | Description | Example |
+|---------|-------------|---------|
+| `*` | One level deep | `ui.bbcode.*` → `ui.bbcode.parser`, `ui.bbcode.model` |
+| `**` | All levels deep | `im.v2.**` → `im.v2.const`, `im.v2.provider.service.settings` |
 
 ::: tip
 In zsh, escape glob patterns to prevent shell expansion: `chef build ui.\*`
@@ -55,7 +63,8 @@ chef test main.core ui.buttons                    # All tests
 chef test unit main.core                          # Unit only
 chef test unit main.core ./render-tag.test.ts     # Specific file
 chef test e2e ui.buttons                          # E2E only
-chef test ui.* --headed                           # With visible browser
+chef test ui.* --headed                           # Direct children, with visible browser
+chef test im.v2.**                                # All nested extensions
 chef test main.core -w                            # Watch mode
 chef test main.core --debug                       # Debug with DevTools
 chef test --grep "should render"                  # Filter by name
@@ -77,7 +86,8 @@ chef stat [extensions...] [options]
 
 ```bash
 chef stat main.core ui.buttons     # Analyze specific extensions
-chef stat ui.*                     # Analyze a group
+chef stat ui.*                     # Direct children
+chef stat im.v2.**                 # All nested extensions
 ```
 
 ## chef create

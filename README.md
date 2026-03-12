@@ -248,7 +248,8 @@ npx playwright install
 
 ```bash
 chef test main.core                       # Тестирование конкретного расширения
-chef test ui.* --headed                   # Запуск с видимым браузером
+chef test ui.* --headed                   # Прямые дочерние, с видимым браузером
+chef build im.v2.**                       # Все вложенные расширения
 chef test main.core -w                    # Watch-режим
 chef test --grep "should render"          # Фильтр по имени теста
 chef test main.core --debug               # Открыть браузер с DevTools и sourcemaps

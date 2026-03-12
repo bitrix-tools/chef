@@ -20,10 +20,18 @@ chef build [extensions...] [options]
 ```bash
 chef build main.core ui.buttons    # Собрать конкретные расширения
 chef build main.core -w            # Собрать и отслеживать изменения
-chef build ui.bbcode.*             # Собрать расширения по паттерну
+chef build ui.bbcode.*             # Собрать прямые дочерние расширения
+chef build im.v2.**                # Собрать все вложенные расширения
 chef build                         # Собрать всё в текущей директории
 chef build ui.buttons --production # Production-сборка
 ```
+
+### Glob-паттерны
+
+| Паттерн | Описание | Пример |
+|---------|----------|--------|
+| `*` | Один уровень вложенности | `ui.bbcode.*` → `ui.bbcode.parser`, `ui.bbcode.model` |
+| `**` | Все уровни вложенности | `im.v2.**` → `im.v2.const`, `im.v2.provider.service.settings` |
 
 ::: tip
 В zsh экранируйте glob-паттерны, чтобы предотвратить раскрытие оболочкой: `chef build ui.\*`
@@ -55,7 +63,8 @@ chef test main.core ui.buttons                    # Все тесты
 chef test unit main.core                          # Только unit
 chef test unit main.core ./render-tag.test.ts     # Конкретный файл
 chef test e2e ui.buttons                          # Только e2e
-chef test ui.* --headed                           # С видимым браузером
+chef test ui.* --headed                           # Прямые дочерние, с видимым браузером
+chef test im.v2.**                                # Все вложенные расширения
 chef test main.core -w                            # Watch-режим
 chef test main.core --debug                       # Отладка с DevTools
 chef test --grep "should render"                  # Фильтрация по имени
@@ -77,7 +86,8 @@ chef stat [extensions...] [options]
 
 ```bash
 chef stat main.core ui.buttons     # Анализ конкретных расширений
-chef stat ui.*                     # Анализ группы
+chef stat ui.*                     # Прямые дочерние
+chef stat im.v2.**                 # Все вложенные расширения
 ```
 
 ## chef create

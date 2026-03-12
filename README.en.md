@@ -328,8 +328,9 @@ Options:
 Examples:
   chef build main.core ui.buttons    # Build specific extensions
   chef build main.core -w            # Build and watch for changes
-  chef build ui.bbcode.*             # Build extensions matching pattern
-  chef build ui.* -w                 # Build all ui.* extensions with watch
+  chef build ui.bbcode.*             # Build direct children matching pattern
+  chef build im.v2.**               # Build all nested extensions
+  chef build ui.* -w                 # Build and watch
   chef build                         # Build all extensions in current directory
 
 Note: In zsh, escape glob patterns to prevent shell expansion: chef build ui.\*
@@ -360,7 +361,8 @@ Examples:
   chef test unit main.core ./render-tag.test.ts      # Unit tests, specific file
   chef test e2e ui.buttons                           # E2E tests only
   chef test e2e ui.buttons ./render-buttons.spec.ts  # E2E tests, specific file
-  chef test ui.* --headed                     # Test with visible browser
+  chef test ui.* --headed                     # Direct children, with visible browser
+  chef test im.v2.**                         # All nested extensions
   chef test main.core -w                      # Test and watch for changes
   chef test main.core --debug                 # Debug with DevTools and sourcemaps
   chef test main.core --project chromium firefox  # Run in specific browsers
@@ -379,7 +381,8 @@ Options:
 
 Examples:
   chef stat main.core ui.buttons     # Analyze specific extensions
-  chef stat ui.*                     # Analyze all ui.* extensions
+  chef stat ui.*                     # Direct children
+  chef stat im.v2.**                 # All nested extensions
 ```
 
 <br>
