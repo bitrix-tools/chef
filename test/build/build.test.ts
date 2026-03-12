@@ -109,6 +109,187 @@ describe('build', () => {
 		});
 	});
 
+	describe('js extension', () => {
+		const extensionPath = path.join(fixturesPath, 'js-extension');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should build JS bundle without errors', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+			assert.isEmpty(result.warnings, 'Should have no warnings');
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			assert.isTrue(fs.existsSync(jsOutput), 'JS bundle should exist');
+
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(content, 'Greeter', 'Bundle should contain class name');
+			assert.include(content, 'formatName', 'Bundle should contain imported function');
+		});
+
+		it('should inline local module imports', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+
+			assert.include(content, 'charAt', 'Inlined function body should be in bundle');
+			assert.notInclude(content, "from './utils.js'", 'Local imports should be resolved');
+		});
+
+		it('should have no external dependencies', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.dependencies, 'Should have no external dependencies');
+		});
+	});
+
+	describe('js with CSS', () => {
+		const extensionPath = path.join(fixturesPath, 'js-with-css');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should build both JS and CSS bundles', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			assert.isTrue(fs.existsSync(jsOutput), 'JS bundle should exist');
+
+			const jsContent = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(jsContent, 'Panel', 'JS bundle should contain class name');
+
+			const cssOutput = path.join(extensionPath, 'dist', 'bundle.css');
+			assert.isTrue(fs.existsSync(cssOutput), 'CSS bundle should exist');
+
+			const cssContent = fs.readFileSync(cssOutput, 'utf-8');
+			assert.include(cssContent, '.js-panel', 'CSS should contain class');
+		});
+
+		it('should not include CSS import in JS output', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.notInclude(content, "import './styles.css'", 'CSS import should be stripped from JS');
+			assert.notInclude(content, '.js-panel', 'CSS content should not leak into JS');
+		});
+
+		it('should report bundle sizes', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isArray(result.bundles);
+			assert.isAbove(result.bundles.length, 0, 'Should have bundle info');
+
+			for (const bundle of result.bundles)
+			{
+				assert.isString(bundle.fileName);
+				assert.isAbove(bundle.size, 0, `${bundle.fileName} should have size > 0`);
+			}
+		});
+	});
+
+	describe('typescript extension', () => {
+		const extensionPath = path.join(fixturesPath, 'ts-extension');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should build TypeScript bundle', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			options.typescript = true;
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			assert.isTrue(fs.existsSync(jsOutput), 'JS bundle should exist');
+
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(content, 'UserService', 'Bundle should contain class name');
+			assert.include(content, 'findByName', 'Bundle should contain method name');
+		});
+
+		it('should strip type annotations from output', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			options.typescript = true;
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.notInclude(content, ': User', 'Type annotations should be stripped');
+			assert.notInclude(content, 'interface', 'Interfaces should be stripped');
+		});
+	});
+
+	describe('typescript with CSS', () => {
+		const extensionPath = path.join(fixturesPath, 'ts-with-css');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should build both JS and CSS bundles', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			options.typescript = true;
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			assert.isTrue(fs.existsSync(jsOutput), 'JS bundle should exist');
+
+			const jsContent = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(jsContent, 'Widget', 'JS bundle should contain class name');
+
+			const cssOutput = path.join(extensionPath, 'dist', 'bundle.css');
+			assert.isTrue(fs.existsSync(cssOutput), 'CSS bundle should exist');
+
+			const cssContent = fs.readFileSync(cssOutput, 'utf-8');
+			assert.include(cssContent, '.ts-widget', 'CSS should contain class');
+		});
+	});
+
 	describe('concat option', () => {
 		const extensionPath = path.join(fixturesPath, 'concat-extension');
 
@@ -349,6 +530,120 @@ return [
 		});
 	});
 
+	describe('css images advanced', () => {
+		const extensionPath = path.join(fixturesPath, 'css-images-advanced');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should not inline images exceeding maxSize', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const cssOutput = path.join(extensionPath, 'dist', 'bundle.css');
+			const content = fs.readFileSync(cssOutput, 'utf-8');
+
+			// large.png (1175 bytes) > maxSize (1KB) — should keep original URL
+			assert.include(content, 'large.png', 'Large image should keep original filename');
+		});
+
+		it('should inline small images as base64', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			const cssOutput = path.join(extensionPath, 'dist', 'bundle.css');
+			const content = fs.readFileSync(cssOutput, 'utf-8');
+
+			// small.png (69 bytes) < maxSize (1KB) — should be inlined
+			assert.match(content, /url\("data:image\/png;base64,/, 'Small image should be inlined as base64');
+			assert.notMatch(content, /url\([^)]*small\.png/, 'Small image filename should be replaced');
+		});
+
+		it('should inline SVG without base64', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			const cssOutput = path.join(extensionPath, 'dist', 'bundle.css');
+			const content = fs.readFileSync(cssOutput, 'utf-8');
+
+			// SVG should use UTF-8 encoding, not base64
+			assert.include(content, 'data:image/svg+xml;charset=utf-8,', 'SVG should be inlined as UTF-8 data URI');
+			assert.notMatch(content, /url\([^)]*icon\.svg/, 'SVG filename should be replaced');
+		});
+
+		it('should not modify external URLs', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			const cssOutput = path.join(extensionPath, 'dist', 'bundle.css');
+			const content = fs.readFileSync(cssOutput, 'utf-8');
+
+			assert.include(content, 'https://example.com/image.png', 'External URLs should not be modified');
+		});
+
+		it('should not modify existing data URIs', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			const cssOutput = path.join(extensionPath, 'dist', 'bundle.css');
+			const content = fs.readFileSync(cssOutput, 'utf-8');
+
+			assert.include(content, 'data:image/png;base64,iVBOR', 'Existing data URIs should be preserved');
+		});
+	});
+
+	describe('js image import', () => {
+		const extensionPath = path.join(fixturesPath, 'js-image-import');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should replace image import with URL path', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+
+			assert.include(content, 'Icon', 'Bundle should contain class name');
+			assert.include(content, 'assets/icon.svg', 'Import should be replaced with asset URL');
+			assert.notInclude(content, "from './images/icon.svg'", 'Original import should be resolved');
+		});
+
+		it('should emit image file to assets directory', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			const assetsDir = path.join(extensionPath, 'dist', 'assets');
+			assert.isTrue(fs.existsSync(assetsDir), 'Assets directory should exist');
+
+			const assets = fs.readdirSync(assetsDir);
+			const svgFile = assets.find(f => f.endsWith('.svg'));
+			assert.isDefined(svgFile, 'SVG file should be copied to assets');
+		});
+	});
+
 	describe('css multiple files', () => {
 		const extensionPath = path.join(fixturesPath, 'css-multiple');
 
@@ -559,6 +854,143 @@ export class SimpleComponent {
 
 			// For main.core, skip_core should not be added at all
 			assert.notInclude(content, 'skip_core', 'skip_core should not be added for main.core');
+		});
+	});
+
+	describe('error diagnostics', () => {
+		it('should return CF1002 for syntax errors', async () => {
+			const extensionPath = path.join(fixturesPath, 'syntax-error');
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isNotEmpty(result.errors, 'Should have errors');
+			assert.equal(result.errors[0].code, 'CF1002', 'Should be CF1002 syntax error');
+		});
+
+		it('should return CF1001 for TypeScript type errors', async () => {
+			const extensionPath = path.join(fixturesPath, 'ts-type-error');
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			options.typescript = true;
+			const result = await buildService.build(options);
+
+			assert.isNotEmpty(result.errors, 'Should have errors');
+			assert.equal(result.errors[0].code, 'CF1001', 'Should be CF1001 TypeScript error');
+			assert.include(result.errors[0].message, 'TS', 'Should contain TS error code in message');
+		});
+
+		it('should return CF1006 for circular dependencies', async () => {
+			const extensionPath = path.join(fixturesPath, 'circular-dependency');
+
+			cleanDist(extensionPath);
+
+			try
+			{
+				const bundleConfig = loadBundleConfig(extensionPath);
+				const options = getBuildOptions(extensionPath, bundleConfig);
+				const result = await buildService.build(options);
+
+				assert.isNotEmpty(result.warnings, 'Should have warnings');
+
+				const circularWarning = result.warnings.find(w => w.code === 'CF1006');
+				assert.isDefined(circularWarning, 'Should have CF1006 circular dependency warning');
+			}
+			finally
+			{
+				cleanDist(extensionPath);
+			}
+		});
+
+		it('should return CF1007 for missing exports', async () => {
+			const extensionPath = path.join(fixturesPath, 'missing-export');
+
+			cleanDist(extensionPath);
+
+			try
+			{
+				const bundleConfig = loadBundleConfig(extensionPath);
+				const options = getBuildOptions(extensionPath, bundleConfig);
+				const result = await buildService.build(options);
+
+				assert.isNotEmpty(result.errors, 'Should have errors');
+
+				const missingExport = result.errors.find(e => e.code === 'CF1007');
+				assert.isDefined(missingExport, 'Should have CF1007 missing export error');
+				assert.include(missingExport!.message, 'nonExistent', 'Should mention the missing export name');
+			}
+			finally
+			{
+				cleanDist(extensionPath);
+			}
+		});
+
+		it('should return CF1002 for CSS syntax errors', async () => {
+			const extensionPath = path.join(fixturesPath, 'css-syntax-error');
+
+			cleanDist(extensionPath);
+
+			try
+			{
+				const bundleConfig = loadBundleConfig(extensionPath);
+				const options = getBuildOptions(extensionPath, bundleConfig);
+				options.targets = ['chrome 49'];
+				const result = await buildService.build(options);
+
+				assert.isNotEmpty(result.errors, 'Should have errors');
+				assert.equal(result.errors[0].code, 'CF1002', 'Should be CF1002 syntax error');
+				assert.include(result.errors[0].message, 'Unclosed block', 'Should mention CSS parse error');
+			}
+			finally
+			{
+				cleanDist(extensionPath);
+			}
+		});
+
+		it('should return CF1014 for missing concat CSS files', async () => {
+			const extensionPath = path.join(fixturesPath, 'concat-css-missing');
+
+			cleanDist(extensionPath);
+
+			try
+			{
+				const bundleConfig = loadBundleConfig(extensionPath);
+				const options = getBuildOptions(extensionPath, bundleConfig);
+				const result = await buildService.build(options);
+
+				assert.isNotEmpty(result.warnings, 'Should have warnings');
+
+				const concatWarning = result.warnings.find(w => w.code === 'CF1014');
+				assert.isDefined(concatWarning, 'Should have CF1014 plugin warning');
+				assert.include(concatWarning!.message, 'nonexistent.css', 'Should mention missing file');
+			}
+			finally
+			{
+				cleanDist(extensionPath);
+			}
+		});
+
+		it('should return CF1014 for missing concat JS files', async () => {
+			const extensionPath = path.join(fixturesPath, 'concat-js-missing');
+
+			cleanDist(extensionPath);
+
+			try
+			{
+				const bundleConfig = loadBundleConfig(extensionPath);
+				const options = getBuildOptions(extensionPath, bundleConfig);
+				const result = await buildService.build(options);
+
+				assert.isNotEmpty(result.warnings, 'Should have warnings');
+
+				const concatWarning = result.warnings.find(w => w.code === 'CF1014');
+				assert.isDefined(concatWarning, 'Should have CF1014 plugin warning');
+				assert.include(concatWarning!.message, 'nonexistent.js', 'Should mention missing file');
+			}
+			finally
+			{
+				cleanDist(extensionPath);
+			}
 		});
 	});
 });

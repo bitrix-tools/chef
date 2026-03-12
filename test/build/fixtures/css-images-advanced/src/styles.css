@@ -1,0 +1,19 @@
+.with-small-image {
+	background-image: url('./images/small.png');
+}
+
+.with-large-image {
+	background-image: url('./images/large.png');
+}
+
+.with-svg {
+	background-image: url('./images/icon.svg');
+}
+
+.with-external-url {
+	background-image: url('https://example.com/image.png');
+}
+
+.with-data-uri {
+	background-image: url('data:image/png;base64,iVBOR');
+}
