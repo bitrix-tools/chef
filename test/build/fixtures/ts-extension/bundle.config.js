@@ -3,4 +3,5 @@ module.exports = {
 	output: {
 		js: './dist/bundle.js',
 	},
+	namespace: 'BX.Test.Users',
 };

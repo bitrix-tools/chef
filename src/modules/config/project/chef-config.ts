@@ -22,12 +22,14 @@ export interface ChefConfig
 		targets?: string | string[];
 		sourceMaps?: boolean;
 		treeshake?: boolean;
+		emitDeclaration?: boolean;
 	};
 	enforce?: {
 		targets?: string | string[];
 		sourceMaps?: boolean;
 		treeshake?: boolean;
 		babel?: boolean;
+		emitDeclaration?: boolean;
 	};
 }
 

@@ -8,6 +8,7 @@ import { BuildEngine } from '../../src/modules/engines/build/build-engine';
 import { RollupBuildStrategy } from '../../src/modules/engines/build/rollup/rollup-strategy';
 import { BundleConfigManager } from '../../src/modules/config/bundle/bundle-config-manager';
 import { PhpConfigManager } from '../../src/modules/config/php/php-config-manager';
+import { DeclarationEmitter } from '../../src/modules/engines/build/declaration-emitter';
 
 import type { BuildOptions } from '../../src/modules/engines/build/build-types';
 
@@ -287,6 +288,102 @@ describe('build', () => {
 
 			const cssContent = fs.readFileSync(cssOutput, 'utf-8');
 			assert.include(cssContent, '.ts-widget', 'CSS should contain class');
+		});
+	});
+
+	describe('strip comments', () => {
+		const extensionPath = path.join(fixturesPath, 'ts-extension');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should remove comments from bundle output', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			options.typescript = true;
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.notInclude(content, 'Service for managing users', 'JSDoc comments should be stripped from bundle');
+			assert.notInclude(content, 'Adds a user', 'JSDoc comments should be stripped from bundle');
+		});
+
+		it('should preserve eslint-disable banner', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			options.typescript = true;
+			await buildService.build(options);
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(content, '/* eslint-disable */', 'eslint-disable banner should be preserved');
+		});
+	});
+
+	describe('emit declaration', () => {
+		const extensionPath = path.join(fixturesPath, 'ts-extension');
+		let emitter: DeclarationEmitter;
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+			fs.mkdirSync(path.join(extensionPath, 'dist'), { recursive: true });
+			emitter = new DeclarationEmitter();
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should generate .d.ts file with namespace declaration', async () => {
+			const dtsOutput = path.join(extensionPath, 'dist', 'bundle.d.ts');
+
+			await emitter.emit({
+				packageRoot: extensionPath,
+				namespace: 'BX.Test.Users',
+				outputPath: dtsOutput,
+			});
+
+			assert.isTrue(fs.existsSync(dtsOutput), '.d.ts file should exist');
+
+			const content = fs.readFileSync(dtsOutput, 'utf-8');
+			assert.include(content, 'declare namespace BX.Test.Users', 'Should contain namespace declaration');
+			assert.include(content, 'class UserService', 'Should contain exported class');
+			assert.include(content, 'findByName', 'Should contain method declaration');
+			assert.include(content, 'count', 'Should contain getter declaration');
+			assert.notInclude(content, '#private', 'Should not contain private field markers');
+		});
+
+		it('should preserve JSDoc comments in .d.ts', async () => {
+			const dtsOutput = path.join(extensionPath, 'dist', 'bundle.d.ts');
+
+			await emitter.emit({
+				packageRoot: extensionPath,
+				namespace: 'BX.Test.Users',
+				outputPath: dtsOutput,
+			});
+
+			const content = fs.readFileSync(dtsOutput, 'utf-8');
+			assert.include(content, 'Service for managing users', 'JSDoc should be preserved in .d.ts');
+		});
+
+		it('should not generate .d.ts without namespace', async () => {
+			const dtsOutput = path.join(extensionPath, 'dist', 'bundle.d.ts');
+
+			await emitter.emit({
+				packageRoot: extensionPath,
+				namespace: 'window',
+				outputPath: dtsOutput,
+			});
+
+			assert.isFalse(fs.existsSync(dtsOutput), '.d.ts should not be generated for window namespace');
 		});
 	});
 

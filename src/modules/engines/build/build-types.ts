@@ -50,6 +50,7 @@ export type BuildOptions = {
 	babel?: boolean,
 	customPlugins?: Plugin[],
 	production?: boolean,
+	emitDeclaration?: boolean,
 };
 
 export type BuildCodeOptions = {

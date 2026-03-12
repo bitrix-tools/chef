@@ -30,6 +30,7 @@ export interface PreparedBundleConfig {
 	minification: boolean | MinifyOptions;
 	transformClasses: boolean;
 	sourceMaps: boolean;
+	emitDeclaration: boolean;
 	tests: {
 		localization: {
 			languageId: string;

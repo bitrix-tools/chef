@@ -1,7 +1,10 @@
+import path from 'node:path';
+
 import fg from 'fast-glob';
 
 import { ChefConfigManager } from '../config/project/chef-config-manager';
 import { validateBuildOptions } from '../config/project/chef-config-validator';
+import { DeclarationEmitter } from '../engines/build/declaration-emitter';
 
 import type { BasePackage } from '../packages/base-package';
 import type { BuildEngine } from '../engines/build/build-engine';
@@ -28,6 +31,11 @@ export class PackageBuilder
 		}
 
 		const buildResult = await buildEngine.build(buildOptions);
+
+		if (buildResult.errors.length === 0 && buildOptions.emitDeclaration && buildOptions.typescript)
+		{
+			await this.#emitDeclaration(buildOptions);
+		}
 
 		if (validation && 'warnings' in validation)
 		{
@@ -103,6 +111,10 @@ export class PackageBuilder
 			transformClasses: bundleConfig.get('transformClasses'),
 			customPlugins: bundleConfig.get('plugins'),
 			production,
+			emitDeclaration: enforce?.emitDeclaration
+				?? (bundleConfig.has('emitDeclaration')
+					? bundleConfig.get('emitDeclaration')
+					: (defaults?.emitDeclaration ?? true)),
 		};
 	}
 
@@ -133,6 +145,18 @@ export class PackageBuilder
 		}
 
 		return { warnings: warnings.map((w) => w.message) };
+	}
+
+	async #emitDeclaration(options: BuildOptions): Promise<void>
+	{
+		const outputPath = options.output.js.replace(/\.js$/, '.d.ts');
+		const emitter = new DeclarationEmitter();
+
+		await emitter.emit({
+			packageRoot: options.packageRoot,
+			namespace: options.namespace,
+			outputPath,
+		});
 	}
 
 	#hasVueFiles(): boolean

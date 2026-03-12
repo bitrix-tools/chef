@@ -38,6 +38,7 @@ export interface BundleConfig {
 		};
 	};
 	rebuild?: string[];
+	emitDeclaration?: boolean;
 }
 
 /** @deprecated Use new format: `plugins: [...]` and `resolveNodeModules: true` */
