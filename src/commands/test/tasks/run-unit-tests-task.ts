@@ -42,7 +42,7 @@ function createDebugTask(extension: BasePackage, args: Record<string, any>, brow
 
 	return {
 		title: 'Unit tests',
-		run: async (): Promise<TaskResult> => {
+		run: async (onUpdate): Promise<TaskResult> => {
 			console.log('');
 			console.log(boxen(debugMessage, {
 				padding: 1,
@@ -54,7 +54,7 @@ function createDebugTask(extension: BasePackage, args: Record<string, any>, brow
 			for (const browserType of browsers)
 			{
 				const label = BROWSER_LABEL[browserType] ?? browserType;
-				const reporter = createReporter(args.reporter);
+				const reporter = createReporter(args.reporter, onUpdate);
 
 				const testResult = await extension.runUnitTests({
 					...args,
@@ -118,8 +118,8 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 
 	return {
 		title: 'Unit tests',
-		run: async (): Promise<TaskResult> => {
-			const reporter = createReporter(args.reporter);
+		run: async (onUpdate): Promise<TaskResult> => {
+			const reporter = createReporter(args.reporter, onUpdate);
 			reporter.setBrowserCount(browsers.length);
 			const allConsoleLogs: ConsoleLog[] = [];
 			const allErrors: Error[] = [];

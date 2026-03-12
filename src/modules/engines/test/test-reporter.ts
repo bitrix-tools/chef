@@ -1,5 +1,4 @@
 import chalk from 'chalk';
-import ora, { type Ora } from 'ora';
 
 import { stripAnsi, hasLocalFilePath } from '../../../diagnostics/code-frame';
 import { formatError } from '../../../diagnostics/format-error';
@@ -86,7 +85,7 @@ export class TestReporter
 	readonly #liveLines = new Map<string, LiveLine>();
 	readonly #lines: LiveLine[] = [];
 	readonly #startTime: number;
-	#spinner: Ora;
+	readonly #onStatus: (message: string) => void;
 	#hasResults = false;
 	#expectedBrowsers = 1;
 	#viewportHeight = 0;
@@ -95,15 +94,11 @@ export class TestReporter
 	#failed = 0;
 	#pending = 0;
 
-	constructor()
+	constructor(onStatus?: (message: string) => void)
 	{
 		this.#startTime = Date.now();
-		this.#spinner = ora({
-			text: 'Preparing tests...',
-			spinner: 'dots',
-			prefixText: PREFIX,
-		});
-		this.#spinner.start();
+		this.#onStatus = onStatus ?? (() => {});
+		this.#onStatus('Preparing tests...');
 	}
 
 	setBrowserCount(count: number): void
@@ -113,8 +108,6 @@ export class TestReporter
 
 	stop(): void
 	{
-		this.#spinner.stop();
-
 		if (isTTY)
 		{
 			process.stdout.write('\x1B[?25h');
@@ -134,13 +127,13 @@ export class TestReporter
 
 			const parts = [...this.#browserStatuses.entries()]
 				.map(([name, s]) => `${name}: ${s}`)
-				.join(chalk.gray(' · '));
+				.join(' · ');
 
-			this.#spinner.text = parts;
+			this.#onStatus(parts);
 		}
 		else
 		{
-			this.#spinner.text = status;
+			this.#onStatus(status);
 		}
 	}
 
@@ -270,7 +263,7 @@ export class TestReporter
 		if (!this.#hasResults)
 		{
 			this.#hasResults = true;
-			this.#spinner.stop();
+			this.#onStatus('');
 
 			// Leave room for task runner lines above and status bar below.
 			// Use a generous margin so the viewport never exceeds terminal height.
@@ -471,8 +464,6 @@ export class TestReporter
 	{
 		const wallTime = Date.now() - this.#startTime;
 		const total = this.#passed + this.#failed + this.#pending;
-
-		this.#spinner.stop();
 
 		// Clear live viewport and print full report
 		if (isTTY && this.#viewportRenderedLines > 0)

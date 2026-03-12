@@ -80,7 +80,6 @@
     "eslint": "^8.57.1",
     "fast-glob": "^3.3.3",
     "log-symbols": "^7.0.1",
-    "ora": "^8.2.0",
     "oxc-minify": "^0.118.0",
     "playwright": "^1.57.0",
     "postcss": "^8.5.6",

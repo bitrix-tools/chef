@@ -7,8 +7,8 @@ export function runEndToEndTestsTask(extension: BasePackage, args: Record<string
 {
 	return {
 		title: 'E2E tests',
-		run: async (): Promise<TaskResult> => {
-			const reporter = createReporter(args.reporter);
+		run: async (onUpdate): Promise<TaskResult> => {
+			const reporter = createReporter(args.reporter, onUpdate);
 
 			const testResult = await extension.runEndToEndTests({
 				...args,

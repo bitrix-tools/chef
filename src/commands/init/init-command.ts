@@ -1,7 +1,6 @@
 import * as path from 'node:path';
 
 import { Command } from 'commander';
-import ora from 'ora';
 import chalk from 'chalk';
 import boxen from 'boxen';
 import logSymbols from 'log-symbols';
@@ -113,12 +112,11 @@ const initBuildCommand = new Command('build')
 		console.log('');
 		console.log(chalk.bold('Preparing paths aliases'));
 
-		const aliasesConfigSpinner = ora({
-			prefixText: ' ',
-			text: 'Scanning extensions...',
-		});
-
-		aliasesConfigSpinner.start();
+		const isTTY = process.stdout.isTTY ?? false;
+		if (isTTY)
+		{
+			process.stdout.write(`  Scanning extensions...`);
+		}
 
 		const initializer = new ProjectInitializer({
 			rootPath: Environment.getRoot(),
@@ -129,13 +127,18 @@ const initBuildCommand = new Command('build')
 		{
 			const result = await initializer.initBuild({
 				onProgress: (count) => {
-					aliasesConfigSpinner.text = `Found ${count} extensions`;
+					if (isTTY)
+					{
+						process.stdout.write(`\r\x1B[2K  Scanning extensions... found ${count}`);
+					}
 				},
 				onAliasesDone: (count) => {
 					const aliasesPath = path.join(Environment.getRoot(), 'aliases.tsconfig.json');
-					aliasesConfigSpinner.succeed(
-						`aliases.tsconfig.json generated successfully with ${count} aliases`,
-					);
+					if (isTTY)
+					{
+						process.stdout.write('\r\x1B[2K');
+					}
+					console.log(`  ${chalk.green(logSymbols.success)} aliases.tsconfig.json generated successfully with ${count} aliases`);
 					console.log(`  → file://${aliasesPath}\n`);
 				},
 				onBeforeFileWrite: (fileName) => {
@@ -262,7 +265,11 @@ const initBuildCommand = new Command('build')
 		}
 		catch (error)
 		{
-			aliasesConfigSpinner.fail('Error while scanning packages');
+			if (isTTY)
+			{
+				process.stdout.write('\r\x1B[2K');
+			}
+			console.log(`  ${chalk.red(logSymbols.error)} Error while scanning packages`);
 			const err = error instanceof Error ? error : new Error(String(error));
 			console.log(formatInternalError({ code: CF.ALIAS_GENERATION_ERROR, message: err.message, stack: err.stack }));
 			throw error;

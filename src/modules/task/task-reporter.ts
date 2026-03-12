@@ -110,6 +110,12 @@ export class TaskReporter
 
 	updateTask(message: string): void
 	{
+		if (!message)
+		{
+			this.#stopSpinner();
+			return;
+		}
+
 		this.#spinnerText = message;
 	}
 
