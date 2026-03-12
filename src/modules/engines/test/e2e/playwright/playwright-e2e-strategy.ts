@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 
 import { E2ETestStrategy } from '../e2e-test-strategy';
+import { ChefError } from '../../../../../diagnostics/chef-error';
+import { CF } from '../../../../../diagnostics/diagnostic-codes';
 import { parseTokenStream } from '../parse-token-stream';
 
 import type {
@@ -119,7 +121,7 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 				if (report.length === 0 && code !== 0)
 				{
 					const stderrText = consoleLogs.map((l) => l.text).join('\n').trim();
-					errors.push(new Error(stderrText || 'Playwright exited with errors'));
+					errors.push(new ChefError(CF.PLAYWRIGHT_ERROR, stderrText || 'Playwright exited with errors'));
 				}
 
 				resolve({

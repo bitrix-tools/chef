@@ -3,6 +3,8 @@ import * as path from 'node:path';
 import { Command, program } from 'commander';
 
 import { Environment } from './environment/environment';
+import { CF } from './diagnostics/diagnostic-codes';
+import { formatError } from './diagnostics/format-error';
 
 async function loadAndRun(loader: () => Promise<Record<string, unknown>>): Promise<void>
 {
@@ -57,7 +59,9 @@ function checkCwdPreAction(thisCommand: Command, actionCommand: Command)
 
 	if (isOutsideRoot)
 	{
-		console.log(`\n❌ Error: \nThe target directory is outside the project root: ${cwd}\n`);
+		console.log('');
+		console.log(formatError({ code: CF.OUTSIDE_PROJECT_ROOT, severity: 'error', message: `The target directory is outside the project root: ${cwd}` }).join('\n'));
+		console.log('');
 		process.exit(1);
 	}
 }

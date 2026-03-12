@@ -125,8 +125,8 @@ export class PackageBuilder
 				denied: {
 					dependencies: [],
 					bundles: [],
-					warnings: warnings.map((w) => ({ message: w.message })),
-					errors: errors.map((e) => ({ message: e.message })),
+					warnings: warnings.map((w) => ({ code: w.code, message: w.message })),
+					errors: errors.map((e) => ({ code: e.code, message: e.message })),
 					standalone: buildOptions.standalone ?? false,
 				},
 			};

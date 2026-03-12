@@ -1,4 +1,5 @@
 import { TaskReporter } from './task-reporter';
+import { CF } from '../../diagnostics/diagnostic-codes';
 
 import type { TaskGroup, TaskGroupResult } from './task-types';
 
@@ -22,11 +23,15 @@ export class TaskRunner
 			}
 			catch (error: any)
 			{
+				const code = (typeof error?.code === 'string' && error.code.startsWith('CF'))
+					? error.code
+					: CF.UNCAUGHT_EXCEPTION;
+
 				reporter.completeTask({
 					title: task.title,
 					status: 'failed',
 					details: [
-						{ type: 'error', message: error.message || 'Unknown error', stack: error.stack },
+						{ type: 'error', code, message: error.message || 'Unknown error', stack: error.stack },
 					],
 				});
 			}

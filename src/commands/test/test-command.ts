@@ -11,6 +11,8 @@ import { TaskRunner } from '../../modules/task/task-runner';
 import { runUnitTestsTask } from './tasks/run-unit-tests-task';
 import { runEndToEndTestsTask } from './tasks/run-e2e-tests-task';
 import { TeamcityReporter } from '../../modules/engines/test/teamcity-reporter';
+import { formatInternalError } from '../../diagnostics/format-error';
+import { CF } from '../../diagnostics/diagnostic-codes';
 
 import type { BasePackage } from '../../modules/packages/base-package';
 import type { Task } from '../../modules/task/task-types';
@@ -100,7 +102,7 @@ function runTestsTeamcity({ extensions, args, type }: RunTestsOptions): void
 			});
 		})
 		.on('error', (err: Error) => {
-			console.error(err.message);
+			console.log(formatInternalError({ code: CF.PACKAGE_READ_ERROR, message: err.message, stack: err.stack }));
 			process.exit(1);
 		});
 }
@@ -186,7 +188,7 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 			}
 		})
 		.on('error', (err: Error) => {
-			console.error('❌ Error while reading packages:', err);
+			console.log(formatInternalError({ code: CF.PACKAGE_READ_ERROR, message: err.message, stack: err.stack }));
 			process.exit(1);
 		});
 

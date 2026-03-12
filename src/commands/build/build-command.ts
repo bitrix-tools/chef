@@ -11,6 +11,8 @@ import { PackageFactoryProvider } from '../../modules/packages/providers/package
 import { PackageResolver } from '../../modules/packages/package-resolver';
 import { findPackages } from '../../utils/package/find-packages';
 import { createShutdown } from '../../utils/create-shutdown';
+import { formatInternalError } from '../../diagnostics/format-error';
+import { CF } from '../../diagnostics/diagnostic-codes';
 import { build } from './internal/build';
 
 import type { FSWatcher } from 'chokidar';
@@ -107,8 +109,8 @@ buildCommand
 					process.exit(0);
 				}
 			})
-			.on('error', (err) => {
-				console.error('❌ Error while reading packages:', err);
+			.on('error', (err: Error) => {
+				console.log(formatInternalError({ code: CF.PACKAGE_READ_ERROR, message: err.message, stack: err.stack }));
 				process.exit(1);
 			});
 

@@ -4,6 +4,19 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createRequire } from 'node:module';
 
+function handleFatalError(error)
+{
+	import('./fatal-error.js').then(({ renderFatalError }) => {
+		renderFatalError(error);
+	}).catch(() => {
+		console.error(error);
+		process.exit(1);
+	});
+}
+
+process.on('uncaughtException', handleFatalError);
+process.on('unhandledRejection', handleFatalError);
+
 const require = createRequire(import.meta.url);
 
 require('tsx').globalPreload();

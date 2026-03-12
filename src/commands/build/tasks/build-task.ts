@@ -26,6 +26,7 @@ function diagnosticToDetail(log: BuildDiagnostic, root: string, relativeRoot: st
 
 	return {
 		type: 'error',
+		code: log.code,
 		message: shortenPaths(rawMessage, relativeRoot),
 		frame: log.frame,
 		loc,

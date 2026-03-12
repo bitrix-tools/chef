@@ -9,6 +9,8 @@ import { PackageResolver } from '../../modules/packages/package-resolver';
 import { findPackages } from '../../utils/package/find-packages';
 import { createPathOption } from '../../shared/options/path-option';
 import { TaskRunner } from '../../modules/task/task-runner';
+import { formatInternalError } from '../../diagnostics/format-error';
+import { CF } from '../../diagnostics/diagnostic-codes';
 
 import type { BasePackage } from '../../modules/packages/base-package';
 import type { Task, TaskResult } from '../../modules/task/task-types';
@@ -138,7 +140,7 @@ flowToTsCommand
 				process.exit(0);
 			})
 			.on('error', (err: Error) => {
-				console.error('❌ Error while reading packages:', err);
+				console.log(formatInternalError({ code: CF.PACKAGE_READ_ERROR, message: err.message, stack: err.stack }));
 				process.exit(1);
 			});
 	});

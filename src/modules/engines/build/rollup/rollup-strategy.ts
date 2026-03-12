@@ -16,6 +16,7 @@ import { Environment } from '../../../../environment/environment';
 import { PackageResolver } from '../../../packages/package-resolver';
 import { isExternalDependencyName } from '../../../../utils/is-external-dependency-name';
 import { BuildStrategy } from '../build-strategy';
+import { CF } from '../../../../diagnostics/diagnostic-codes';
 import { FileFinder } from '../../../../utils/file-finder';
 import concatPlugin from './plugins/concat';
 
@@ -117,13 +118,22 @@ export class RollupBuildStrategy extends BuildStrategy
 		};
 	}
 
-	protected static toDiagnostic(error: unknown): BuildDiagnostic
+	protected static toDiagnostic(error: unknown, code: string = CF.SYNTAX_ERROR): BuildDiagnostic
 	{
+		const rollupCode = (error instanceof Error && 'code' in error && typeof error.code === 'string')
+			? error.code
+			: undefined;
+
+		const errorCode = rollupCode?.startsWith('CF')
+			? rollupCode
+			: (rollupCode && RollupBuildStrategy.#rollupWarningCodes[rollupCode]) ?? code;
+
 		if (error instanceof Error && 'loc' in error)
 		{
 			const loc = (error as any).loc;
 
 			return {
+				code: errorCode,
 				message: error.message,
 				frame: (error as any).frame,
 				loc: loc?.file ? { file: loc.file, line: loc.line, column: loc.column } : undefined,
@@ -131,9 +141,22 @@ export class RollupBuildStrategy extends BuildStrategy
 		}
 
 		return {
+			code: errorCode,
 			message: error instanceof Error ? error.message : String(error),
 		};
 	}
+
+	static readonly #rollupWarningCodes: Record<string, string> = {
+		CIRCULAR_DEPENDENCY: CF.CIRCULAR_DEPENDENCY,
+		MISSING_EXPORT: CF.MISSING_EXPORT,
+		THIS_IS_UNDEFINED: CF.THIS_IS_UNDEFINED,
+		EVAL: CF.EVAL,
+		MISSING_GLOBAL_NAME: CF.MISSING_GLOBAL_NAME,
+		UNUSED_EXTERNAL_IMPORT: CF.UNUSED_EXTERNAL_IMPORT,
+		UNRESOLVED_IMPORT: CF.UNRESOLVED_IMPORT,
+		MISSING_NAME_OPTION_FOR_IIFE_EXPORT: CF.MISSING_IIFE_NAME,
+		PLUGIN_WARNING: CF.PLUGIN_WARNING,
+	};
 
 	protected static createOnWarningHandler(): {
 		warningsRef: BuildDiagnostic[],
@@ -154,7 +177,10 @@ export class RollupBuildStrategy extends BuildStrategy
 				return;
 			}
 
+			const code = (warning.code && RollupBuildStrategy.#rollupWarningCodes[warning.code]) ?? CF.UNKNOWN_BUILD_WARNING;
+
 			warningsRef.push({
+				code,
 				message: warning.message,
 				frame: warning.frame,
 				loc: warning.loc?.file
@@ -219,7 +245,8 @@ export class RollupBuildStrategy extends BuildStrategy
 
 				if (result.errors.length > 0)
 				{
-					throw new Error(result.errors.map((e) => e.message).join('\n'));
+					const { ChefError } = await import('../../../../diagnostics/chef-error');
+					throw new ChefError(CF.MINIFICATION_ERROR, result.errors.map((e) => e.message).join('\n'));
 				}
 
 				return {
@@ -257,12 +284,6 @@ export class RollupBuildStrategy extends BuildStrategy
 		}
 		catch (error)
 		{
-			const isPluginError = error instanceof Error && 'plugin' in error;
-			if (!isPluginError)
-			{
-				console.error(error);
-			}
-
 			return {
 				dependencies: [],
 				bundles: [],
@@ -434,7 +455,7 @@ export class RollupBuildStrategy extends BuildStrategy
 
 		const configDirname = path.dirname(configPath);
 
-		config.options.paths = Object.entries(config.options.paths).reduce((acc, [extensionName, paths]) => {
+		config.options.paths = Object.entries(config.options.paths ?? {}).reduce((acc, [extensionName, paths]) => {
 			acc[extensionName] = paths.map((filePath) => {
 				return path.join(configDirname, filePath.replace('./', ''));
 			});
@@ -619,7 +640,7 @@ export class RollupBuildStrategy extends BuildStrategy
 						const tsConfigPath = FileFinder.findUpFile({
 							fileName: 'tsconfig.json',
 							fromDir: path.dirname(options.input),
-							rootDir: Environment.getRoot(),
+							rootDir: Environment.getRoot() ?? undefined,
 						});
 
 						if (typeof tsConfigPath === 'string' && tsConfigPath.length > 0)
@@ -660,6 +681,7 @@ export class RollupBuildStrategy extends BuildStrategy
 					sourceMap: false,
 				}),
 				urlPlugin({
+					limit: 0,
 					emitFiles: true,
 					fileName: 'assets/[name][extname]',
 					publicPath: path.join(

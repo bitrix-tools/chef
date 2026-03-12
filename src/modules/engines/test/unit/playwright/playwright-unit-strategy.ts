@@ -4,6 +4,8 @@ import { TraceMap } from '@jridgewell/trace-mapping';
 
 import { UnitTestStrategy } from '../unit-test-strategy';
 import { PackageBuilder } from '../../../../services/package-builder';
+import { ChefError } from '../../../../../diagnostics/chef-error';
+import { CF } from '../../../../../diagnostics/diagnostic-codes';
 import { findPlaywrightConfig } from './find-playwright-config';
 import { mapStack } from './map-stack';
 import { embedSourceMap } from './embed-source-map';
@@ -66,7 +68,7 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 				stats: {},
 				consoleLogs: [],
 				errors: [
-					new Error('playwright.config.ts does not exist run `chef init test` for configure playwright'),
+					new ChefError(CF.PLAYWRIGHT_CONFIG_NOT_FOUND, 'playwright.config.ts does not exist run `chef init test` for configure playwright'),
 				],
 			};
 		}
@@ -84,7 +86,7 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 				stats: {},
 				consoleLogs: [],
 				errors: [
-					new Error(`Unknown browser type: ${browserType}`),
+					new ChefError(CF.UNKNOWN_BROWSER, `Unknown browser type: ${browserType}`),
 				],
 			};
 		}

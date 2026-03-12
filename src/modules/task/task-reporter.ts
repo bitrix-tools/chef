@@ -1,8 +1,11 @@
 import chalk from 'chalk';
 
-import { formatError } from '../../utils/error-formatter';
+import { hasCodeFrame } from '../../diagnostics/code-frame';
+import { formatError, formatInternalError } from '../../diagnostics/format-error';
 
 import type { TaskResult, TaskDetail, TaskGroupResult } from './task-types';
+
+type TaskError = Extract<TaskDetail, { type: 'error' }>;
 
 const isTTY = process.stdout.isTTY ?? false;
 
@@ -38,20 +41,23 @@ function statusIcon(status: TaskResult['status']): string
 	return chalk.yellow('⚠');
 }
 
-function renderDetail(detail: TaskDetail, indent: string): string
+function isInternalError(error: TaskError): boolean
 {
-	if (detail.type === 'item')
-	{
-		return detail.text.split('\n')
-			.map((line) => `${indent}${line}`)
-			.join('\n');
-	}
+	return typeof error.code === 'string' && error.code.startsWith('CF9');
+}
 
-	if (detail.type === 'error')
-	{
-		return formatError(detail, indent).join('\n');
-	}
+type TaskItem = Extract<TaskDetail, { type: 'item' }>;
+type TaskBlock = Extract<TaskDetail, { type: 'block' }>;
 
+function renderItem(detail: TaskItem, indent: string): string
+{
+	return detail.text.split('\n')
+		.map((line) => `${indent}${line}`)
+		.join('\n');
+}
+
+function renderBlock(detail: TaskBlock, indent: string): string
+{
 	const colorFn = detail.color && typeof chalk[detail.color as keyof typeof chalk] === 'function'
 		? (chalk as any)[detail.color]
 		: (str: string) => str;
@@ -129,41 +135,7 @@ export class TaskReporter
 
 		if (result.details)
 		{
-			const errorDetails = result.details.filter((d) => d.type === 'error');
-			const errorCount = errorDetails.length;
-			let errorIndex = 0;
-
-			for (const detail of result.details)
-			{
-				if (detail.type === 'error' && errorCount > 1)
-				{
-					errorIndex++;
-					if (errorIndex > 1)
-					{
-						console.log('');
-						console.log(`${this.#detailPrefix}${chalk.dim('─'.repeat(40))}`);
-					}
-					console.log('');
-
-					const counterText = `${errorIndex}/${errorCount}`;
-					const counter = chalk.dim(counterText);
-
-					const shortMessage = detail.message
-						.replace(/^.*?\(\d+:\d+\):\s*/, '');
-					console.log(`${this.#detailPrefix}${counter} ${shortMessage}`);
-
-					const errorLines = formatError({ ...detail, message: '' }, this.#detailPrefix);
-					if (errorLines.length > 0)
-					{
-						console.log('');
-						console.log(errorLines.join('\n'));
-					}
-				}
-				else
-				{
-					console.log(renderDetail(detail, this.#detailPrefix));
-				}
-			}
+			this.#renderDetails(result.details, result.status);
 		}
 	}
 
@@ -210,6 +182,107 @@ export class TaskReporter
 			warnings: this.#warnings,
 			duration,
 		};
+	}
+
+	#renderDetails(details: TaskDetail[], status: TaskResult['status']): void
+	{
+		const items = details.filter((d): d is Extract<TaskDetail, { type: 'item' }> => d.type === 'item');
+		const blocks = details.filter((d): d is Extract<TaskDetail, { type: 'block' }> => d.type === 'block');
+		const allErrors = details.filter((d): d is TaskError => d.type === 'error');
+		const errors = allErrors.filter((d) => !isInternalError(d));
+		const internal = allErrors.filter((d) => isInternalError(d));
+
+		const severity = status === 'warning' ? 'warning' : 'error';
+
+		// Items (bundle sizes, etc.) — always first, compact
+		for (const item of items)
+		{
+			console.log(renderItem(item, this.#detailPrefix));
+		}
+
+		// Blocks
+		for (const block of blocks)
+		{
+			console.log(renderBlock(block, this.#detailPrefix));
+		}
+
+		// Errors/warnings
+		if (errors.length > 0)
+		{
+			const hasItemsBefore = items.length > 0 || blocks.length > 0;
+			this.#renderErrors(errors, severity, hasItemsBefore);
+		}
+
+		// Internal errors
+		for (const error of internal)
+		{
+			console.log('');
+			console.log(formatInternalError(error));
+		}
+
+		// Trailing blank line after errors to separate from next task
+		if (errors.length > 0 || internal.length > 0)
+		{
+			console.log('');
+		}
+	}
+
+	#renderErrors(errors: TaskError[], severity: 'error' | 'warning', hasItemsBefore: boolean): void
+	{
+		const colorFn = severity === 'warning' ? chalk.yellow : chalk.red;
+		const withFrame = errors.filter((d) => hasCodeFrame(d));
+		const withoutFrame = errors.filter((d) => !hasCodeFrame(d));
+
+		if (errors.length === 1 && !hasItemsBefore)
+		{
+			// Single error — inline, no section header
+			const error = errors[0];
+			console.log(formatError({ ...error, severity }, this.#detailPrefix).join('\n'));
+
+			return;
+		}
+
+		const sectionTitle = severity === 'warning'
+			? chalk.yellow.bold(`Warnings (${errors.length})`)
+			: chalk.red.bold(`Errors (${errors.length})`);
+
+		console.log('');
+		console.log(`${this.#detailPrefix}${sectionTitle}`);
+
+		// Frameless errors — compact list
+		if (withoutFrame.length > 0)
+		{
+			console.log('');
+			for (const error of withoutFrame)
+			{
+				const codePrefix = error.code ? colorFn(`[${error.code}]`) + ' ' : '';
+				console.log(`${this.#detailPrefix}${codePrefix}${error.message}`);
+			}
+		}
+
+		// Framed errors — with separators
+		for (let i = 0; i < withFrame.length; i++)
+		{
+			const error = withFrame[i];
+
+			if (i > 0 || withoutFrame.length > 0)
+			{
+				console.log('');
+				console.log(`${this.#detailPrefix}${chalk.dim('─'.repeat(40))}`);
+			}
+
+			console.log('');
+			const codePrefix = error.code ? colorFn(`[${error.code}]`) + ' ' : '';
+			const shortMessage = error.message.replace(/^.*?\(\d+:\d+\):\s*/, '');
+			console.log(`${this.#detailPrefix}${codePrefix}${shortMessage}`);
+
+			const errorLines = formatError({ ...error, severity, message: '' }, this.#detailPrefix);
+			if (errorLines.length > 0)
+			{
+				console.log('');
+				console.log(errorLines.join('\n'));
+			}
+		}
 	}
 
 	#printTitle(): void

@@ -10,6 +10,8 @@ import { Environment } from '../../environment/environment';
 import { createPathOption } from '../../shared/options/path-option';
 import { multiline } from '../../utils/multiline-text-tag';
 import { ProjectInitializer, SaveFileStatus } from '../../modules/services/project-initializer';
+import { formatInternalError } from '../../diagnostics/format-error';
+import { CF } from '../../diagnostics/diagnostic-codes';
 
 const initTestsCommand = new Command('tests')
 	.description('Set up Playwright config and .env.test for browser tests')
@@ -260,8 +262,9 @@ const initBuildCommand = new Command('build')
 		}
 		catch (error)
 		{
-			aliasesConfigSpinner.fail('Error while scanning packages:');
-			console.error(error);
+			aliasesConfigSpinner.fail('Error while scanning packages');
+			const err = error instanceof Error ? error : new Error(String(error));
+			console.log(formatInternalError({ code: CF.ALIAS_GENERATION_ERROR, message: err.message, stack: err.stack }));
 			throw error;
 		}
 	});

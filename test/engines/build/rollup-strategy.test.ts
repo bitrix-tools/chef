@@ -2,6 +2,7 @@ import { describe, it } from 'mocha';
 import { assert } from 'chai';
 
 import { RollupBuildStrategy } from '../../../src/modules/engines/build/rollup/rollup-strategy';
+import { CF } from '../../../src/diagnostics/diagnostic-codes';
 
 import type { RollupLog } from 'rollup';
 
@@ -160,6 +161,74 @@ describe('RollupBuildStrategy', () => {
 			);
 
 			assert.isEmpty(dependenciesRef);
+		});
+
+		it('should map CIRCULAR_DEPENDENCY to CF1006', () => {
+			const { onWarning, warningsRef } = TestableRollupStrategy.testCreateOnWarningHandler();
+
+			onWarning({ code: 'CIRCULAR_DEPENDENCY', message: 'A -> B -> A' } as RollupLog, () => {});
+
+			assert.equal(warningsRef[0].code, CF.CIRCULAR_DEPENDENCY);
+		});
+
+		it('should map MISSING_EXPORT to CF1007', () => {
+			const { onWarning, warningsRef } = TestableRollupStrategy.testCreateOnWarningHandler();
+
+			onWarning({ code: 'MISSING_EXPORT', message: '"foo" is not exported' } as RollupLog, () => {});
+
+			assert.equal(warningsRef[0].code, CF.MISSING_EXPORT);
+		});
+
+		it('should map THIS_IS_UNDEFINED to CF1008', () => {
+			const { onWarning, warningsRef } = TestableRollupStrategy.testCreateOnWarningHandler();
+
+			onWarning({ code: 'THIS_IS_UNDEFINED', message: 'this rewritten' } as RollupLog, () => {});
+
+			assert.equal(warningsRef[0].code, CF.THIS_IS_UNDEFINED);
+		});
+
+		it('should map EVAL to CF1009', () => {
+			const { onWarning, warningsRef } = TestableRollupStrategy.testCreateOnWarningHandler();
+
+			onWarning({ code: 'EVAL', message: 'Use of eval' } as RollupLog, () => {});
+
+			assert.equal(warningsRef[0].code, CF.EVAL);
+		});
+
+		it('should map UNUSED_EXTERNAL_IMPORT to CF1011', () => {
+			const { onWarning, warningsRef } = TestableRollupStrategy.testCreateOnWarningHandler();
+
+			onWarning({ code: 'UNUSED_EXTERNAL_IMPORT', message: '"foo" imported but unused' } as RollupLog, () => {});
+
+			assert.equal(warningsRef[0].code, CF.UNUSED_EXTERNAL_IMPORT);
+		});
+
+		it('should map PLUGIN_WARNING to CF1014', () => {
+			const { onWarning, warningsRef } = TestableRollupStrategy.testCreateOnWarningHandler();
+
+			onWarning({ code: 'PLUGIN_WARNING', message: 'Plugin issue' } as RollupLog, () => {});
+
+			assert.equal(warningsRef[0].code, CF.PLUGIN_WARNING);
+		});
+
+		it('should map unknown warning codes to CF1099', () => {
+			const { onWarning, warningsRef } = TestableRollupStrategy.testCreateOnWarningHandler();
+
+			onWarning({ code: 'SOME_FUTURE_CODE', message: 'Unknown warning' } as RollupLog, () => {});
+
+			assert.equal(warningsRef[0].code, CF.UNKNOWN_BUILD_WARNING);
+		});
+
+		it('should map non-external UNRESOLVED_IMPORT to CF1012', () => {
+			const { onWarning, warningsRef } = TestableRollupStrategy.testCreateOnWarningHandler();
+
+			onWarning(
+				{ code: 'UNRESOLVED_IMPORT', exporter: './utils' } as RollupLog,
+				() => {},
+			);
+
+			assert.lengthOf(warningsRef, 1);
+			assert.equal(warningsRef[0].code, CF.UNRESOLVED_IMPORT);
 		});
 	});
 

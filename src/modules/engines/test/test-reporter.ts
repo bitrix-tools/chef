@@ -1,11 +1,8 @@
 import chalk from 'chalk';
 import ora, { type Ora } from 'ora';
 
-import {
-	stripAnsi,
-	hasLocalFilePath,
-	formatError,
-} from '../../../utils/error-formatter';
+import { stripAnsi, hasLocalFilePath } from '../../../diagnostics/code-frame';
+import { formatError } from '../../../diagnostics/format-error';
 
 import type { TestToken, ConsoleLog } from './test-types';
 

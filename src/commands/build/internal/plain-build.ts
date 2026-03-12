@@ -32,6 +32,7 @@ export function plainBuild(extension: BasePackage, args: Record<string, any>): P
 			{
 				const details: TaskDetail[] = result.errors.map((error) => ({
 					type: 'error' as const,
+					code: error.code,
 					message: error.message.replace(/^\[plugin [^\]]+\]\s*/, '').replaceAll(pathPrefix, ''),
 					frame: error.frame,
 					loc: error.loc?.file
@@ -71,6 +72,7 @@ export function plainBuild(extension: BasePackage, args: Record<string, any>): P
 				{
 					details.push({
 						type: 'error',
+						code: warning.code,
 						message: warning.message.replaceAll(pathPrefix, ''),
 						frame: warning.frame,
 						loc: warning.loc?.file

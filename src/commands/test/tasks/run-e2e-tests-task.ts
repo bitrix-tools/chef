@@ -23,6 +23,7 @@ export function runEndToEndTestsTask(extension: BasePackage, args: Record<string
 
 				const details: TaskDetail[] = testResult.errors.map((error: Error) => ({
 					type: 'error' as const,
+					code: 'code' in error ? (error as any).code : undefined,
 					message: error.message,
 					stack: error.stack,
 				}));

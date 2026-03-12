@@ -2,6 +2,7 @@ import type { Plugin } from 'rollup';
 import type { MinifyOptions } from 'oxc-minify';
 
 export interface BuildDiagnostic {
+	code?: string;
 	message: string;
 	frame?: string;
 	loc?: { file: string; line: number; column: number };

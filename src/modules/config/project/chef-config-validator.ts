@@ -1,10 +1,12 @@
 import { denyLabels, parseDenyOption } from './chef-config';
+import { CF } from '../../../diagnostics/diagnostic-codes';
 
 import type { ChefConfig, DenySeverity } from './chef-config';
 import type { BuildOptions } from '../../engines/build/build-types';
 
 export interface ValidationIssue
 {
+	code?: string;
 	option: string;
 	severity: DenySeverity;
 	message: string;
@@ -35,6 +37,7 @@ export function validateBuildOptions(options: BuildOptions, config: ChefConfig):
 		if (rule.enabled && check(options))
 		{
 			issues.push({
+				code: CF.OPTION_DENIED,
 				option: key,
 				severity: rule.severity,
 				message: rule.message ?? `${denyLabels[key]} denied by project config (chef.config)`,

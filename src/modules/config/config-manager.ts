@@ -1,5 +1,7 @@
 import * as fs from 'node:fs/promises';
 
+import { ChefError } from '../../diagnostics/chef-error';
+import { CF } from '../../diagnostics/diagnostic-codes';
 import { ConfigStrategy } from './config-strategy';
 
 export abstract class ConfigManager<T>
@@ -29,7 +31,7 @@ export abstract class ConfigManager<T>
 				}
 				else
 				{
-					throw new Error(`Invalid value of '${key}'.`);
+					throw new ChefError(CF.INVALID_CONFIG_VALUE, `Invalid value of '${key}'.`);
 				}
 			}
 			// else

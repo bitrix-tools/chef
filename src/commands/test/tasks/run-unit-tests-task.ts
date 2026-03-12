@@ -66,6 +66,7 @@ function createDebugTask(extension: BasePackage, args: Record<string, any>, brow
 				{
 					const details: TaskDetail[] = testResult.errors.map((error: Error) => ({
 						type: 'error' as const,
+						code: 'code' in error ? (error as any).code : undefined,
 						message: error.message,
 						stack: error.stack,
 					}));
@@ -156,6 +157,7 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 			{
 				const details: TaskDetail[] = allErrors.map((error) => ({
 					type: 'error' as const,
+					code: 'code' in error ? (error as any).code : undefined,
 					message: error.message,
 					stack: error.stack,
 				}));

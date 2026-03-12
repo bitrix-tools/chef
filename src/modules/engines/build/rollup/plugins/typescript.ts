@@ -7,6 +7,8 @@ import type { Plugin } from 'rollup';
 import type { CompilerOptions, Diagnostic } from 'typescript';
 import type { BuildDiagnostic } from '../../build-types';
 
+import { CF } from '../../../../../diagnostics/diagnostic-codes';
+
 export interface TypeScriptPluginOptions
 {
 	packageRoot: string;
@@ -224,12 +226,13 @@ function diagnosticsToErrors(ts: typeof import('typescript'), diagnostics: Diagn
 
 		if (!diagnostic.file || diagnostic.start === undefined)
 		{
-			return { message };
+			return { code: CF.TS_TYPE_ERROR, message };
 		}
 
 		const { line, character } = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start);
 
 		return {
+			code: CF.TS_TYPE_ERROR,
 			message,
 			loc: {
 				file: diagnostic.file.fileName,
