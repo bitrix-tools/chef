@@ -18,7 +18,6 @@ export interface BundleConfig {
 		type?: 'inline' | 'copy';
 		output?: string;
 		maxSize?: number;
-		svgo?: boolean;
 	};
 	resolveFilesImport?: {
 		output?: string;

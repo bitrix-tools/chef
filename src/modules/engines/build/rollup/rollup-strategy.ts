@@ -453,19 +453,13 @@ export class RollupBuildStrategy extends BuildStrategy
 			{ default: commonjs },
 			{ default: jsonPlugin },
 			{ default: urlPlugin },
-			{ default: postcss },
-			{ default: postcssUrl },
-			{ default: postcssSvgo },
-			{ default: autoprefixer },
+			{ default: cssPlugin },
 		] = await Promise.all([
 			import('@rollup/plugin-node-resolve'),
 			import('@rollup/plugin-commonjs'),
 			import('@rollup/plugin-json'),
 			import('@rollup/plugin-url'),
-			import('rollup-plugin-postcss'),
-			import('postcss-url'),
-			import('postcss-svgo'),
-			import('autoprefixer'),
+			import('./plugins/css'),
 		]);
 
 		const babelPlugin = await this.#loadBabelPlugin(options);
@@ -478,10 +472,7 @@ export class RollupBuildStrategy extends BuildStrategy
 			commonjs,
 			jsonPlugin,
 			urlPlugin,
-			postcss,
-			postcssUrl,
-			postcssSvgo,
-			autoprefixer,
+			cssPlugin,
 			babelPlugin,
 			terserPlugin,
 		};
@@ -555,10 +546,7 @@ export class RollupBuildStrategy extends BuildStrategy
 			commonjs,
 			jsonPlugin,
 			urlPlugin,
-			postcss,
-			postcssUrl,
-			postcssSvgo,
-			autoprefixer,
+			cssPlugin,
 			babelPlugin,
 			terserPlugin,
 		} = await this.#loadBuildPlugins(options);
@@ -621,28 +609,11 @@ export class RollupBuildStrategy extends BuildStrategy
 				})(),
 				...(babelPlugin ? [babelPlugin] : []),
 				jsonPlugin(),
-				postcss({
-					extensions: ['.css'],
-					extract: options.output.css || true,
-					to: options.output.css,
-					sourceMap: false,
-					plugins: [
-						autoprefixer({
-							overrideBrowserslist: options.targets,
-						}),
-						postcssUrl({
-							url: options?.cssImages?.type ?? 'inline',
-							maxSize: options?.cssImages?.maxSize ?? 14,
-							inline: (size: number) => {
-								return size < (options?.cssImages?.maxSize ?? 14) * 1024;
-							},
-							fallback: 'copy',
-							useHash: false,
-						}),
-						postcssSvgo({
-							encode: true,
-						}),
-					],
+				cssPlugin({
+					extract: options.output.css,
+					targets: options.targets,
+					cssImages: options.cssImages,
+					packageRoot: options.packageRoot,
 				}),
 				commonjs({
 					sourceMap: false,

@@ -280,6 +280,191 @@ return [
 		});
 	});
 
+	describe('css autoprefixer', () => {
+		const extensionPath = path.join(fixturesPath, 'css-autoprefixer');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should add vendor prefixes for old targets', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			options.targets = ['chrome 49', 'safari 9'];
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const cssOutput = path.join(extensionPath, 'dist', 'extension.bundle.css');
+			assert.isTrue(fs.existsSync(cssOutput), 'CSS bundle should exist');
+
+			const content = fs.readFileSync(cssOutput, 'utf-8');
+			assert.include(content, '-webkit-user-select', 'Should add -webkit-user-select prefix');
+			assert.include(content, '-webkit-backdrop-filter', 'Should add -webkit-backdrop-filter prefix');
+			assert.include(content, '-webkit-appearance', 'Should add -webkit-appearance prefix');
+		});
+
+		it('should not add unnecessary prefixes for modern targets', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			options.targets = ['chrome 130'];
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const cssOutput = path.join(extensionPath, 'dist', 'extension.bundle.css');
+			const content = fs.readFileSync(cssOutput, 'utf-8');
+			assert.notInclude(content, '-webkit-user-select', 'Should not add prefix for modern Chrome');
+		});
+	});
+
+	describe('css images', () => {
+		const extensionPath = path.join(fixturesPath, 'css-images');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should inline small images as data URI', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const cssOutput = path.join(extensionPath, 'dist', 'extension.bundle.css');
+			assert.isTrue(fs.existsSync(cssOutput), 'CSS bundle should exist');
+
+			const content = fs.readFileSync(cssOutput, 'utf-8');
+			assert.include(content, 'data:', 'Small image should be inlined as data URI');
+			assert.notInclude(content, 'small.png', 'Should not contain original filename');
+		});
+	});
+
+	describe('css multiple files', () => {
+		const extensionPath = path.join(fixturesPath, 'css-multiple');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should merge multiple CSS imports into one bundle', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const cssOutput = path.join(extensionPath, 'dist', 'extension.bundle.css');
+			assert.isTrue(fs.existsSync(cssOutput), 'CSS bundle should exist');
+
+			const content = fs.readFileSync(cssOutput, 'utf-8');
+			assert.include(content, '.multi-base', 'Should contain base styles');
+			assert.include(content, '.multi-theme', 'Should contain theme styles');
+		});
+
+		it('should preserve import order in CSS bundle', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			const cssOutput = path.join(extensionPath, 'dist', 'extension.bundle.css');
+			const content = fs.readFileSync(cssOutput, 'utf-8');
+
+			const baseIndex = content.indexOf('.multi-base');
+			const themeIndex = content.indexOf('.multi-theme');
+
+			assert.isAbove(baseIndex, -1, 'Base styles should be in bundle');
+			assert.isAbove(themeIndex, -1, 'Theme styles should be in bundle');
+			assert.isBelow(baseIndex, themeIndex, 'Base styles should come before theme styles');
+		});
+	});
+
+	describe('css nested components', () => {
+		const extensionPath = path.join(fixturesPath, 'css-nested-components');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should collect CSS from all nested components into one bundle', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const cssOutput = path.join(extensionPath, 'dist', 'extension.bundle.css');
+			assert.isTrue(fs.existsSync(cssOutput), 'CSS bundle should exist');
+
+			const content = fs.readFileSync(cssOutput, 'utf-8');
+
+			// Root component
+			assert.include(content, '.app', 'Should contain root app styles');
+			// Top-level components
+			assert.include(content, '.header', 'Should contain header styles');
+			assert.include(content, '.sidebar', 'Should contain sidebar styles');
+			// Nested component
+			assert.include(content, '.content', 'Should contain content styles');
+			// Deeply nested components
+			assert.include(content, '.card', 'Should contain card styles');
+			assert.include(content, '.list', 'Should contain list styles');
+			assert.include(content, '.list-item', 'Should contain list-item styles');
+		});
+
+		it('should produce a single CSS file from nested imports', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			const distPath = path.join(extensionPath, 'dist');
+			const cssFiles = fs.readdirSync(distPath).filter((f) => f.endsWith('.css'));
+
+			assert.lengthOf(cssFiles, 1, 'Should produce exactly one CSS file');
+		});
+
+		it('should preserve import order: parent CSS before children', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			const cssOutput = path.join(extensionPath, 'dist', 'extension.bundle.css');
+			const content = fs.readFileSync(cssOutput, 'utf-8');
+
+			// extension.css is imported first in extension.js → should appear before component styles
+			const appIndex = content.indexOf('.app');
+			const headerIndex = content.indexOf('.header');
+			const sidebarIndex = content.indexOf('.sidebar');
+			const contentIndex = content.indexOf('.content');
+			const cardIndex = content.indexOf('.card');
+			const listIndex = content.indexOf('.list {');
+
+			assert.isBelow(appIndex, headerIndex, 'App styles should come before header');
+			assert.isBelow(headerIndex, sidebarIndex, 'Header should come before sidebar');
+			assert.isBelow(sidebarIndex, contentIndex, 'Sidebar should come before content');
+
+			// content.js imports content.css first, then card and list
+			assert.isBelow(contentIndex, cardIndex, 'Content styles should come before card');
+			assert.isBelow(cardIndex, listIndex, 'Card styles should come before list');
+		});
+	});
+
 	describe('skip_core logic', () => {
 		const extensionPath = path.join(fixturesPath, 'basic-extension');
 		const configPhpPath = path.join(extensionPath, 'config.php');

@@ -8,7 +8,6 @@ export const cssImagesStrategy = {
 		return {
 			type: 'inline',
 			maxSize: 14,
-			svgo: true,
 		};
 	},
 	prepare(value: any): BundleConfig['cssImages']
