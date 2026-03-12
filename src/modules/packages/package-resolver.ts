@@ -18,6 +18,42 @@ const isGlobPattern = (name: string) => {
 	return /[*?!\[\]]/.test(name);
 };
 
+export interface ParsedExtensionPattern
+{
+	fixedSegments: string[];
+	configPatterns: string[];
+}
+
+export function parseExtensionPattern(pattern: string): ParsedExtensionPattern
+{
+	const segments = pattern.split('.');
+
+	const fixedSegments: string[] = [];
+	let globStart = 0;
+	for (let i = 0; i < segments.length; i++)
+	{
+		if (isGlobPattern(segments[i]))
+		{
+			globStart = i;
+			break;
+		}
+		fixedSegments.push(segments[i]);
+		globStart = i + 1;
+	}
+
+	const globSegments = segments.slice(globStart);
+	const globPath = globSegments.length > 0
+		? globSegments.join('/') + '/'
+		: '';
+
+	const configPatterns = [
+		`${globPath}bundle.config.js`,
+		`${globPath}bundle.config.ts`,
+	];
+
+	return { fixedSegments, configPatterns };
+}
+
 export class PackageResolver
 {
 	static #cache: MemoryCache = new MemoryCache();
@@ -128,31 +164,7 @@ export class PackageResolver
 
 		for (const pattern of patterns)
 		{
-			const segments = pattern.split('.');
-
-			// Split into fixed prefix segments and glob tail
-			const fixedSegments: string[] = [];
-			let globStart = 0;
-			for (let i = 0; i < segments.length; i++)
-			{
-				if (isGlobPattern(segments[i]))
-				{
-					globStart = i;
-					break;
-				}
-				fixedSegments.push(segments[i]);
-				globStart = i + 1;
-			}
-
-			const globSegments = segments.slice(globStart);
-			const globPath = globSegments.length > 0
-				? globSegments.join('/') + '/'
-				: '';
-
-			const configPatterns = [
-				`${globPath}bundle.config.js`,
-				`${globPath}bundle.config.ts`,
-			];
+			const { fixedSegments, configPatterns } = parseExtensionPattern(pattern);
 
 			if (Environment.getType() === 'source')
 			{
