@@ -7,8 +7,12 @@ import { PackageResolver } from '../packages/package-resolver';
 import { findPackages } from '../../utils/package/find-packages';
 import { safeFileWrite, SaveFileStatus } from '../../utils/safe-file-write';
 
-import type { FlexibleCompilerOptions } from '@rollup/plugin-typescript';
+import type { CompilerOptions } from 'typescript';
 import type { BasePackage } from '../packages/base-package';
+
+type TSConfig = {
+	compilerOptions: CompilerOptions;
+};
 
 export type FileResult = {
 	name: string;
@@ -81,7 +85,7 @@ export class ProjectInitializer
 			return '';
 		})();
 
-		const tsconfig: FlexibleCompilerOptions = {
+		const tsconfig: TSConfig = {
 			compilerOptions: {
 				baseUrl: this.#rootPath,
 				types: [typesPath],
