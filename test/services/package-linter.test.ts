@@ -81,4 +81,49 @@ describe('PackageLinter', () => {
 		assert.equal(result.files.length, 1);
 		assert.equal(result.files[0].messages[0].ruleId, 'no-var');
 	});
+
+	it('should pass fix option to lint engine', async () => {
+		const mockPackage = createMockPackage('/test');
+
+		sandbox.stub(Environment, 'getRoot').returns('/root');
+
+		const lintResult = createMockLintResult();
+		const lintStub = sandbox.stub(LintEngine.prototype, 'lint').resolves(lintResult);
+
+		const linter = new PackageLinter(mockPackage);
+		await linter.lint({ fix: true });
+
+		const options = lintStub.firstCall.args[0];
+		assert.isTrue(options.fix);
+	});
+
+	it('should pass files option to lint engine', async () => {
+		const mockPackage = createMockPackage('/test');
+
+		sandbox.stub(Environment, 'getRoot').returns('/root');
+
+		const lintResult = createMockLintResult();
+		const lintStub = sandbox.stub(LintEngine.prototype, 'lint').resolves(lintResult);
+
+		const linter = new PackageLinter(mockPackage);
+		await linter.lint({ files: ['/test/src/app.js', '/test/src/utils.js'] });
+
+		const options = lintStub.firstCall.args[0];
+		assert.deepEqual(options.files, ['/test/src/app.js', '/test/src/utils.js']);
+	});
+
+	it('should pass cache option to lint engine', async () => {
+		const mockPackage = createMockPackage('/test');
+
+		sandbox.stub(Environment, 'getRoot').returns('/root');
+
+		const lintResult = createMockLintResult();
+		const lintStub = sandbox.stub(LintEngine.prototype, 'lint').resolves(lintResult);
+
+		const linter = new PackageLinter(mockPackage);
+		await linter.lint({ cache: false });
+
+		const options = lintStub.firstCall.args[0];
+		assert.isFalse(options.cache);
+	});
 });

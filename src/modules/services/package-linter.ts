@@ -7,6 +7,12 @@ import { Environment } from '../../environment/environment';
 import type { BasePackage } from '../packages/base-package';
 import type { LintResult } from '../engines/lint/lint-types';
 
+type PackageLinterOptions = {
+	fix?: boolean;
+	files?: string[];
+	cache?: boolean;
+};
+
 export class PackageLinter
 {
 	readonly #package: BasePackage;
@@ -16,13 +22,16 @@ export class PackageLinter
 		this.#package = extensionPackage;
 	}
 
-	async lint(): Promise<LintResult>
+	async lint(options: PackageLinterOptions = {}): Promise<LintResult>
 	{
 		const engine = new LintEngine(new ESLintStrategy());
 
 		return engine.lint({
 			sourcePath: path.join(this.#package.getPath(), 'src'),
 			rootPath: Environment.getRoot(),
+			fix: options.fix,
+			files: options.files,
+			cache: options.cache,
 		});
 	}
 }

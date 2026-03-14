@@ -50,10 +50,11 @@ export function formatError(error: ErrorInfo, indent = ''): string[]
 
 			if (textOnly)
 			{
+				const continuationIndent = '  ' + ' '.repeat(stripAnsi(codePrefix).length);
 				const msgLines = textOnly.split('\n');
 				for (let i = 0; i < msgLines.length; i++)
 				{
-					lines.push(i === 0 ? `  ${codePrefix}${msgLines[i]}` : `  ${msgLines[i]}`);
+					lines.push(i === 0 ? `  ${codePrefix}${msgLines[i]}` : `${continuationIndent}${msgLines[i]}`);
 				}
 			}
 		}

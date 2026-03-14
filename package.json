@@ -77,7 +77,7 @@
     "chokidar": "^5.0.0",
     "commander": "^14.0.0",
     "concat-with-sourcemaps": "^1.1.0",
-    "eslint": "^8.57.1",
+    "eslint": "^9.39.4",
     "fast-glob": "^3.3.3",
     "log-symbols": "^7.0.1",
     "oxc-minify": "^0.118.0",

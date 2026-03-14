@@ -13,9 +13,17 @@ const STATUS_MAP = {
 export function lintTask(extension: BasePackage, args?: Record<string, any>): Task
 {
 	return {
-		title: 'ESLint analysis...',
+		title: 'Lint...',
 		run: async (): Promise<TaskResult> => {
 			const result = await extension.lint();
+
+			if (result.skipped)
+			{
+				return {
+					title: result.skipReason ? `Lint: ${result.skipReason}` : 'Lint: skipped',
+					status: 'passed',
+				};
+			}
 
 			if (args?.verbose)
 			{

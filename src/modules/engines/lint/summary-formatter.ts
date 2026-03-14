@@ -8,7 +8,7 @@ export function summaryFormatter(result: LintResult): { title: string; text: str
 	{
 		return {
 			level: 'fail',
-			title: `ESLint: Found ${pluralize(' error', result.getErrorsCount())} and ${pluralize(' warning', result.getWarningsCount())}.`,
+			title: `Lint: Found ${pluralize(' error', result.getErrorsCount())} and ${pluralize(' warning', result.getWarningsCount())}.`,
 			text: '',
 		};
 	}
@@ -17,13 +17,13 @@ export function summaryFormatter(result: LintResult): { title: string; text: str
 	{
 		return {
 			level: 'warn',
-			title: `ESLint: Found ${pluralize(' warning', result.getWarningsCount())}.`,
+			title: `Lint: Found ${pluralize(' warning', result.getWarningsCount())}.`,
 			text: '',
 		};
 	}
 
 	return {
-		title: 'Eslint: All clean (0 errors, 0 warnings)',
+		title: 'Lint: All clean (0 errors, 0 warnings)',
 		level: 'succeed',
 		text: '',
 	};

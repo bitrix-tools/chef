@@ -426,10 +426,10 @@ export abstract class BasePackage
 		return new PackageBuilder(this).generate(options);
 	}
 
-	async lint(): Promise<LintResult>
+	async lint(options: { fix?: boolean; files?: string[]; cache?: boolean } = {}): Promise<LintResult>
 	{
 		const { PackageLinter } = await import('../services/package-linter');
-		return new PackageLinter(this).lint();
+		return new PackageLinter(this).lint(options);
 	}
 
 	async runUnitTests(args: Record<string, any> = {})

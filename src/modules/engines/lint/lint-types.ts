@@ -1,6 +1,9 @@
 export type LintOptions = {
 	sourcePath: string;
 	rootPath: string;
+	fix?: boolean;
+	files?: string[];
+	cache?: boolean;
 };
 
 export type LintFormatterLevel = 'succeed' | 'warn' | 'fail';
@@ -20,6 +23,8 @@ export interface LintFileResult {
 
 export interface LintResult {
 	files: LintFileResult[];
+	skipped?: boolean;
+	skipReason?: string;
 	hasErrors(): boolean;
 	getErrorsCount(): number;
 	hasWarnings(): boolean;
