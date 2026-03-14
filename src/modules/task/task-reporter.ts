@@ -198,7 +198,7 @@ export class TaskReporter
 		const errors = allErrors.filter((d) => !isInternalError(d));
 		const internal = allErrors.filter((d) => isInternalError(d));
 
-		const severity = status === 'warning' ? 'warning' : 'error';
+		const groupSeverity = status === 'warning' ? 'warning' : 'error';
 
 		// Items (bundle sizes, etc.) — always first, compact
 		for (const item of items)
@@ -212,11 +212,21 @@ export class TaskReporter
 			console.log(renderBlock(block, this.#detailPrefix));
 		}
 
-		// Errors/warnings
-		if (errors.length > 0)
+		// Split errors by per-detail severity when available, fallback to group severity
+		const errorDetails = errors.filter((d) => (d.severity ?? groupSeverity) === 'error');
+		const warningDetails = errors.filter((d) => (d.severity ?? groupSeverity) === 'warning');
+		const hasItemsBefore = items.length > 0 || blocks.length > 0;
+
+		if (errorDetails.length > 0 && warningDetails.length > 0)
 		{
-			const hasItemsBefore = items.length > 0 || blocks.length > 0;
-			this.#renderErrors(errors, severity, hasItemsBefore);
+			// Mixed: render errors and warnings as separate sections
+			this.#renderErrors(errorDetails, 'error', hasItemsBefore);
+			this.#renderErrors(warningDetails, 'warning', true);
+		}
+		else if (errors.length > 0)
+		{
+			// All same severity
+			this.#renderErrors(errors, groupSeverity, hasItemsBefore);
 		}
 
 		// Internal errors

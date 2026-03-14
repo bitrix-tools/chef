@@ -3,7 +3,7 @@ type TaskStatus = 'passed' | 'failed' | 'warning';
 type TaskDetail =
 	| { type: 'item'; text: string }
 	| { type: 'block'; text: string; color?: string }
-	| { type: 'error'; code?: string; message: string; stack?: string; frame?: string; loc?: { file: string; line: number; column: number; root?: string } };
+	| { type: 'error'; severity?: 'error' | 'warning'; code?: string; message: string; stack?: string; frame?: string; loc?: { file: string; line: number; column: number; root?: string } };
 
 interface TaskResult
 {

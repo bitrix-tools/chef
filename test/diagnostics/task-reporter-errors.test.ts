@@ -324,6 +324,82 @@ describe('TaskReporter error rendering', () => {
 		}
 	});
 
+	it('should split mixed errors and warnings into separate sections', () => {
+		const reporter = new TaskReporter('test', 1);
+		reporter.startTask('Linting...');
+		reporter.completeTask({
+			title: 'Lint result',
+			status: 'failed',
+			details: [
+				{ type: 'error', severity: 'error', code: 'no-var', message: 'Unexpected var' },
+				{ type: 'error', severity: 'error', code: 'no-eval', message: 'eval is harmful' },
+				{ type: 'error', severity: 'warning', code: 'no-console', message: 'Unexpected console' },
+			],
+		});
+
+		const plain = plainOutput();
+
+		assert.include(plain, 'Errors (2)');
+		assert.include(plain, 'Warnings (1)');
+
+		const errorsPos = plain.indexOf('Errors (2)');
+		const warningsPos = plain.indexOf('Warnings (1)');
+		assert.isBelow(errorsPos, warningsPos, 'Errors section should come before Warnings');
+	});
+
+	it('should render all as errors when no per-detail severity and status is failed', () => {
+		const reporter = new TaskReporter('test', 1);
+		reporter.startTask('Building...');
+		reporter.completeTask({
+			title: 'Build failed',
+			status: 'failed',
+			details: [
+				{ type: 'error', code: 'CF1001', message: 'Error A' },
+				{ type: 'error', code: 'CF1001', message: 'Error B' },
+			],
+		});
+
+		const plain = plainOutput();
+
+		assert.include(plain, 'Errors (2)');
+		assert.notInclude(plain, 'Warnings');
+	});
+
+	it('should render all as warnings when all details have warning severity', () => {
+		const reporter = new TaskReporter('test', 1);
+		reporter.startTask('Linting...');
+		reporter.completeTask({
+			title: 'Lint result',
+			status: 'warning',
+			details: [
+				{ type: 'error', severity: 'warning', code: 'no-console', message: 'Console warning 1' },
+				{ type: 'error', severity: 'warning', code: 'no-console', message: 'Console warning 2' },
+			],
+		});
+
+		const plain = plainOutput();
+
+		assert.include(plain, 'Warnings (2)');
+		assert.notInclude(plain, 'Errors');
+	});
+
+	it('should use yellow for warning codes and red for error codes in mixed output', () => {
+		const reporter = new TaskReporter('test', 1);
+		reporter.startTask('Linting...');
+		reporter.completeTask({
+			title: 'Lint result',
+			status: 'failed',
+			details: [
+				{ type: 'error', severity: 'error', code: 'no-var', message: 'Error msg' },
+				{ type: 'error', severity: 'warning', code: 'no-console', message: 'Warning msg' },
+			],
+		});
+
+		// Red and yellow ANSI codes should both be present
+		assert.include(output, '\x1B[31m');
+		assert.include(output, '\x1B[33m');
+	});
+
 	it('should render blocks', () => {
 		const reporter = new TaskReporter('test', 1);
 		reporter.startTask('Linting...');
