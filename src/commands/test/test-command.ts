@@ -185,7 +185,7 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 			{
 				if (count > 1)
 				{
-					console.log(`\n${chalk.green('✔')} Test ${count} extensions successfully`);
+					console.log(`\n${chalk.green('✔')} Tested ${count} extensions`);
 				}
 
 				process.exit(0);
@@ -199,7 +199,7 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 	if (args.watch)
 	{
 		const shutdown = createShutdown(async () => {
-			console.log('\n🛑 Watcher stopped...');
+			console.log('\nWatcher stopped...');
 
 			for await (const watcher of watchers)
 			{
@@ -208,7 +208,7 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 
 			await queue.onIdle();
 
-			console.log('👋 Goodbye!');
+			console.log('Goodbye!');
 		});
 
 		process.on('SIGINT', shutdown);

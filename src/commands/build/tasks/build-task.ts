@@ -62,7 +62,7 @@ export function buildTask(extension: BasePackage, args: Record<string, any>): Ta
 			}
 
 			return {
-				title: 'Build successfully',
+				title: 'Build completed',
 				status: 'passed',
 			};
 		},

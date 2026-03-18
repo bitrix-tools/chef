@@ -103,7 +103,7 @@ buildCommand
 				{
 					if (count > 1)
 					{
-						console.log(`\n${chalk.green('✔')} Build ${count} extensions successfully`);
+						console.log(`\n${chalk.green('✔')} Built ${count} extensions`);
 					}
 
 					process.exit(0);
@@ -117,7 +117,7 @@ buildCommand
 		if (args.watch)
 		{
 			const shutdown = createShutdown(async () => {
-				console.log('\n🛑 Watcher stopped...');
+				console.log('\nWatcher stopped...');
 
 				for await (const watcher of watchers)
 				{
@@ -131,7 +131,7 @@ buildCommand
 
 				await queue.onIdle();
 
-				console.log('👋 Goodbye!');
+				console.log('Goodbye!');
 			});
 
 			process.on('SIGINT', shutdown);

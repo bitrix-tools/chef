@@ -1,3 +1,5 @@
+import chalk from 'chalk';
+
 import type { BasePackage } from '../../../modules/packages/base-package';
 import type { Task, TaskResult } from '../../../modules/task/task-types';
 
@@ -11,7 +13,7 @@ export function unitTestsTask(extension: BasePackage): Task
 			if (testsResult.errors.length > 0)
 			{
 				return {
-					title: `Run unit tests failed --> Run chef test -e=${extension.getName()} for more information`,
+					title: `Unit tests failed — run ${chalk.cyan(`chef test ${extension.getName()}`)} for details`,
 					status: 'failed',
 				};
 			}
@@ -34,14 +36,14 @@ export function unitTestsTask(extension: BasePackage): Task
 			{
 				return {
 					title: 'No unit tests found',
-					status: 'warning',
+					status: 'skipped',
 				};
 			}
 
 			if (stats.failed > 0)
 			{
 				return {
-					title: `Unit tests failed --> Run chef test -e=${extension.getName()} for more information.`,
+					title: `Unit tests failed — run ${chalk.cyan(`chef test ${extension.getName()}`)} for details`,
 					status: 'failed',
 				};
 			}

@@ -1,3 +1,5 @@
+import chalk from 'chalk';
+
 import type { BasePackage } from '../../../modules/packages/base-package';
 import type { Task, TaskResult } from '../../../modules/task/task-types';
 
@@ -11,7 +13,7 @@ export function tryBuildTask(extension: BasePackage): Task
 			if (buildResult.errors.length > 0)
 			{
 				return {
-					title: `Has build errors --> Run chef build -e=${extension.getName()} for more information`,
+					title: `Has build errors — run ${chalk.cyan(`chef build ${extension.getName()}`)} for details`,
 					status: 'failed',
 				};
 			}
@@ -19,7 +21,7 @@ export function tryBuildTask(extension: BasePackage): Task
 			if (buildResult.warnings.length > 0)
 			{
 				return {
-					title: `Has build warnings --> Run chef build -e=${extension.getName()} for more information`,
+					title: `Has build warnings — run ${chalk.cyan(`chef build ${extension.getName()}`)} for details`,
 					status: 'warning',
 				};
 			}

@@ -40,7 +40,7 @@ createCommand
 
 			if (!isProceed)
 			{
-				console.log(`${extensionName} create canceled`);
+				console.log(`${extensionName} creation cancelled`);
 				return;
 			}
 		}

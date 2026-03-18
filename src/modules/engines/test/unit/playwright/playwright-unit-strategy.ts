@@ -79,7 +79,7 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 				stats: {},
 				consoleLogs: [],
 				errors: [
-					new ChefError(CF.PLAYWRIGHT_CONFIG_NOT_FOUND, 'playwright.config.ts does not exist run `chef init test` for configure playwright'),
+					new ChefError(CF.PLAYWRIGHT_CONFIG_NOT_FOUND, 'playwright.config.ts not found. Run `chef init tests` to set up the test environment.'),
 				],
 			};
 		}
