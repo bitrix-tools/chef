@@ -35,29 +35,6 @@ describe('ESLintStrategy', () => {
 			assert.isFalse(result.hasWarnings());
 		});
 
-		it('should skip with legacy config message when old config found', async () => {
-			const findUpStub = sandbox.stub(FileFinder, 'findUpFile');
-			// First call for flat config files — not found
-			findUpStub.onFirstCall().returns(null);
-			findUpStub.onSecondCall().returns(null);
-			findUpStub.onThirdCall().returns(null);
-			findUpStub.onCall(3).returns(null);
-			findUpStub.onCall(4).returns(null);
-			findUpStub.onCall(5).returns(null);
-			// Then for legacy config files — found .eslintrc.js
-			findUpStub.onCall(6).returns('/project/.eslintrc.js');
-
-			const strategy = new ESLintStrategy();
-			const result = await strategy.lint({
-				sourcePath: '/project/ext/src',
-				rootPath: '/project',
-			});
-
-			assert.isTrue(result.skipped);
-			assert.include(result.skipReason, '.eslintrc.js');
-			assert.include(result.skipReason, 'flat config');
-		});
-
 		it('should return empty files array when skipped', async () => {
 			sandbox.stub(FileFinder, 'findUpFile').returns(null);
 

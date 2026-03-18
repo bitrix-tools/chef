@@ -20,12 +20,14 @@ lintCommand
 	.addOption(createPathOption('Search for extensions and lint starting from this directory'))
 	.addOption(new Option('--fix', 'Automatically fix problems'))
 	.addOption(new Option('--file <patterns...>', 'Lint specific files (glob patterns relative to extension src/)'))
+	.addOption(new Option('--no-cache', 'Disable caching (cache is enabled by default)'))
 	.action(async (extensions: string[], args) => {
 		const queue = new SequentialQueue();
 
 		const lintOptions = {
 			fix: args.fix ?? false,
 			files: args.file,
+			cache: args.cache,
 		};
 
 		const extensionsStream: NodeJS.ReadableStream = (() => {

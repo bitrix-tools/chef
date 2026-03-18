@@ -11,6 +11,7 @@ import type { Task, TaskResult, TaskDetail } from '../../../modules/task/task-ty
 type LintCommandOptions = {
 	fix?: boolean;
 	files?: string[];
+	cache?: boolean;
 };
 
 export function lint(extension: BasePackage, options: LintCommandOptions = {}): () => Promise<any>
@@ -28,6 +29,7 @@ export function lint(extension: BasePackage, options: LintCommandOptions = {}): 
 				const result = await extension.lint({
 					fix: options.fix,
 					files,
+					cache: options.cache,
 				});
 
 				if (result.skipped)

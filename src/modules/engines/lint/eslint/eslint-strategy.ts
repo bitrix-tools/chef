@@ -14,18 +14,9 @@ const FLAT_CONFIG_FILES = [
 	'eslint.config.cts',
 ];
 
-const LEGACY_CONFIG_FILES = [
-	'.eslintrc.js',
-	'.eslintrc.cjs',
-	'.eslintrc.json',
-	'.eslintrc.yml',
-	'.eslintrc.yaml',
-	'.eslintrc',
-];
-
-function findFile(fileNames: string[], fromDir: string, rootDir: string): string | null
+function findConfigFile(fromDir: string, rootDir: string): string | null
 {
-	for (const fileName of fileNames)
+	for (const fileName of FLAT_CONFIG_FILES)
 	{
 		const filePath = FileFinder.findUpFile({ fileName, fromDir, rootDir });
 		if (filePath)
@@ -50,40 +41,31 @@ export class ESLintStrategy extends LintStrategy
 {
 	async lint(options: LintOptions): Promise<LintResult>
 	{
-		const configFile = findFile(FLAT_CONFIG_FILES, options.sourcePath, options.rootPath);
+		const configFile = findConfigFile(options.sourcePath, options.rootPath);
 
 		if (!configFile)
 		{
-			const legacyConfig = findFile(LEGACY_CONFIG_FILES, options.sourcePath, options.rootPath);
-
-			if (legacyConfig)
-			{
-				return {
-					...EMPTY_RESULT,
-					skipReason: `Found legacy config ${path.basename(legacyConfig)}, migrate to eslint.config.js (flat config)`,
-				};
-			}
-
 			return {
 				...EMPTY_RESULT,
 				skipReason: 'No eslint.config.js found',
 			};
 		}
 
+		const configDir = path.dirname(configFile);
 		const { ESLint } = await import('eslint');
 
 		const eslint = new ESLint({
 			errorOnUnmatchedPattern: false,
-			cwd: options.rootPath,
+			cwd: configDir,
 			overrideConfigFile: configFile,
 			fix: options.fix ?? false,
 			cache: options.cache ?? true,
-			cacheLocation: path.join(options.rootPath, '.eslintcache'),
+			cacheLocation: path.join(configDir, '.eslintcache'),
 		});
 
 		const patterns = options.files && options.files.length > 0
 			? options.files
-			: [path.join(options.sourcePath, '**/*.js')];
+			: [path.join(options.sourcePath, '**/*.{js,ts}')];
 
 		const results = await eslint.lintFiles(patterns);
 
