@@ -6,7 +6,8 @@ import { TaskRunner } from '../../../modules/task/task-runner';
 import { pluralize } from '../../../utils/pluralize';
 
 import type { BasePackage } from '../../../modules/packages/base-package';
-import type { Task, TaskResult, TaskDetail } from '../../../modules/task/task-types';
+import type { Task, TaskResult, TaskDetail, TaskGroupResult } from '../../../modules/task/task-types';
+import type { LintResult } from '../../../modules/engines/lint/lint-types';
 
 type LintCommandOptions = {
 	fix?: boolean;
@@ -14,7 +15,22 @@ type LintCommandOptions = {
 	cache?: boolean;
 };
 
-export function lint(extension: BasePackage, options: LintCommandOptions = {}): () => Promise<any>
+export type LintRunResult = {
+	name: string;
+	taskGroupResult: TaskGroupResult;
+	lintResult: LintResult;
+};
+
+const EMPTY_LINT_RESULT: LintResult = {
+	files: [],
+	skipped: true,
+	hasErrors: () => false,
+	getErrorsCount: () => 0,
+	hasWarnings: () => false,
+	getWarningsCount: () => 0,
+};
+
+export function lint(extension: BasePackage, options: LintCommandOptions = {}): () => Promise<LintRunResult>
 {
 	return async () => {
 		const name = extension.getName();
@@ -22,6 +38,8 @@ export function lint(extension: BasePackage, options: LintCommandOptions = {}): 
 		const files = options.files?.map((pattern) => {
 			return path.isAbsolute(pattern) ? pattern : path.join(root, pattern);
 		});
+
+		let lintResult: LintResult = EMPTY_LINT_RESULT;
 
 		const lintTask: Task = {
 			title: `Linting ${name}...`,
@@ -32,11 +50,13 @@ export function lint(extension: BasePackage, options: LintCommandOptions = {}): 
 					cache: options.cache,
 				});
 
+				lintResult = result;
+
 				if (result.skipped)
 				{
 					return {
 						title: `${chalk.bold(name)} ${chalk.dim(`— ${result.skipReason}`)}`,
-						status: 'passed',
+						status: 'skipped',
 					};
 				}
 
@@ -97,9 +117,11 @@ export function lint(extension: BasePackage, options: LintCommandOptions = {}): 
 			},
 		};
 
-		return TaskRunner.run({
+		const taskGroupResult = await TaskRunner.run({
 			title: name,
 			tasks: [lintTask],
 		});
+
+		return { name, taskGroupResult, lintResult };
 	};
 }
