@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as process from 'node:process';
 
 dotenv.config({
-	path: path.join(__dirname, '.env.test'),
+	path: path.join(import.meta.dirname, '.env.test'),
 	quiet: true,
 });
 
@@ -14,13 +14,15 @@ dotenv.config({
 export default defineConfig({
 	testDir: process.env.TESTS_DIR ?? undefined,
 	fullyParallel: true,
-	forbidOnly: !!process.env.CI,
+	forbidOnly: Boolean(process.env.CI),
 	retries: process.env.CI ? 2 : 0,
 	workers: process.env.CI ? 1 : undefined,
 	reporter: 'list',
 	use: {
 		baseURL: process.env.BASE_URL ?? 'http://localhost',
 		trace: 'on-first-retry',
+		screenshot: 'only-on-failure',
+		video: 'retain-on-failure',
 	},
 	projects: [
 		{

@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 
 import { E2ETestStrategy } from '../e2e-test-strategy';
+import { findPlaywrightConfig } from '../../unit/playwright/find-playwright-config';
 import { ChefError } from '../../../../../diagnostics/chef-error';
 import { CF } from '../../../../../diagnostics/diagnostic-codes';
 import { parseTokenStream } from '../parse-token-stream';
@@ -37,6 +38,12 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 		const onToken = options.onToken ?? (() => {});
 		const onBegin = options.onBegin ?? (() => {});
 		const args = ['playwright', 'test', `--reporter=${STREAMING_REPORTER_PATH}`];
+
+		const playwrightConfig = await findPlaywrightConfig(options.projectRoot, options.projectRoot);
+		if (!playwrightConfig?.outputDir)
+		{
+			args.push(`--output=${path.join(options.testsDirectory, 'test-results')}`);
+		}
 
 		if (options.headed)
 		{
