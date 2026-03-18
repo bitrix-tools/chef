@@ -566,7 +566,7 @@ export class RollupBuildStrategy extends BuildStrategy
 		]);
 
 		const babelTransformPlugins = [
-			...(options.typescript ? [] : [flowStripTypesPlugin]),
+			...(options.typescript && !options.standalone ? [] : [flowStripTypesPlugin]),
 			externalHelpersPlugin,
 		];
 
