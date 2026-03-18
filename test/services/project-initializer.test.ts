@@ -60,5 +60,23 @@ describe('ProjectInitializer', () => {
 			);
 			assert.equal(envTest, 'TEST_URL=http://localhost');
 		});
+
+		it('should return correct file names in result', async () => {
+			const projectDir = path.join(tmpDir, 'project');
+			await fs.mkdir(projectDir, { recursive: true });
+
+			await fs.writeFile(path.join(templateDir, 'playwright.config.ts.txt'), 'config');
+			await fs.writeFile(path.join(templateDir, '.env.test.txt'), 'env');
+
+			const initializer = new ProjectInitializer({
+				rootPath: projectDir,
+				templateDirectory: templateDir,
+			});
+
+			const result = await initializer.initTests();
+			const fileNames = result.files.map((f) => f.name);
+
+			assert.deepEqual(fileNames, ['playwright.config.ts', '.env.test']);
+		});
 	});
 });
