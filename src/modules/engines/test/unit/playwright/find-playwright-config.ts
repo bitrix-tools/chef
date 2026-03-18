@@ -1,6 +1,15 @@
 import { FileFinder } from '../../../../../utils/file-finder';
 
 import type { PlaywrightTestConfig } from '@playwright/test';
+import type { BrowserType } from '../../test-types';
+
+const KNOWN_BROWSERS: Record<string, BrowserType> = {
+	chromium: 'chromium',
+	firefox: 'firefox',
+	webkit: 'webkit',
+};
+
+const DEFAULT_BROWSERS: BrowserType[] = ['chromium', 'firefox', 'webkit'];
 
 function findPlaywrightConfigPath(packageRoot: string, projectRoot: string): string | null
 {
@@ -38,4 +47,27 @@ export async function findPlaywrightConfig(packageRoot: string, projectRoot: str
 		|| configModule
 		|| null
 	);
+}
+
+export function getBrowsersFromConfig(config: PlaywrightTestConfig | null): BrowserType[]
+{
+	if (!config?.projects?.length)
+	{
+		return DEFAULT_BROWSERS;
+	}
+
+	const browsers = new Set<BrowserType>();
+
+	for (const project of config.projects)
+	{
+		const browserType = (project as any).use?.defaultBrowserType
+			?? KNOWN_BROWSERS[project.name as string];
+
+		if (browserType && KNOWN_BROWSERS[browserType])
+		{
+			browsers.add(KNOWN_BROWSERS[browserType]);
+		}
+	}
+
+	return browsers.size > 0 ? [...browsers] : DEFAULT_BROWSERS;
 }

@@ -2,12 +2,14 @@ import chalk from 'chalk';
 import boxen from 'boxen';
 
 import { createReporter } from '../create-reporter';
+import { findPlaywrightConfig, getBrowsersFromConfig } from '../../../modules/engines/test/unit/playwright/find-playwright-config';
+import { Environment } from '../../../environment/environment';
 
 import type { BasePackage } from '../../../modules/packages/base-package';
 import type { Task, TaskResult, TaskDetail } from '../../../modules/task/task-types';
-import type { ConsoleLog } from '../../../modules/engines/test/test-types';
+import type { BrowserType, ConsoleLog } from '../../../modules/engines/test/test-types';
 
-const PROJECT_TO_BROWSER: Record<string, string> = {
+const KNOWN_BROWSERS: Record<string, BrowserType> = {
 	chromium: 'chromium',
 	firefox: 'firefox',
 	webkit: 'webkit',
@@ -18,8 +20,6 @@ const BROWSER_LABEL: Record<string, string> = {
 	firefox: 'Firefox',
 	webkit: 'WebKit',
 };
-
-const DEFAULT_BROWSERS = ['chromium', 'firefox', 'webkit'];
 
 function createDebugTask(extension: BasePackage, args: Record<string, any>, browsers: string[]): Task
 {
@@ -99,26 +99,34 @@ function createDebugTask(extension: BasePackage, args: Record<string, any>, brow
 
 export function runUnitTestsTask(extension: BasePackage, args: Record<string, any>): Task
 {
-	const browsers = (() => {
+	const resolveBrowsers = async (): Promise<BrowserType[]> => {
 		if (args.project)
 		{
 			const projects: string[] = Array.isArray(args.project) ? args.project : [args.project];
 			return projects
-				.map((project: string) => PROJECT_TO_BROWSER[project])
+				.map((project: string) => KNOWN_BROWSERS[project])
 				.filter(Boolean);
 		}
 
-		return DEFAULT_BROWSERS;
-	})();
+		const config = await findPlaywrightConfig(extension.getPath(), Environment.getRoot());
+		return getBrowsersFromConfig(config);
+	};
 
 	if (args.debug)
 	{
-		return createDebugTask(extension, args, browsers);
+		return {
+			title: 'Unit tests',
+			run: async (onUpdate): Promise<TaskResult> => {
+				const browsers = await resolveBrowsers();
+				return createDebugTask(extension, args, browsers).run(onUpdate);
+			},
+		};
 	}
 
 	return {
 		title: 'Unit tests',
 		run: async (onUpdate): Promise<TaskResult> => {
+			const browsers = await resolveBrowsers();
 			const reporter = createReporter(args.reporter, onUpdate);
 			reporter.setBrowserCount(browsers.length);
 			const allConsoleLogs: ConsoleLog[] = [];

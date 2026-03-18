@@ -11,11 +11,14 @@ import { TaskRunner } from '../../modules/task/task-runner';
 import { runUnitTestsTask } from './tasks/run-unit-tests-task';
 import { runEndToEndTestsTask } from './tasks/run-e2e-tests-task';
 import { TeamcityReporter } from '../../modules/engines/test/teamcity-reporter';
+import { findPlaywrightConfig, getBrowsersFromConfig } from '../../modules/engines/test/unit/playwright/find-playwright-config';
+import { Environment } from '../../environment/environment';
 import { formatInternalError } from '../../diagnostics/format-error';
 import { CF } from '../../diagnostics/diagnostic-codes';
 
 import type { BasePackage } from '../../modules/packages/base-package';
 import type { Task } from '../../modules/task/task-types';
+import type { BrowserType } from '../../modules/engines/test/test-types';
 import type { FSWatcher } from 'chokidar';
 
 type RunTestsOptions = {
@@ -49,14 +52,15 @@ function runTestsTeamcity({ extensions, args, type }: RunTestsOptions): void
 			await queue.add(async () => {
 				if (type !== 'e2e')
 				{
-					const browsers = (() => {
+					const browsers: BrowserType[] = await (async () => {
 						if (args.project)
 						{
 							const projects: string[] = Array.isArray(args.project) ? args.project : [args.project];
-							return projects.filter(Boolean);
+							return projects.filter((p): p is BrowserType => p === 'chromium' || p === 'firefox' || p === 'webkit');
 						}
 
-						return ['chromium', 'firefox', 'webkit'];
+						const config = await findPlaywrightConfig(extension.getPath(), Environment.getRoot());
+						return getBrowsersFromConfig(config);
 					})();
 
 					const browserLabels: Record<string, string> = {
