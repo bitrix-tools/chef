@@ -954,6 +954,363 @@ export class SimpleComponent {
 		});
 	});
 
+	describe('flow extension', () => {
+		const extensionPath = path.join(fixturesPath, 'flow-extension');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should strip Flow type annotations from output', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(content, 'FlowComponent', 'Bundle should contain class name');
+			assert.notInclude(content, ': Options', 'Flow type annotations should be stripped');
+			assert.notInclude(content, ': string', 'Flow return types should be stripped');
+			assert.notInclude(content, ': number', 'Flow return types should be stripped');
+		});
+	});
+
+	describe('typescript with dependency', () => {
+		const extensionPath = path.join(fixturesPath, 'ts-with-dependency');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should build TypeScript extension with external dependency', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			options.typescript = true;
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+			assert.include(result.dependencies, 'main.core', 'Should detect main.core dependency');
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(content, 'TsComponent', 'Bundle should contain class name');
+		});
+
+		it('should treat Bitrix dependency as external IIFE parameter', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			options.typescript = true;
+			await buildService.build(options);
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.match(content, /function\s*\(exports,\s*main_core\)/, 'External dependency should be an IIFE parameter');
+		});
+	});
+
+	describe('multiple dependencies', () => {
+		const extensionPath = path.join(fixturesPath, 'multiple-dependencies');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should detect all Bitrix dependencies', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+			assert.include(result.dependencies, 'main.core', 'Should detect main.core');
+			assert.include(result.dependencies, 'main.popup', 'Should detect main.popup');
+			assert.include(result.dependencies, 'ui.design-tokens', 'Should detect ui.design-tokens');
+		});
+
+		it('should sort dependencies alphabetically', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			const result = await buildService.build(options);
+
+			const sorted = [...result.dependencies].sort();
+			assert.deepEqual(result.dependencies, sorted, 'Dependencies should be sorted');
+		});
+	});
+
+	describe('namespace wrapping', () => {
+		const extensionPath = path.join(fixturesPath, 'namespace-extension');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should wrap output in IIFE format', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(content, '(function (exports)', 'Output should be wrapped in IIFE');
+		});
+
+		it('should initialize namespace path on global object', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(content, 'this.BX', 'Should initialize BX namespace');
+			assert.include(content, 'BX.Test', 'Should initialize Test sub-namespace');
+		});
+
+		it('should export classes and functions to namespace', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(content, 'exports.NamespaceComponent', 'Should export class');
+			assert.include(content, 'exports.createComponent', 'Should export function');
+		});
+
+		it('should add eslint-disable banner', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.isTrue(content.startsWith('/* eslint-disable */'), 'Bundle should start with eslint-disable');
+		});
+	});
+
+	describe('minification', () => {
+		const extensionPath = path.join(fixturesPath, 'minify-extension');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should produce smaller output when minified', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+
+			// Build without minification
+			const normalResult = await buildService.build(options);
+			assert.isEmpty(normalResult.errors);
+			const normalOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const normalContent = fs.readFileSync(normalOutput, 'utf-8');
+
+			cleanDist(extensionPath);
+
+			// Build with minification
+			options.minify = true;
+			const minifiedResult = await buildService.build(options);
+			assert.isEmpty(minifiedResult.errors);
+			const minifiedContent = fs.readFileSync(normalOutput, 'utf-8');
+
+			assert.isBelow(minifiedContent.length, normalContent.length, 'Minified output should be smaller');
+		});
+
+		it('should shorten variable names when minified', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			options.minify = true;
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.notInclude(content, 'firstNumber', 'Parameter names should be shortened');
+			assert.notInclude(content, 'secondNumber', 'Parameter names should be shortened');
+		});
+	});
+
+	describe('sourcemaps', () => {
+		const extensionPath = path.join(fixturesPath, 'sourcemap-extension');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should generate sourcemap file when enabled', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			options.sourceMaps = true;
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const mapOutput = path.join(extensionPath, 'dist', 'bundle.js.map');
+			assert.isTrue(fs.existsSync(mapOutput), 'Sourcemap file should exist');
+
+			const mapContent = JSON.parse(fs.readFileSync(mapOutput, 'utf-8'));
+			assert.isArray(mapContent.sources, 'Sourcemap should contain sources');
+			assert.isString(mapContent.mappings, 'Sourcemap should contain mappings');
+		});
+
+		it('should add sourceMappingURL to bundle', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			options.sourceMaps = true;
+			await buildService.build(options);
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(content, '//# sourceMappingURL=bundle.js.map', 'Bundle should reference sourcemap');
+		});
+
+		it('should not generate sourcemap when disabled', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			options.sourceMaps = false;
+			await buildService.build(options);
+
+			const mapOutput = path.join(extensionPath, 'dist', 'bundle.js.map');
+			assert.isFalse(fs.existsSync(mapOutput), 'Sourcemap file should not exist');
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.notInclude(content, 'sourceMappingURL', 'Bundle should not reference sourcemap');
+		});
+	});
+
+	describe('generate (without writing)', () => {
+		it('should return build result without writing bundle files', async () => {
+			const extensionPath = path.join(fixturesPath, 'js-extension');
+			cleanDist(extensionPath);
+
+			try
+			{
+				const bundleConfig = loadBundleConfig(extensionPath);
+				const options = getBuildOptions(extensionPath, bundleConfig);
+				const result = await buildService.generate(options);
+
+				assert.isEmpty(result.errors, 'Should have no errors');
+				assert.isArray(result.bundles, 'Should have bundles info');
+				assert.isAbove(result.bundles.length, 0, 'Should have at least one bundle');
+
+				const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+				assert.isFalse(fs.existsSync(jsOutput), 'JS bundle file should not be created');
+			}
+			finally
+			{
+				cleanDist(extensionPath);
+			}
+		});
+
+		it('should detect dependencies same as build', async () => {
+			const extensionPath = path.join(fixturesPath, 'basic-extension');
+			cleanDist(extensionPath);
+
+			try
+			{
+				const bundleConfig = loadBundleConfig(extensionPath);
+				const options = getBuildOptions(extensionPath, bundleConfig);
+				const result = await buildService.generate(options);
+
+				assert.include(result.dependencies, 'main.core', 'Generate should detect dependencies');
+			}
+			finally
+			{
+				cleanDist(extensionPath);
+			}
+		});
+	});
+
+	describe('buildCode (in-memory)', () => {
+		it('should return bundled code as string', async () => {
+			const extensionPath = path.join(fixturesPath, 'js-extension');
+			const code = `
+				export class InMemoryComponent {
+					greet() { return 'hello'; }
+				}
+			`;
+
+			const result = await buildService.buildCode({
+				code,
+				packageRoot: extensionPath,
+				publicPath: '/test/',
+				targets: [],
+				namespace: 'BX.Test.BuildCode',
+			});
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+			assert.isString(result.code, 'Should return code as string');
+			assert.include(result.code, 'InMemoryComponent', 'Code should contain class name');
+		});
+
+		it('should detect external Bitrix dependencies', async () => {
+			const extensionPath = path.join(fixturesPath, 'js-extension');
+			const code = `
+				import { Tag } from 'main.core';
+				export class Component {
+					render() { return Tag.render\`<div>test</div>\`; }
+				}
+			`;
+
+			const result = await buildService.buildCode({
+				code,
+				packageRoot: extensionPath,
+				publicPath: '/test/',
+				targets: [],
+				namespace: 'BX.Test.BuildCode',
+			});
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+			assert.include(result.dependencies, 'main.core', 'Should detect main.core dependency');
+		});
+
+		it('should return sourcemap when enabled', async () => {
+			const extensionPath = path.join(fixturesPath, 'js-extension');
+			const code = `export const value = 42;`;
+
+			const result = await buildService.buildCode({
+				code,
+				packageRoot: extensionPath,
+				publicPath: '/test/',
+				targets: [],
+				namespace: 'BX.Test.BuildCode',
+				sourcemap: true,
+			});
+
+			assert.isEmpty(result.errors);
+			assert.isNotNull(result.map, 'Should return sourcemap');
+			assert.isString(result.map?.mappings, 'Sourcemap should have mappings');
+		});
+	});
+
 	describe('error diagnostics', () => {
 		it('should return CF1002 for syntax errors', async () => {
 			const extensionPath = path.join(fixturesPath, 'syntax-error');

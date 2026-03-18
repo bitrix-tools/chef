@@ -546,7 +546,7 @@ export class RollupBuildStrategy extends BuildStrategy
 		};
 	}
 
-	async #loadBabelPlugin(options: { babel?: boolean, typescript?: boolean, targets: string[], transformClasses?: boolean }): Promise<Plugin | null>
+	async #loadBabelPlugin(options: { babel?: boolean, typescript?: boolean, standalone?: boolean, targets: string[], transformClasses?: boolean }): Promise<Plugin | null>
 	{
 		if (options.babel === false)
 		{
