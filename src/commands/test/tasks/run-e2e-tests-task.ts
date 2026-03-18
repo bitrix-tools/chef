@@ -1,4 +1,5 @@
 import { createReporter } from '../create-reporter';
+import { checkCredentialsWarning } from '../check-env-test';
 
 import type { BasePackage } from '../../../modules/packages/base-package';
 import type { Task, TaskResult, TaskDetail } from '../../../modules/task/task-types';
@@ -8,6 +9,8 @@ export function runEndToEndTestsTask(extension: BasePackage, args: Record<string
 	return {
 		title: 'E2E tests',
 		run: async (onUpdate): Promise<TaskResult> => {
+			checkCredentialsWarning(extension.getPath());
+
 			const reporter = createReporter(args.reporter, onUpdate);
 
 			const testResult = await extension.runEndToEndTests({

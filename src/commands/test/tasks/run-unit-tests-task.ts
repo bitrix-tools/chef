@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import boxen from 'boxen';
 
 import { createReporter } from '../create-reporter';
+import { checkBaseUrlWarning } from '../check-env-test';
 import { findPlaywrightConfig, getBrowsersFromConfig } from '../../../modules/engines/test/unit/playwright/find-playwright-config';
 import { Environment } from '../../../environment/environment';
 
@@ -109,6 +110,9 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 		}
 
 		const config = await findPlaywrightConfig(extension.getPath(), Environment.getRoot());
+
+		checkBaseUrlWarning(config?.use?.baseURL, extension.getPath());
+
 		return getBrowsersFromConfig(config);
 	};
 
