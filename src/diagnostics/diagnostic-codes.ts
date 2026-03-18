@@ -27,6 +27,9 @@ export const CF = {
 	NO_E2E_TESTS: 'CF3002',
 	PLAYWRIGHT_ERROR: 'CF3003',
 
+	// Package (CF4xxx)
+	EXTENSION_NOT_FOUND: 'CF4001',
+
 	// Environment (CF5xxx)
 	OUTSIDE_PROJECT_ROOT: 'CF5001',
 

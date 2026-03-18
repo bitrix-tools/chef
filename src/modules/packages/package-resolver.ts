@@ -3,10 +3,13 @@ import * as fs from 'node:fs';
 import { Readable, Transform, PassThrough } from 'node:stream';
 
 import fg from 'fast-glob';
+import chalk from 'chalk';
+import boxen from 'boxen';
 
 import { Environment } from '../../environment/environment';
 import { PackageFactoryProvider } from './providers/package-factory-provider';
 import { MemoryCache } from '../../utils/memory-cache';
+import { CF } from '../../diagnostics/diagnostic-codes';
 
 import type { BasePackage } from './base-package';
 
@@ -17,6 +20,77 @@ const isExtensionName = (name: string) => {
 const isGlobPattern = (name: string) => {
 	return /[*?!\[\]]/.test(name);
 };
+
+const hasExtensionConfig = (extensionPath: string): boolean => {
+	return (
+		fs.existsSync(path.join(extensionPath, 'bundle.config.js'))
+		|| fs.existsSync(path.join(extensionPath, 'bundle.config.ts'))
+		|| fs.existsSync(path.join(extensionPath, 'script.es6.js'))
+	);
+};
+
+function findExtensionPath(name: string): string | null
+{
+	const segments = name.split('.');
+	const root = Environment.getRoot();
+
+	if (Environment.getType() === 'source')
+	{
+		const moduleName = segments.at(0);
+		const extensionPath = path.join(root, moduleName, 'install', 'js', ...segments);
+		if (fs.existsSync(extensionPath))
+		{
+			return extensionPath;
+		}
+	}
+
+	if (Environment.getType() === 'project')
+	{
+		const localPath = path.join(root, 'local', 'js', ...segments);
+		if (fs.existsSync(localPath))
+		{
+			return localPath;
+		}
+
+		const productPath = path.join(root, 'bitrix', 'js', ...segments);
+		if (fs.existsSync(productPath))
+		{
+			return productPath;
+		}
+	}
+
+	return null;
+}
+
+function formatNotFoundError(name: string): string
+{
+	const extensionPath = findExtensionPath(name);
+
+	const lines: string[] = [];
+	lines.push(chalk.red(`${CF.EXTENSION_NOT_FOUND}: Extension ${chalk.bold(name)} not found`));
+	lines.push('');
+
+	if (extensionPath)
+	{
+		lines.push(`Directory ${chalk.dim(extensionPath)} exists,`);
+		lines.push(`but does not contain ${chalk.bold('bundle.config.js')} or ${chalk.bold('bundle.config.ts')}.`);
+		lines.push('');
+		lines.push(`This path is likely a ${chalk.bold('directory of extensions')}, not an extension itself.`);
+		lines.push(`Use ${chalk.cyan(`${name}.*`)} to run for all extensions inside,`);
+		lines.push(`or ${chalk.cyan(`${name}.**`)} to include nested extensions.`);
+	}
+	else
+	{
+		lines.push(`No extension directory found for ${chalk.bold(name)}.`);
+		lines.push(`Check that the name is correct and the extension exists.`);
+	}
+
+	return boxen(lines.join('\n'), {
+		padding: 1,
+		borderStyle: 'round',
+		borderColor: 'yellow',
+	});
+}
 
 export interface ParsedExtensionPattern
 {
@@ -71,7 +145,7 @@ export class PackageResolver
 				{
 					const moduleName = segments.at(0);
 					const extensionPath = path.join(root, moduleName, 'install', 'js', ...segments);
-					if (fs.existsSync(extensionPath))
+					if (fs.existsSync(extensionPath) && hasExtensionConfig(extensionPath))
 					{
 						return packageFactory.create({
 							path: extensionPath,
@@ -82,7 +156,7 @@ export class PackageResolver
 				if (Environment.getType() === 'project')
 				{
 					const localExtensionPath = path.join(root, 'local', 'js', ...segments);
-					if (fs.existsSync(localExtensionPath))
+					if (fs.existsSync(localExtensionPath) && hasExtensionConfig(localExtensionPath))
 					{
 						return packageFactory.create({
 							path: localExtensionPath,
@@ -90,7 +164,7 @@ export class PackageResolver
 					}
 
 					const productExtensionPath = path.join(root, 'bitrix', 'js', ...segments);
-					if (fs.existsSync(productExtensionPath))
+					if (fs.existsSync(productExtensionPath) && hasExtensionConfig(productExtensionPath))
 					{
 						return packageFactory.create({
 							path: productExtensionPath,
@@ -142,6 +216,11 @@ export class PackageResolver
 						count++;
 						output.push({ extension, count, explicit: true });
 					}
+				}
+				else
+				{
+					console.log('');
+					console.log(formatNotFoundError(name));
 				}
 			}
 
