@@ -24,7 +24,9 @@ export class PackageLinter
 
 	async lint(options: PackageLinterOptions = {}): Promise<LintResult>
 	{
-		const engine = new LintEngine(new ESLintStrategy());
+		const engine = new LintEngine([
+			new ESLintStrategy(),
+		]);
 
 		return engine.lint({
 			sourcePath: path.join(this.#package.getPath(), 'src'),

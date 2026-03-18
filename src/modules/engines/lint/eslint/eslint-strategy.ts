@@ -39,6 +39,11 @@ const EMPTY_RESULT: LintResult = {
 
 export class ESLintStrategy extends LintStrategy
 {
+	match(options: LintOptions): boolean
+	{
+		return findConfigFile(options.sourcePath, options.rootPath) !== null;
+	}
+
 	async lint(options: LintOptions): Promise<LintResult>
 	{
 		const configFile = findConfigFile(options.sourcePath, options.rootPath);

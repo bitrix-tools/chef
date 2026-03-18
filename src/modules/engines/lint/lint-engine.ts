@@ -3,15 +3,30 @@ import type { LintOptions, LintResult } from './lint-types';
 
 export class LintEngine
 {
-	protected readonly strategy: LintStrategy;
+	readonly #strategies: LintStrategy[];
 
-	constructor(strategy: LintStrategy)
+	constructor(strategies: LintStrategy[])
 	{
-		this.strategy = strategy;
+		this.#strategies = strategies;
 	}
 
 	async lint(options: LintOptions): Promise<LintResult>
 	{
-		return this.strategy.lint(options);
+		const strategy = this.#strategies.find((s) => s.match(options));
+
+		if (!strategy)
+		{
+			return {
+				files: [],
+				skipped: true,
+				skipReason: 'No matching lint strategy found',
+				hasErrors: () => false,
+				getErrorsCount: () => 0,
+				hasWarnings: () => false,
+				getWarningsCount: () => 0,
+			};
+		}
+
+		return strategy.lint(options);
 	}
 }
