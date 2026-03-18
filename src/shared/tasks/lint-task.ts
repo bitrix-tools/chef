@@ -21,7 +21,7 @@ export function lintTask(extension: BasePackage, args?: Record<string, any>): Ta
 			{
 				return {
 					title: result.skipReason ? `Lint: ${result.skipReason}` : 'Lint: skipped',
-					status: 'passed',
+					status: 'skipped',
 				};
 			}
 

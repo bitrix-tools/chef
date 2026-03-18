@@ -182,7 +182,7 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 			{
 				return {
 					title: 'Unit tests',
-					status: 'passed',
+					status: 'skipped',
 				};
 			}
 

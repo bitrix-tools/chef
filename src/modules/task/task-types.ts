@@ -1,4 +1,4 @@
-type TaskStatus = 'passed' | 'failed' | 'warning';
+type TaskStatus = 'passed' | 'failed' | 'warning' | 'skipped';
 
 type TaskDetail =
 	| { type: 'item'; text: string }

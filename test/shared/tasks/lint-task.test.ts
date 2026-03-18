@@ -85,7 +85,7 @@ describe('lintTask', () => {
 		const task = lintTask(mockPackage);
 		const result = await task.run();
 
-		assert.equal(result.status, 'passed');
+		assert.equal(result.status, 'skipped');
 		assert.include(result.title, 'No eslint.config.js found');
 	});
 
@@ -98,7 +98,7 @@ describe('lintTask', () => {
 		const task = lintTask(mockPackage);
 		const result = await task.run();
 
-		assert.equal(result.status, 'passed');
+		assert.equal(result.status, 'skipped');
 		assert.include(result.title, 'skipped');
 	});
 

@@ -38,6 +38,11 @@ function statusIcon(status: TaskResult['status']): string
 		return chalk.red('✗');
 	}
 
+	if (status === 'skipped')
+	{
+		return chalk.gray('—');
+	}
+
 	return chalk.yellow('⚠');
 }
 
@@ -132,7 +137,7 @@ export class TaskReporter
 		{
 			this.#failed++;
 		}
-		else
+		else if (result.status === 'warning')
 		{
 			this.#warnings++;
 		}

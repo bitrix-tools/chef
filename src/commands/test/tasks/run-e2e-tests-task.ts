@@ -41,8 +41,8 @@ export function runEndToEndTestsTask(extension: BasePackage, args: Record<string
 				reporter.stop();
 
 				return {
-					title: 'No E2E tests found',
-					status: 'warning',
+					title: 'E2E tests',
+					status: 'skipped',
 				};
 			}
 
