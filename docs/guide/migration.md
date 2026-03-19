@@ -8,7 +8,7 @@
 - **TypeScript** — нативная поддержка TypeScript из коробки, включая конфиги (`bundle.config.ts`)
 - **Современные цели** — по умолчанию `baseline widely available` вместо `IE >= 11`
 - **E2E-тесты** — поддержка Playwright для end-to-end тестирования
-- **Новые команды** — `chef stat` для анализа зависимостей, `chef flow-to-ts` для миграции с Flow
+- **Новые команды** — `chef diag` для диагностики проекта, `chef flow-to-ts` для миграции с Flow
 - **Node.js 22+** — использует современные возможности платформы
 
 ## Установка
@@ -33,7 +33,9 @@ npm install -g @bitrix/chef
 | `bitrix test` | `chef test` | Полностью переработано (Playwright) |
 | `bitrix create name` | `chef create name` | Полностью совместимы |
 | — | `chef init` | **Новое.** Инициализация проекта |
-| — | `chef stat` | **Новое.** Анализ зависимостей и размеров |
+| — | `chef diag` | **Новое.** Диагностика: зависимости, размеры, циклы |
+| — | `chef lint` | **Новое.** Линтинг расширений |
+| — | `chef aliases` | **Новое.** Регенерация алиасов путей |
 | — | `chef flow-to-ts` | **Новое.** Миграция Flow.js → TypeScript |
 | — | `chef test unit` | **Новое.** Запуск только unit-тестов |
 | — | `chef test e2e` | **Новое.** Запуск только e2e-тестов |

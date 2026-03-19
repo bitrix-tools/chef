@@ -71,24 +71,96 @@ chef test --grep "should render"                  # Filter by name
 chef test main.core --project chromium firefox    # Specific browsers
 ```
 
-## chef stat
+## chef lint
 
-Analyze bundle size and dependency tree.
+Lint extensions with ESLint.
 
 ```bash
-chef stat [extensions...] [options]
+chef lint [extensions...] [options]
 ```
 
 | Option | Description |
 |--------|-------------|
 | `extensions` | Extension names or glob patterns |
-| `-p, --path [path]` | Analyze a specific directory |
+| `-p, --path [path]` | Search for and lint extensions starting from this directory |
+| `--fix` | Automatically fix problems |
+| `--file <patterns...>` | Lint specific files (glob patterns relative to `src/`) |
+| `--no-cache` | Disable caching (cache is enabled by default) |
 
 ```bash
-chef stat main.core ui.buttons     # Analyze specific extensions
-chef stat ui.*                     # Direct children
-chef stat im.v2.**                 # All nested extensions
+chef lint main.core                # Lint a specific extension
+chef lint ui.*                     # Lint a group of extensions
+chef lint main.core --fix          # Auto-fix problems
+chef lint main.core --file "*.ts"  # Lint only .ts files
 ```
+
+::: tip
+`chef lint` requires an `eslint.config.{js,mjs,cjs,ts,mts,cts}` file in the project. If no config is found, linting is skipped.
+:::
+
+## chef diag
+
+Diagnose and analyze extensions across the project.
+
+```bash
+chef diag <subcommand> [options]
+```
+
+### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `top-used` | Most depended-on extensions |
+| `top-deps` | Extensions with the most direct dependencies |
+| `top-deps-tree` | Extensions with the largest transitive dependency tree |
+| `top-bundle-size` | Extensions with the largest bundles |
+| `top-total-size` | Extensions with the largest total size (own code + dependencies) |
+| `config` | Search extensions by `bundle.config` parameters |
+| `unused-deps` | Extensions with unused dependencies |
+| `circular-deps` | Check for circular dependencies |
+| `circular-imports` | Check for circular imports between source files |
+| `find-usages` | Find where an extension is used across JS, TS and PHP files |
+| `unused` | Extensions that are never referenced anywhere |
+
+### Common options
+
+| Option | Description |
+|--------|-------------|
+| `-p, --path [path]` | Scan for extensions starting from this directory |
+| `-l, --limit <n>` | Limit the number of results (default: 20) |
+| `-t, --type <type>` | Filter by type: `js`, `ts` |
+
+```bash
+chef diag top-used                          # Most depended-on extensions
+chef diag top-bundle-size --limit 10        # TOP 10 largest bundles
+chef diag circular-deps                     # All circular dependencies
+chef diag circular-deps main.core           # Check a specific extension
+chef diag unused-deps                       # Unused dependencies
+chef diag find-usages ui.buttons            # Where ui.buttons is used
+chef diag config --key namespace            # Extensions with namespace in config
+chef diag config --key minification --missing  # Extensions without minification
+chef diag unused                            # Unused extensions
+```
+
+## chef aliases
+
+Regenerate TypeScript path aliases (`aliases.tsconfig.json`).
+
+```bash
+chef aliases [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `-p, --path [path]` | Project root to scan for extensions |
+| `-q, --quiet` | Quiet mode — single-line output without colors |
+
+```bash
+chef aliases                       # Regenerate aliases
+chef aliases -q                    # Quiet mode (for scripts and hooks)
+```
+
+Usually runs automatically via VCS hooks (see `chef init hooks`).
 
 ## chef create
 
@@ -160,6 +232,20 @@ chef init tests [options]
 Creates `playwright.config.ts` and `.env.test` in the project root.
 
 See [Testing](/en/guide/testing) for details.
+
+### chef init hooks
+
+Install VCS hooks to auto-update path aliases.
+
+```bash
+chef init hooks [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `-p, --path [path]` | Project root where hooks will be installed |
+
+Supports Git and Mercurial. Hooks run `chef aliases --quiet` after pull, merge, checkout and rebase to keep `aliases.tsconfig.json` up to date.
 
 ## chef flow-to-ts
 

@@ -34,8 +34,8 @@ features:
     title: Browser Testing
     details: Unit tests with Mocha + Chai run in a real browser via Playwright. E2E tests with automatic authentication — no extra setup.
   - icon: 🔍
-    title: Bundle Analytics
-    details: Bundle sizes, dependency tree and duplicates — chef stat shows everything for one extension or a whole group.
+    title: Project Diagnostics
+    details: Bundle sizes, circular dependencies, unused extensions — chef diag analyzes extensions across the entire project.
   - icon: 🚀
     title: Scaffold in Seconds
     details: chef create ui.buttons will create an extension with the right structure, config, entry point and test templates.

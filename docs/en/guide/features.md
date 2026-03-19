@@ -60,13 +60,16 @@ chef build ui.buttons --production
 
 See [Production Build](/en/guide/production) for details.
 
-## Analytics
+## Diagnostics
 
-Bundle sizes, dependency tree and duplicates — `chef stat` shows everything for one extension or a whole group.
+Bundle sizes, dependency trees, circular dependencies, unused extensions — `chef diag` analyzes extensions across the entire project.
 
 ```bash
-chef stat ui.buttons
-chef stat ui.*
+chef diag top-used                   # Most depended-on extensions
+chef diag top-bundle-size            # Largest bundles
+chef diag circular-deps              # Circular dependencies
+chef diag unused                     # Unused extensions
+chef diag find-usages main.core      # Find usages
 ```
 
 ## Scaffold
@@ -156,7 +159,7 @@ If you need to modify a system extension — copy it to `local/js/` and modify i
 
 ### Specifying Packages
 
-Most Chef commands (`build`, `test`, `stat`) accept extension lists in the same way.
+Most Chef commands (`build`, `test`, `lint`) accept extension lists in the same way.
 
 **One or more extensions by name:**
 

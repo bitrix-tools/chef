@@ -11,7 +11,6 @@ describe('chef --help', () => {
 		assert.include(output, 'build');
 		assert.include(output, 'lint');
 		assert.include(output, 'test');
-		assert.include(output, 'stat');
 		assert.include(output, 'create');
 		assert.include(output, 'init');
 		assert.include(output, 'diag');

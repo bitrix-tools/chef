@@ -71,7 +71,6 @@ program
 	.description('CLI toolkit for building, testing and maintaining Bitrix JS extensions')
 	.addCommand(lazyCommand('build', 'Build JS extensions for Bitrix', () => import('./commands/build/build-command')))
 	.addCommand(lazyCommand('lint', 'Run linting for Bitrix JS extensions', () => import('./commands/lint/lint-command')))
-	.addCommand(lazyCommand('stat', 'Show build, tests and bundle statistics for Bitrix extensions', () => import('./commands/stat/stat-command')))
 	.addCommand(lazyCommand('test', 'Run unit and end-to-end tests for extensions', () => import('./commands/test/test-command')))
 	.addCommand(lazyCommand('create', 'Create a new Bitrix JS extension scaffold', () => import('./commands/create/create-command')))
 	.addCommand(lazyCommand('flow-to-ts', 'Migrate Flow-typed JS code to TypeScript in extensions', () => import('./commands/flow-to-ts/flow-to-ts-command')))

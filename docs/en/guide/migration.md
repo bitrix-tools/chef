@@ -8,7 +8,7 @@ This guide helps you migrate from `@bitrix/cli` to `@bitrix/chef`. Chef is a rew
 - **TypeScript** — native TypeScript support out of the box, including configs (`bundle.config.ts`)
 - **Modern targets** — defaults to `baseline widely available` instead of `IE >= 11`
 - **E2E tests** — Playwright support for end-to-end testing
-- **New commands** — `chef stat` for dependency analysis, `chef flow-to-ts` for Flow migration
+- **New commands** — `chef diag` for project diagnostics, `chef flow-to-ts` for Flow migration
 - **Node.js 22+** — leverages modern platform features
 
 ## Installation
@@ -33,7 +33,9 @@ After installation, the `chef` command is available globally. The old `bitrix` c
 | `bitrix test` | `chef test` | Fully reworked (Playwright) |
 | `bitrix create name` | `chef create name` | Fully compatible |
 | — | `chef init` | **New.** Project initialization |
-| — | `chef stat` | **New.** Dependency and size analysis |
+| — | `chef diag` | **New.** Diagnostics: dependencies, sizes, cycles |
+| — | `chef lint` | **New.** Extension linting |
+| — | `chef aliases` | **New.** Path alias regeneration |
 | — | `chef flow-to-ts` | **New.** Flow.js → TypeScript migration |
 | — | `chef test unit` | **New.** Run unit tests only |
 | — | `chef test e2e` | **New.** Run e2e tests only |

@@ -22,9 +22,11 @@ npm run test:watch
 
 - `chef build` — сборка JS-расширений (Rollup + Babel + PostCSS)
 - `chef test` — запуск unit и e2e тестов (Playwright + Mocha)
-- `chef stat` — статистика по расширениям (зависимости, размеры бандлов)
+- `chef lint` — линтинг расширений через ESLint
+- `chef diag` — диагностика: зависимости, размеры бандлов, циклы, неиспользуемые расширения
 - `chef create <name>` — создание scaffold нового расширения
-- `chef init` — инициализация TypeScript/тестового окружения
+- `chef aliases` — регенерация алиасов путей для TypeScript
+- `chef init` — инициализация TypeScript/тестового окружения/VCS-хуков
 - `chef flow-to-ts` — миграция Flow.js кода в TypeScript
 
 ## Architecture
@@ -35,7 +37,7 @@ npm run test:watch
 
 ### Key Directories
 
-- `src/commands/` — CLI-команды (build, test, stat, create, init, flow-to-ts)
+- `src/commands/` — CLI-команды (build, test, lint, diag, create, aliases, init, flow-to-ts)
 - `src/modules/` — основная бизнес-логика:
   - `config/` — парсинг конфигов (bundle.config.js, config.php, chef.config.ts)
   - `engines/` — движки со strategy pattern (build → Rollup, lint → ESLint, test → Playwright)
@@ -77,7 +79,7 @@ npm run test:watch
 ```bash
 cd /Users/belov/Projects/modules && chef build ui.bbcode.*
 cd /Users/belov/Projects/modules && chef test main.core
-cd /Users/belov/Projects/modules && chef stat ui.*
+cd /Users/belov/Projects/modules && chef diag top-used
 ```
 
 chef глобально залинкован через `npm link`, изменения в коде доступны сразу (tsx).

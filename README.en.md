@@ -30,7 +30,7 @@
 - **Lint** — ESLint integration for consistent code quality
 - **Scaffold** — Generate new extensions with `chef create`
 - **Migrate** — Convert Flow.js to TypeScript with `chef flow-to-ts`
-- **Analyze** — Bundle statistics and dependency tree visualization
+- **Diagnostics** — Dependency analysis, bundle sizes, circular dependencies and unused extension detection
 
 <br>
 
@@ -61,11 +61,13 @@ chef build my.extension
 |---------|-------------|
 | `chef build` | Build extensions (TypeScript, Babel, PostCSS) |
 | `chef test` | Run unit and E2E tests (use `unit`/`e2e` subcommands to run separately) |
-| `chef stat` | Analyze bundle size and dependencies |
+| `chef lint` | Lint extensions with ESLint |
+| `chef diag` | Diagnostics: dependencies, bundle sizes, cycles, unused extensions |
 | `chef create <name>` | Scaffold a new extension |
-| `chef init` | Initialize build and test environment |
+| `chef aliases` | Regenerate TypeScript path aliases |
 | `chef init build` | Initialize TypeScript, aliases, and browserslist |
-| `chef init tests` | Initialize test environment only |
+| `chef init tests` | Initialize test environment |
+| `chef init hooks` | Install VCS hooks to auto-update aliases |
 | `chef flow-to-ts` | Migrate Flow.js to TypeScript |
 
 <br>
@@ -366,23 +368,6 @@ Examples:
   chef test main.core -w                      # Test and watch for changes
   chef test main.core --debug                 # Debug with DevTools and sourcemaps
   chef test main.core --project chromium firefox  # Run in specific browsers
-```
-
-### Stat
-
-```bash
-chef stat [extensions...] [options]
-
-Arguments:
-  extensions               Extension names or glob patterns (e.g. main.core ui.bbcode.*)
-
-Options:
-  -p, --path <path>        Analyze specific directory
-
-Examples:
-  chef stat main.core ui.buttons     # Analyze specific extensions
-  chef stat ui.*                     # Direct children
-  chef stat im.v2.**                 # All nested extensions
 ```
 
 <br>

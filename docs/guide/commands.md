@@ -71,24 +71,96 @@ chef test --grep "should render"                  # Фильтрация по и
 chef test main.core --project chromium firefox    # Конкретные браузеры
 ```
 
-## chef stat
+## chef lint
 
-Анализ размера бандла и дерева зависимостей расширений.
+Линтинг расширений через ESLint.
 
 ```bash
-chef stat [extensions...] [options]
+chef lint [extensions...] [options]
 ```
 
 | Параметр | Описание |
 |----------|----------|
 | `extensions` | Имена расширений или glob-паттерны |
-| `-p, --path [path]` | Анализировать конкретную директорию |
+| `-p, --path [path]` | Искать и линтить расширения, начиная с указанной директории |
+| `--fix` | Автоматически исправлять проблемы |
+| `--file <patterns...>` | Линтить конкретные файлы (glob-паттерны относительно `src/`) |
+| `--no-cache` | Отключить кеширование (по умолчанию кеш включён) |
 
 ```bash
-chef stat main.core ui.buttons     # Анализ конкретных расширений
-chef stat ui.*                     # Прямые дочерние
-chef stat im.v2.**                 # Все вложенные расширения
+chef lint main.core                # Линтинг конкретного расширения
+chef lint ui.*                     # Линтинг группы расширений
+chef lint main.core --fix          # Автоматическое исправление
+chef lint main.core --file "*.ts"  # Линтить только .ts файлы
 ```
+
+::: tip
+Для работы `chef lint` необходим файл `eslint.config.{js,mjs,cjs,ts,mts,cts}` в проекте. Если конфиг не найден, линтинг пропускается.
+:::
+
+## chef diag
+
+Диагностика и анализ расширений по всему проекту.
+
+```bash
+chef diag <subcommand> [options]
+```
+
+### Подкоманды
+
+| Подкоманда | Описание |
+|------------|----------|
+| `top-used` | Самые востребованные расширения (по числу зависимых) |
+| `top-deps` | Расширения с наибольшим числом прямых зависимостей |
+| `top-deps-tree` | Расширения с наибольшим деревом транзитивных зависимостей |
+| `top-bundle-size` | Расширения с самыми тяжёлыми бандлами |
+| `top-total-size` | Расширения с наибольшим суммарным размером (свой код + зависимости) |
+| `config` | Поиск расширений по параметрам `bundle.config` |
+| `unused-deps` | Расширения с неиспользуемыми зависимостями |
+| `circular-deps` | Проверка на циклические зависимости |
+| `circular-imports` | Проверка на циклические импорты между файлами |
+| `find-usages` | Поиск использований расширения в JS, TS и PHP файлах |
+| `unused` | Расширения, на которые никто не ссылается |
+
+### Общие параметры
+
+| Параметр | Описание |
+|----------|----------|
+| `-p, --path [path]` | Сканировать расширения, начиная с указанной директории |
+| `-l, --limit <n>` | Ограничить количество результатов (по умолчанию: 20) |
+| `-t, --type <type>` | Фильтр по типу: `js`, `ts` |
+
+```bash
+chef diag top-used                          # Самые востребованные расширения
+chef diag top-bundle-size --limit 10        # TOP 10 тяжёлых бандлов
+chef diag circular-deps                     # Все циклические зависимости
+chef diag circular-deps main.core           # Проверить конкретное расширение
+chef diag unused-deps                       # Неиспользуемые зависимости
+chef diag find-usages ui.buttons            # Где используется ui.buttons
+chef diag config --key namespace            # Расширения с namespace в конфиге
+chef diag config --key minification --missing  # Расширения без минификации
+chef diag unused                            # Неиспользуемые расширения
+```
+
+## chef aliases
+
+Регенерация алиасов путей для TypeScript (`aliases.tsconfig.json`).
+
+```bash
+chef aliases [options]
+```
+
+| Параметр | Описание |
+|----------|----------|
+| `-p, --path [path]` | Корень проекта для сканирования расширений |
+| `-q, --quiet` | Тихий режим — однострочный вывод без цветов |
+
+```bash
+chef aliases                       # Перегенерировать алиасы
+chef aliases -q                    # Тихий режим (для скриптов и хуков)
+```
+
+Обычно запускается автоматически через VCS-хуки (см. `chef init hooks`).
 
 ## chef create
 
@@ -160,6 +232,20 @@ chef init tests [options]
 Создаёт `playwright.config.ts` и `.env.test` в корне проекта.
 
 Подробнее — в разделе [Тестирование](/guide/testing).
+
+### chef init hooks
+
+Установка VCS-хуков для автоматического обновления алиасов путей.
+
+```bash
+chef init hooks [options]
+```
+
+| Параметр | Описание |
+|----------|----------|
+| `-p, --path [path]` | Корень проекта, где будут установлены хуки |
+
+Поддерживает Git и Mercurial. Хуки запускают `chef aliases --quiet` после pull, merge, checkout и rebase, чтобы `aliases.tsconfig.json` всегда оставался актуальным.
 
 ## chef flow-to-ts
 
