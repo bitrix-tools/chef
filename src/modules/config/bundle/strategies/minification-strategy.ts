@@ -15,7 +15,7 @@ export const minificationStrategy = {
 			return value;
 		}
 
-		return this.getDefault();
+		return Boolean(value);
 	},
 	validate(value: any): true | string
 	{
