@@ -1,0 +1,8 @@
+.autoprefixer-test {
+	display: flex;
+	-webkit-user-select: none;
+	        user-select: none;
+	-webkit-backdrop-filter: blur(10px);
+	        backdrop-filter: blur(10px);
+	appearance: none;
+}

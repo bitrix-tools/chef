@@ -7,11 +7,46 @@ import { assert } from 'chai';
 
 import { runChef, sourceRepo } from './run-chef';
 
+const unitFixturesPath = path.resolve(import.meta.dirname, '../build/fixtures');
+const expectedPath = path.resolve(import.meta.dirname, 'fixtures/expected');
+
 function createTmpSourceRepo(): string
 {
 	const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chef-build-')));
 	fs.cpSync(sourceRepo, tmp, { recursive: true });
 	return tmp;
+}
+
+function injectFixture(tmpRepo: string, fixtureName: string, extensionPath: string): string
+{
+	const src = path.join(unitFixturesPath, fixtureName);
+	const dest = path.join(tmpRepo, extensionPath);
+
+	fs.cpSync(src, dest, { recursive: true });
+
+	// Clean dist so build creates fresh output
+	const distPath = path.join(dest, 'dist');
+	if (fs.existsSync(distPath))
+	{
+		fs.rmSync(distPath, { recursive: true });
+	}
+
+	return dest;
+}
+
+function assertBundleMatchesExpected(extensionDir: string, fixtureName: string, bundleFile: string): void
+{
+	const actual = fs.readFileSync(path.join(extensionDir, 'dist', bundleFile), 'utf-8');
+	const expected = fs.readFileSync(path.join(expectedPath, fixtureName, bundleFile), 'utf-8');
+
+	assert.equal(actual, expected, `Bundle ${fixtureName}/${bundleFile} differs from expected`);
+}
+
+function buildFixture(tmpRepo: string, fixtureName: string): { dest: string; extPath: string }
+{
+	const extPath = `ui/install/js/ui/${fixtureName}`;
+	const dest = injectFixture(tmpRepo, fixtureName, extPath);
+	return { dest, extPath };
 }
 
 describe('chef build', () => {
@@ -25,6 +60,8 @@ describe('chef build', () => {
 		fs.rmSync(tmpRepo, { recursive: true, force: true });
 	});
 
+	// region: basic commands
+
 	it('should build an extension by name', async () => {
 		const extensionDist = path.join(tmpRepo, 'ui/install/js/ui/buttons/dist');
 		fs.rmSync(extensionDist, { recursive: true, force: true });
@@ -33,30 +70,6 @@ describe('chef build', () => {
 
 		assert.equal(exitCode, 0);
 		assert.isTrue(fs.existsSync(path.join(extensionDist, 'buttons.bundle.js')));
-	});
-
-	it('should build an extension with CSS', async () => {
-		const extensionDist = path.join(tmpRepo, 'main/install/js/main/core/dist');
-		fs.rmSync(extensionDist, { recursive: true, force: true });
-
-		const { exitCode } = await runChef(['build', 'main.core'], { cwd: tmpRepo });
-
-		assert.equal(exitCode, 0);
-		assert.isTrue(fs.existsSync(path.join(extensionDist, 'core.bundle.js')));
-		assert.isTrue(fs.existsSync(path.join(extensionDist, 'core.bundle.css')));
-	});
-
-	it('should report syntax error in output', async () => {
-		const { output } = await runChef(['build', 'ui.syntax-error'], { cwd: tmpRepo });
-
-		assert.include(output, 'syntax-error');
-		assert.include(output, 'Unexpected token');
-	});
-
-	it('should report not found for non-existent extension', async () => {
-		const { output } = await runChef(['build', 'ui.does-not-exist'], { cwd: tmpRepo });
-
-		assert.include(output, 'not found');
 	});
 
 	it('should build by --path', async () => {
@@ -71,4 +84,195 @@ describe('chef build', () => {
 		assert.equal(exitCode, 0);
 		assert.isTrue(fs.existsSync(path.join(extensionDist, 'buttons.bundle.js')));
 	});
+
+	it('should report not found for non-existent extension', async () => {
+		const { output } = await runChef(['build', 'ui.does-not-exist'], { cwd: tmpRepo });
+
+		assert.include(output, 'not found');
+	});
+
+	// endregion
+
+	// region: JavaScript
+
+	it('should build plain JS extension', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'js-extension');
+
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+		assertBundleMatchesExpected(dest, 'js-extension', 'bundle.js');
+	});
+
+	it('should build JS extension with CSS', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'js-with-css');
+
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+		assertBundleMatchesExpected(dest, 'js-with-css', 'bundle.js');
+		assertBundleMatchesExpected(dest, 'js-with-css', 'bundle.css');
+	});
+
+	it('should build basic extension with JS and CSS', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'basic-extension');
+
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+		assertBundleMatchesExpected(dest, 'basic-extension', 'extension.bundle.js');
+		assertBundleMatchesExpected(dest, 'basic-extension', 'extension.bundle.css');
+	});
+
+	// endregion
+
+	// region: TypeScript
+
+	it('should build TypeScript extension', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'ts-extension');
+
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+		assertBundleMatchesExpected(dest, 'ts-extension', 'bundle.js');
+	});
+
+	it('should build TypeScript extension with CSS', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'ts-with-css');
+
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+		assertBundleMatchesExpected(dest, 'ts-with-css', 'bundle.js');
+		assertBundleMatchesExpected(dest, 'ts-with-css', 'bundle.css');
+	});
+
+	it('should build TypeScript extension with dependency', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'ts-with-dependency');
+
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+		assertBundleMatchesExpected(dest, 'ts-with-dependency', 'bundle.js');
+	});
+
+	// endregion
+
+	// region: Flow
+
+	it('should build Flow extension and strip type annotations', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'flow-extension');
+
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+		assertBundleMatchesExpected(dest, 'flow-extension', 'bundle.js');
+	});
+
+	// endregion
+
+	// region: CSS features
+
+	it('should build extension with CSS images inlining', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'css-images');
+
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+		assertBundleMatchesExpected(dest, 'css-images', 'extension.bundle.js');
+		assertBundleMatchesExpected(dest, 'css-images', 'extension.bundle.css');
+	});
+
+	it('should build extension with multiple CSS files preserving order', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'css-multiple');
+
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+		assertBundleMatchesExpected(dest, 'css-multiple', 'extension.bundle.css');
+	});
+
+	it('should build extension with nested component CSS preserving order', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'css-nested-components');
+
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+		assertBundleMatchesExpected(dest, 'css-nested-components', 'extension.bundle.js');
+		assertBundleMatchesExpected(dest, 'css-nested-components', 'extension.bundle.css');
+	});
+
+	it('should build extension with autoprefixer', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'css-autoprefixer');
+
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+		assertBundleMatchesExpected(dest, 'css-autoprefixer', 'extension.bundle.css');
+	});
+
+	// endregion
+
+	// region: images
+
+	it('should build extension with JS image import', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'js-image-import');
+
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+		assertBundleMatchesExpected(dest, 'js-image-import', 'bundle.js');
+	});
+
+	// endregion
+
+	// region: namespace and concat
+
+	it('should build extension with namespace wrapping', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'namespace-extension');
+
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+		assertBundleMatchesExpected(dest, 'namespace-extension', 'bundle.js');
+	});
+
+	it('should build extension with concat preserving order', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'concat-extension');
+
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+		assertBundleMatchesExpected(dest, 'concat-extension', 'extension.bundle.js');
+		assertBundleMatchesExpected(dest, 'concat-extension', 'extension.bundle.css');
+	});
+
+	// endregion
+
+	// region: error cases
+
+	it('should report JS syntax error', async () => {
+		buildFixture(tmpRepo, 'syntax-error');
+
+		const { output } = await runChef(
+			['build', '--path', 'ui/install/js/ui/syntax-error'],
+			{ cwd: tmpRepo },
+		);
+
+		assert.include(output, 'CF1002');
+		assert.include(output, 'Unexpected token');
+	});
+
+	it('should report CSS syntax error', async () => {
+		buildFixture(tmpRepo, 'css-syntax-error');
+
+		const { output } = await runChef(
+			['build', '--path', 'ui/install/js/ui/css-syntax-error'],
+			{ cwd: tmpRepo },
+		);
+
+		assert.include(output, 'CF1002');
+	});
+
+	// endregion
 });

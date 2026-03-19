@@ -1,0 +1,43 @@
+.app {
+	display: flex;
+	min-height: 100vh;
+	font-family: Arial, sans-serif;
+}
+
+.header {
+	display: flex;
+	align-items: center;
+	height: 60px;
+	background: #fff;
+	border-bottom: 1px solid #e5e5e5;
+}
+
+.sidebar {
+	width: 250px;
+	padding: 16px;
+	background: #f5f5f5;
+}
+
+.content {
+	flex: 1;
+	padding: 24px;
+	overflow-y: auto;
+}
+
+.card {
+	border-radius: 8px;
+	padding: 12px;
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+	background: #fff;
+}
+
+.list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.list-item {
+	padding: 8px 12px;
+	border-bottom: 1px solid #eee;
+}

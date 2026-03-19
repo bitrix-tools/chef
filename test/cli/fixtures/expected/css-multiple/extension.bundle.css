@@ -1,0 +1,9 @@
+.multi-base {
+	display: block;
+	margin: 0;
+}
+
+.multi-theme {
+	color: red;
+	font-size: 14px;
+}

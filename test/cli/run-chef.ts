@@ -12,6 +12,7 @@ const chefBin = path.resolve(import.meta.dirname, '../../bin/chef');
 const fixturesPath = path.resolve(import.meta.dirname, 'fixtures');
 
 export const sourceRepo = path.join(fixturesPath, 'source-repo');
+export const projectRepo = path.join(fixturesPath, 'project-repo');
 
 function stripAnsi(text: string): string
 {
