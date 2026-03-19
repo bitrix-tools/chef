@@ -11,6 +11,7 @@ import { multiline } from '../../utils/multiline-text-tag';
 import { ProjectInitializer, SaveFileStatus } from '../../modules/services/project-initializer';
 import { formatInternalError } from '../../diagnostics/format-error';
 import { CF } from '../../diagnostics/diagnostic-codes';
+import { initHooksCommand } from './init-hooks-command';
 
 const initTestsCommand = new Command('tests')
 	.description('Set up Playwright config and .env.test for browser tests')
@@ -287,6 +288,7 @@ const initCommand = new Command('init')
 
 initCommand
 	.addCommand(initBuildCommand)
-	.addCommand(initTestsCommand);
+	.addCommand(initTestsCommand)
+	.addCommand(initHooksCommand);
 
 export { initCommand };

@@ -1,18 +1,8 @@
-import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { TemplateManager } from './template-manager';
-import { PackageFactoryProvider } from '../packages/providers/package-factory-provider';
-import { PackageResolver } from '../packages/package-resolver';
-import { findPackages } from '../../utils/package/find-packages';
+import { AliasGenerator } from './alias-generator';
 import { safeFileWrite, SaveFileStatus } from '../../utils/safe-file-write';
-
-import type { CompilerOptions } from 'typescript';
-import type { BasePackage } from '../packages/base-package';
-
-type TSConfig = {
-	compilerOptions: CompilerOptions;
-};
 
 export type FileResult = {
 	name: string;
@@ -69,53 +59,11 @@ export class ProjectInitializer
 
 	async initBuild(options: { onProgress?: (count: number) => void; onAliasesDone?: (count: number) => void; onBeforeFileWrite?: (fileName: string) => void; theme?: object } = {}): Promise<InitBuildResult>
 	{
-		const packageFactory = PackageFactoryProvider.create();
-		const extensionsStream: NodeJS.ReadableStream = findPackages({
-			startDirectory: this.#rootPath,
-			packageFactory,
+		const aliasGenerator = new AliasGenerator();
+		const { aliasesCount } = await aliasGenerator.generate({
+			rootPath: this.#rootPath,
+			onProgress: options.onProgress,
 		});
-
-		const typesPath = (() => {
-			const devExtension = PackageResolver.resolve('ui.dev');
-			if (devExtension)
-			{
-				return devExtension.getInputPath();
-			}
-
-			return '';
-		})();
-
-		const tsconfig: TSConfig = {
-			compilerOptions: {
-				baseUrl: this.#rootPath,
-				types: [typesPath],
-				paths: {},
-			},
-		};
-
-		let aliasesCount = 0;
-
-		await new Promise<void>((resolve, reject) => {
-			extensionsStream
-				.on('data', ({ extension }: { extension: BasePackage }) => {
-					if (/^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)*$/.test(extension.getName()))
-					{
-						const relativePath = path.relative(
-							this.#rootPath,
-							extension.getInputPath(),
-						);
-						tsconfig.compilerOptions.paths[extension.getName()] = [`./${relativePath}`];
-
-						aliasesCount++;
-						options.onProgress?.(aliasesCount);
-					}
-				})
-				.on('done', () => resolve())
-				.on('error', (err: Error) => reject(err));
-		});
-
-		const aliasesPath = path.join(this.#rootPath, 'aliases.tsconfig.json');
-		await fs.writeFile(aliasesPath, JSON.stringify(tsconfig, null, 4));
 
 		options.onAliasesDone?.(aliasesCount);
 

@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { SequentialQueue } from '../../utils/sequential-queue';
+import { MergeLock } from '../../utils/merge-lock';
 
 import { watchOption } from './options/watch-option';
 import { createPathOption } from '../../shared/options/path-option';
@@ -10,6 +11,7 @@ import { productionOption } from './options/production-option';
 import { PackageFactoryProvider } from '../../modules/packages/providers/package-factory-provider';
 import { PackageResolver } from '../../modules/packages/package-resolver';
 import { findPackages } from '../../utils/package/find-packages';
+import { Environment } from '../../environment/environment';
 import { createShutdown } from '../../utils/create-shutdown';
 import { formatInternalError } from '../../diagnostics/format-error';
 import { CF } from '../../diagnostics/diagnostic-codes';
@@ -47,6 +49,7 @@ buildCommand
 
 		const watchers: Array<FSWatcher> = [];
 		const timers = new Map<string, NodeJS.Timeout>();
+		const mergeLock = new MergeLock(Environment.getRoot());
 
 		extensionsStream
 			.on('data', async ({ extension }: { extension: BasePackage }) => {
@@ -73,11 +76,17 @@ buildCommand
 								clearTimeout(existingTimer);
 							}
 
-							const timer = setTimeout(() => {
+							const timer = setTimeout(async () => {
+								timers.delete(extensionId);
+
+								if (await mergeLock.isLocked())
+								{
+									return;
+								}
+
 								queue.add(
 									build(extension, args),
 								);
-								timers.delete(extensionId);
 							}, 100);
 
 							timers.set(extensionId, timer);

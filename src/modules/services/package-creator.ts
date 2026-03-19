@@ -3,6 +3,7 @@ import * as path from 'node:path';
 
 import { Environment } from '../../environment/environment';
 import { TemplateManager } from './template-manager';
+import { AliasGenerator } from './alias-generator';
 import { renderTemplate } from '../../utils/render-template';
 import { FileFinder } from '../../utils/file-finder';
 import { createInputFileName } from '../../utils/create-input-file-name';
@@ -178,24 +179,12 @@ export class PackageCreator
 
 	async #updateAliases(extensionName: string, packagePath: string): Promise<boolean>
 	{
-		try
-		{
-			const root = Environment.getRoot();
-			const aliasesPath = path.join(root, 'aliases.tsconfig.json');
-			const aliasesRaw = await fs.readFile(aliasesPath, 'utf8');
-			const aliases = JSON.parse(aliasesRaw);
-			const srcPath = path.join(packagePath, 'src');
-			const relPath = `./${path.relative(root, srcPath)}`;
-			aliases.compilerOptions ??= {};
-			aliases.compilerOptions.paths ??= {};
-			aliases.compilerOptions.paths[extensionName] = [relPath];
-			await fs.writeFile(aliasesPath, JSON.stringify(aliases, null, 4));
+		const aliasGenerator = new AliasGenerator();
 
-			return true;
-		}
-		catch
-		{
-			return false;
-		}
+		return aliasGenerator.addAlias({
+			rootPath: Environment.getRoot(),
+			extensionName,
+			packagePath,
+		});
 	}
 }

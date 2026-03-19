@@ -32,6 +32,8 @@ export const CF = {
 
 	// Environment (CF5xxx)
 	OUTSIDE_PROJECT_ROOT: 'CF5001',
+	VCS_NOT_FOUND: 'CF5002',
+	HOOK_INSTALL_FAILED: 'CF5003',
 
 	// Internal (CF9xxx)
 	PACKAGE_READ_ERROR: 'CF9001',

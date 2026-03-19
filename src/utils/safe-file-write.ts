@@ -15,13 +15,14 @@ export enum SaveFileStatus {
 export type SafeFileWriteOptions = {
 	filePath: string;
 	data?: any;
+	mode?: number;
 	theme?: any;
 	onConfirm?: (filename: string) => Promise<boolean>;
 };
 
 export async function safeFileWrite(options: SafeFileWriteOptions): Promise<SaveFileStatus>
 {
-	const { filePath, data, theme, onConfirm } = options;
+	const { filePath, data, mode, theme, onConfirm } = options;
 	const filename = path.basename(filePath);
 
 	if (await fileExistsAsync(filePath))
@@ -44,7 +45,7 @@ export async function safeFileWrite(options: SafeFileWriteOptions): Promise<Save
 
 		if (isReplaced)
 		{
-			await fs.writeFile(filePath, data);
+			await fs.writeFile(filePath, data, mode !== undefined ? { mode } : undefined);
 			return SaveFileStatus.REPLACED;
 		}
 
