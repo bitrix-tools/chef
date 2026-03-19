@@ -31,9 +31,11 @@ export async function collectPackages(
 
 	if (howItWorks)
 	{
+		console.log('');
+
 		for (const line of howItWorks)
 		{
-			console.log(` ${chalk.dim(line)}`);
+			console.log(` ${line}`);
 		}
 	}
 

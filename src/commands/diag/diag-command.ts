@@ -35,19 +35,34 @@ function getTypeFilter(args: { type?: string }): ((extension: BasePackage) => bo
 	return args.type ? createTypeFilter(args.type) : undefined;
 }
 
+function dim(text: string): string
+{
+	return chalk.dim(text);
+}
+
+function hi(text: string): string
+{
+	return chalk.reset(text);
+}
+
 function printHowItWorks(lines: string[]): void
 {
+	console.log('');
+
 	for (const line of lines)
 	{
-		console.log(` ${chalk.dim(line)}`);
+		console.log(` ${line}`);
 	}
 }
 
 // region: top-used
 
 const TOP_USED_HOW_IT_WORKS = [
-	'For each extension, counts how many other extensions declare it',
-	'as a dependency in their config.php rel array.',
+	dim(`For each extension, counts how many other extensions declare it`),
+	dim(`as a dependency in their ${hi('config.php rel')} array.`),
+	'',
+	dim(`High dependents count means the extension is ${hi('widely used')} —`),
+	dim(`changes to it affect many other extensions.`),
 ];
 
 const topUsedCommand = new Command('top-used')
@@ -83,7 +98,11 @@ const topUsedCommand = new Command('top-used')
 // region: top-deps
 
 const TOP_DEPS_HOW_IT_WORKS = [
-	'Counts direct dependencies from the config.php rel array for each extension.',
+	dim(`Counts direct dependencies from the ${hi('config.php rel')} array`),
+	dim(`for each extension.`),
+	'',
+	dim(`Many direct dependencies increase page load — each dependency`),
+	dim(`and its transitive tree will be loaded in the browser.`),
 ];
 
 const topDepsCommand = new Command('top-deps')
@@ -120,8 +139,11 @@ const topDepsCommand = new Command('top-deps')
 // region: top-deps-tree
 
 const TOP_DEPS_TREE_HOW_IT_WORKS = [
-	'Recursively resolves the full dependency tree (config.php rel)',
-	'and counts the total number of unique transitive dependencies.',
+	dim(`Recursively resolves the full dependency tree (${hi('config.php rel')})`),
+	dim(`and counts the total number of unique ${hi('transitive')} dependencies.`),
+	'',
+	dim(`Tree size shows the true dependency footprint — two extensions`),
+	dim(`with 5 direct deps each can have vastly different tree sizes.`),
 ];
 
 const topDepsTreeCommand = new Command('top-deps-tree')
@@ -158,8 +180,11 @@ const topDepsTreeCommand = new Command('top-deps-tree')
 // region: top-bundle-size
 
 const TOP_BUNDLE_SIZE_HOW_IT_WORKS = [
-	'Measures the file size of compiled JS and CSS bundles (output files)',
-	'for each extension. Dependencies are not included.',
+	dim(`Measures the file size of compiled ${hi('JS')} and ${hi('CSS')} bundles`),
+	dim(`for each extension. Dependencies are ${hi('not')} included.`),
+	'',
+	dim(`This is the extension's own code that the browser will download.`),
+	dim(`To see the full picture with dependencies, use ${hi('top-total-size')}.`),
 ];
 
 const topBundleSizeCommand = new Command('top-bundle-size')
@@ -198,10 +223,13 @@ const topBundleSizeCommand = new Command('top-bundle-size')
 // region: top-total-size
 
 const TOP_TOTAL_SIZE_HOW_IT_WORKS = [
-	'Own -- extension bundle size (JS + CSS).',
-	'Total -- own bundle + all transitive dependency bundles.',
-	'Deps -- direct dependencies (config.php rel).',
-	'Tree -- total unique transitive dependencies.',
+	dim(`Total size = own bundle + all transitive dependency bundles.`),
+	dim(`This is ${hi('everything the browser downloads')} when the extension is loaded.`),
+	'',
+	dim(`${hi('Own')}   — extension bundle size (JS + CSS)`),
+	dim(`${hi('Total')} — own + all transitive dependency bundles`),
+	dim(`${hi('Deps')}  — direct dependencies (config.php rel)`),
+	dim(`${hi('Tree')}  — total unique transitive dependencies`),
 ];
 
 const topTotalSizeCommand = new Command('top-total-size')
@@ -241,8 +269,12 @@ const topTotalSizeCommand = new Command('top-total-size')
 // region: config
 
 const CONFIG_HOW_IT_WORKS = [
-	'Reads bundle.config.js/ts for each extension and filters by --key.',
-	'With --value: substring match for strings, contains for arrays.',
+	dim(`Reads ${hi('bundle.config.js/ts')} for each extension.`),
+	'',
+	dim(`${hi('--key')}      find extensions that have the specified parameter`),
+	dim(`${hi('--value')}    filter by value (substring for strings, contains for arrays)`),
+	dim(`${hi('--except')}   find extensions with parameters OTHER than specified`),
+	dim(`${hi('--missing')}  find extensions where the specified parameters are absent`),
 ];
 
 const configCommand = new Command('config')
@@ -356,16 +388,16 @@ function wrapList(items: string[], maxWidth: number): string
 // region: unused-deps
 
 const UNUSED_DEPS_HOW_IT_WORKS = [
-	'Compares config.php rel against actual usage in source files.',
-	'Comments are ignored. A dependency is considered used if found via:',
+	dim(`Compares ${hi('config.php rel')} against actual usage in source files.`),
+	dim(`Comments are ignored. A dependency is considered used if found via:`),
 	'',
-	'  import { Foo } from \'extension.name\'',
-	'  import \'extension.name\'                  (side-effect import)',
-	'  Reflection.getClass(\'BX.Namespace.Class\')',
-	'  BX.Namespace.Class                       (matched against exported globals)',
+	dim(`  ${hi("import { Foo } from 'extension.name'")}`),
+	dim(`  ${hi("import 'extension.name'")}                  (side-effect import)`),
+	dim(`  ${hi("Reflection.getClass('BX.Namespace.Class')")}`),
+	dim(`  ${hi('BX.Namespace.Class')}                       (matched against exported globals)`),
 	'',
-	'Exported globals = namespace + exported names from the entry point.',
-	'BX.loadExtension / Runtime.loadExtension are NOT counted (dynamic loading).',
+	dim(`Exported globals = namespace + exported names from the entry point.`),
+	dim(`${hi('BX.loadExtension')} / ${hi('Runtime.loadExtension')} are ${hi('NOT')} counted (dynamic loading).`),
 ];
 
 const unusedDepsCommand = new Command('unused-deps')
@@ -403,16 +435,17 @@ const unusedDepsCommand = new Command('unused-deps')
 // region: circular-deps
 
 const CIRCULAR_DEPS_HOW_IT_WORKS = [
-	'Walks the config.php dependency tree of each extension',
-	'and detects cycles back to the root.',
+	dim(`Walks the ${hi('config.php')} dependency tree of each extension`),
+	dim(`and detects cycles back to the root.`),
 	'',
-	'Without arguments: scans all extensions and reports those with cycles.',
-	'With arguments: checks only the specified extensions.',
+	dim(`Without arguments: scans all extensions and reports those with cycles.`),
+	dim(`With arguments: checks only the specified extensions.`),
 	'',
-	'Self-dependency (A -> A) means the extension lists itself in rel.',
-	'Mutual dependency (A -> B -> A) causes load order issues --',
-	'one extension may initialize before the other is ready.',
-	'Longer chains are less critical but indicate tightly coupled code.',
+	dim(`${hi('A → A')}       self-dependency — the extension lists itself in rel`),
+	dim(`${hi('A → B → A')}   mutual dependency — causes load order issues,`),
+	dim(`            one extension may initialize before the other is ready`),
+	dim(`${hi('A → … → A')}   longer chains are less critical`),
+	dim(`            but indicate tightly coupled code`),
 ];
 
 const circularDepsCommand = new Command('circular-deps')
@@ -557,18 +590,17 @@ async function checkSpecificCircularDeps(extensions: string[], args: { path: str
 // region: circular-imports
 
 const CIRCULAR_IMPORTS_HOW_IT_WORKS = [
-	'Parses import/export statements with relative paths (./  ../)',
-	'in each extension\'s source files and detects cycles in the import graph.',
+	dim(`Parses ${hi('import/export')} statements with relative paths (${hi('./')}  ${hi('../')})`),
+	dim(`in each extension's source files and detects cycles in the import graph.`),
 	'',
-	'Without arguments: scans all extensions and reports those with cycles.',
-	'With arguments: checks only the specified extensions.',
+	dim(`Without arguments: scans all extensions and reports those with cycles.`),
+	dim(`With arguments: checks only the specified extensions.`),
 	'',
-	'Short cycles (A -> B -> A) are the most critical -- one of the modules',
-	'will receive an uninitialized export at runtime, causing errors.',
-	'',
-	'Longer chains (A -> B -> C -> A) are less likely to cause issues',
-	'because the circular module is often already initialized by the time',
-	'it is accessed. Barrel files (index.js) commonly appear in such chains.',
+	dim(`${hi('A → B → A')}   most critical — one of the modules will receive`),
+	dim(`            an ${hi('uninitialized export')} at runtime, causing errors`),
+	dim(`${hi('A → … → A')}   longer chains are less likely to cause issues —`),
+	dim(`            the circular module is often already initialized`),
+	dim(`            by the time it is accessed`),
 ];
 
 const circularImportsCommand = new Command('circular-imports')
@@ -721,14 +753,14 @@ async function checkSpecificCircularImports(extensions: string[]): Promise<void>
 // region: find-usages
 
 const FIND_USAGES_HOW_IT_WORKS = [
-	'Searches JS, TS and PHP files. Comments are ignored.',
-	'Skips node_modules, vendor, lang, db, images, test, meta, updates, routes.',
+	dim(`Searches ${hi('JS')}, ${hi('TS')} and ${hi('PHP')} files. Comments are ignored.`),
+	dim(`Skips node_modules, vendor, lang, db, images, test, meta, updates, routes.`),
 	'',
-	'JS/TS: import \'ext\', import { } from \'ext\', BX.loadExtension(\'ext\'),',
-	'       BX.loadExt(\'ext\'), Runtime.loadExtension(\'ext\'),',
-	'       BX.Namespace.Something (via bundle.config namespace)',
-	'PHP:   Extension::load(\'ext\'), CJSCore::Init([\'ext\']), config.php rel,',
-	'       BX.Namespace.Something in inline <script> tags',
+	dim(`${hi('JS/TS')}  import 'ext', import { } from 'ext', BX.loadExtension('ext'),`),
+	dim(`       BX.loadExt('ext'), Runtime.loadExtension('ext'),`),
+	dim(`       BX.Namespace.Something (via bundle.config namespace)`),
+	dim(`${hi('PHP')}    Extension::load('ext'), CJSCore::Init(['ext']), config.php rel,`),
+	dim(`       BX.Namespace.Something in inline <script> tags`),
 ];
 
 const findUsagesCommand = new Command('find-usages')
@@ -845,16 +877,16 @@ function classifyPath(relPath: string): string
 // region: unused
 
 const UNUSED_HOW_IT_WORKS = [
-	'Only JS extensions (no components, activities or templates).',
-	'Comments are ignored.',
-	'Skips node_modules, vendor, lang, db, images, test, meta, updates, routes.',
+	dim(`Only JS extensions (no components, activities or templates).`),
+	dim(`Comments are ignored.`),
+	dim(`Skips node_modules, vendor, lang, db, images, test, meta, updates, routes.`),
 	'',
-	'An extension is considered used if:',
-	'  1. Listed as a dependency in another extension\'s config.php rel array',
-	'  2. Its name appears in quotes in any JS/TS file',
-	'     (import \'ext\', from \'ext\', BX.loadExtension, BX.loadExt, Runtime.loadExtension)',
-	'  3. Its name appears in quotes in any PHP file',
-	'     (Extension::load, CJSCore::Init, config.php rel, inline JS)',
+	dim(`An extension is considered ${hi('used')} if:`),
+	dim(`  ${hi('1.')} Listed as a dependency in another extension's ${hi('config.php rel')} array`),
+	dim(`  ${hi('2.')} Its name appears in quotes in any ${hi('JS/TS')} file`),
+	dim(`     (import 'ext', from 'ext', BX.loadExtension, BX.loadExt, Runtime.loadExtension)`),
+	dim(`  ${hi('3.')} Its name appears in quotes in any ${hi('PHP')} file`),
+	dim(`     (Extension::load, CJSCore::Init, config.php rel, inline JS)`),
 ];
 
 const unusedCommand = new Command('unused')
