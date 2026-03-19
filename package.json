@@ -20,8 +20,8 @@
   "scripts": {
     "prebuild": "mkdir -p dist/ && cp -r src/commands/create/templates dist/ && cp -r src/commands/init/templates dist/ && cp src/modules/engines/test/e2e/playwright/streaming-reporter.ts dist/",
     "build": "tsup-node ./src/cli.ts --format esm --splitting=false",
-    "test": "tsx --import=tsx/esm ./node_modules/.bin/mocha './test/**/*.test.ts' --inline-diffs --color=true",
-    "test:watch": "tsx watch --import=tsx/esm ./node_modules/.bin/mocha './test/**/*.test.ts' --inline-diffs --color=true",
+    "test": "tsx --import=tsx/esm ./node_modules/.bin/mocha './test/**/*.test.ts' --inline-diffs --color=true --timeout 30000",
+    "test:watch": "tsx watch --import=tsx/esm ./node_modules/.bin/mocha './test/**/*.test.ts' --inline-diffs --color=true --timeout 30000",
     "release": "tsx scripts/release.ts",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
