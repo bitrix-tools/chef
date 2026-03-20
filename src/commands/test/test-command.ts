@@ -12,6 +12,7 @@ import { runUnitTestsTask } from './tasks/run-unit-tests-task';
 import { runEndToEndTestsTask } from './tasks/run-e2e-tests-task';
 import { TeamcityReporter } from '../../modules/engines/test/teamcity-reporter';
 import { findPlaywrightConfig, getBrowsersFromConfig } from '../../modules/engines/test/unit/playwright/find-playwright-config';
+import { PlaywrightUnitStrategy } from '../../modules/engines/test/unit/playwright/playwright-unit-strategy';
 import { Environment } from '../../environment/environment';
 import { formatInternalError } from '../../diagnostics/format-error';
 import { CF } from '../../diagnostics/diagnostic-codes';
@@ -148,6 +149,7 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 					const name = extension.getName();
 					const chokidar = await import('chokidar');
 					const watchDirs = [
+						extension.getSourceDirectoryPath(),
 						...(type !== 'e2e' ? [extension.getUnitTestsDirectoryPath()] : []),
 						...(type !== 'unit' ? [extension.getEndToEndTestsDirectoryPath()] : []),
 					];
@@ -156,6 +158,7 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 					watchers.push(watcher);
 
 					watcher.on('change', async () => {
+						PlaywrightUnitStrategy.clearBundleCache();
 						await queue.add(async () => {
 							const freshTasks = createTestTasks(extension, args, type);
 							await TaskRunner.run({

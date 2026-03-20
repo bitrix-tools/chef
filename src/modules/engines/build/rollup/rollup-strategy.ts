@@ -592,8 +592,15 @@ export class RollupBuildStrategy extends BuildStrategy
 			);
 		}
 
+		const extensions = ['.js', '.jsx', '.mjs'];
+		if (options.typescript && options.transformClasses)
+		{
+			extensions.push('.ts', '.tsx');
+		}
+
 		return babelPlugin({
 			babelHelpers: 'external',
+			extensions,
 			presets: [
 				[
 					presetEnv,

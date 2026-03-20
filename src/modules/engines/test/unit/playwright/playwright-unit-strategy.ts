@@ -29,6 +29,11 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 {
 	static #bundleCache = new Map<string, Promise<TestBundle>>();
 
+	static clearBundleCache(): void
+	{
+		PlaywrightUnitStrategy.#bundleCache.clear();
+	}
+
 	async #buildTestBundle(options: UnitTestOptions): Promise<TestBundle>
 	{
 		const filteredTests = options.file
