@@ -20,7 +20,9 @@ import { findUsages, groupByType, getTypeLabel, relativePath } from './analyzers
 import { analyzeOrphans } from './analyzers/orphan-analyzer';
 import { findCircularImports } from './analyzers/circular-imports-analyzer';
 import { ExtensionPackage } from '../../modules/packages/package/extension-package';
-import { createTypeOption, createTypeFilter } from './options/type-option';
+import { createIncludeOption, createExcludeOption, createNameFilter } from './options/name-filter-option';
+
+import { findExportedGlobals } from './package-snapshot';
 
 import type { UsageLocation } from './analyzers/find-usages-analyzer';
 import type { SnapshotField } from './package-snapshot';
@@ -30,9 +32,16 @@ const diagCommand = new Command('diag');
 
 diagCommand.description('Diagnose and analyze extensions across the project');
 
-function getTypeFilter(args: { type?: string }): ((extension: BasePackage) => boolean) | undefined
+function filterByName<T extends { name: string }>(items: T[], args: { include?: string[]; exclude?: string[] }): T[]
 {
-	return args.type ? createTypeFilter(args.type) : undefined;
+	const nameFilter = createNameFilter(args);
+
+	if (!nameFilter)
+	{
+		return items;
+	}
+
+	return items.filter((item) => nameFilter(item.name));
 }
 
 function dim(text: string): string
@@ -70,7 +79,8 @@ const topUsedCommand = new Command('top-used')
 	.addHelpText('after', '\nHow it works:\n  ' + TOP_USED_HOW_IT_WORKS.join('\n  ') + '\n')
 	.addOption(createPathOption('Scan for extensions starting from this directory'))
 	.addOption(createLimitOption())
-	.addOption(createTypeOption())
+	.addOption(createIncludeOption())
+	.addOption(createExcludeOption())
 	.action(async (args) => {
 		const fields: Set<SnapshotField> = new Set(['dependencies']);
 		const { snapshots, duration, scanned } = await collectPackages({
@@ -78,9 +88,8 @@ const topUsedCommand = new Command('top-used')
 			fields,
 			title: `TOP ${args.limit} most depended-on extensions`,
 			howItWorks: TOP_USED_HOW_IT_WORKS,
-			filter: getTypeFilter(args),
 		});
-		const results = analyzePopular(snapshots, args.limit);
+		const results = filterByName(analyzePopular(snapshots, Infinity), args).slice(0, args.limit);
 
 		console.log(formatRanking({
 			items: results,
@@ -110,7 +119,8 @@ const topDepsCommand = new Command('top-deps')
 	.addHelpText('after', '\nHow it works:\n  ' + TOP_DEPS_HOW_IT_WORKS.join('\n  ') + '\n')
 	.addOption(createPathOption('Scan for extensions starting from this directory'))
 	.addOption(createLimitOption())
-	.addOption(createTypeOption())
+	.addOption(createIncludeOption())
+	.addOption(createExcludeOption())
 	.action(async (args) => {
 		const fields: Set<SnapshotField> = new Set(['dependencies']);
 		const { snapshots, duration, scanned } = await collectPackages({
@@ -118,10 +128,9 @@ const topDepsCommand = new Command('top-deps')
 			fields,
 			title: `TOP ${args.limit} extensions with most direct dependencies`,
 			howItWorks: TOP_DEPS_HOW_IT_WORKS,
-			filter: getTypeFilter(args),
 		});
 
-		const results = analyzeHeavyDeps(snapshots, args.limit);
+		const results = filterByName(analyzeHeavyDeps(snapshots, Infinity), args).slice(0, args.limit);
 
 		console.log(formatRanking({
 			items: results,
@@ -151,7 +160,8 @@ const topDepsTreeCommand = new Command('top-deps-tree')
 	.addHelpText('after', '\nHow it works:\n  ' + TOP_DEPS_TREE_HOW_IT_WORKS.join('\n  ') + '\n')
 	.addOption(createPathOption('Scan for extensions starting from this directory'))
 	.addOption(createLimitOption())
-	.addOption(createTypeOption())
+	.addOption(createIncludeOption())
+	.addOption(createExcludeOption())
 	.action(async (args) => {
 		const fields: Set<SnapshotField> = new Set(['dependencyTreeSize']);
 		const { snapshots, duration, scanned } = await collectPackages({
@@ -159,10 +169,9 @@ const topDepsTreeCommand = new Command('top-deps-tree')
 			fields,
 			title: `TOP ${args.limit} extensions with largest dependency tree`,
 			howItWorks: TOP_DEPS_TREE_HOW_IT_WORKS,
-			filter: getTypeFilter(args),
 		});
 
-		const results = analyzeDeepDeps(snapshots, args.limit);
+		const results = filterByName(analyzeDeepDeps(snapshots, Infinity), args).slice(0, args.limit);
 
 		console.log(formatRanking({
 			items: results,
@@ -192,7 +201,8 @@ const topBundleSizeCommand = new Command('top-bundle-size')
 	.addHelpText('after', '\nHow it works:\n  ' + TOP_BUNDLE_SIZE_HOW_IT_WORKS.join('\n  ') + '\n')
 	.addOption(createPathOption('Scan for extensions starting from this directory'))
 	.addOption(createLimitOption())
-	.addOption(createTypeOption())
+	.addOption(createIncludeOption())
+	.addOption(createExcludeOption())
 	.action(async (args) => {
 		const fields: Set<SnapshotField> = new Set(['bundleSize']);
 		const { snapshots, duration, scanned } = await collectPackages({
@@ -200,10 +210,9 @@ const topBundleSizeCommand = new Command('top-bundle-size')
 			fields,
 			title: `TOP ${args.limit} extensions with largest bundle size`,
 			howItWorks: TOP_BUNDLE_SIZE_HOW_IT_WORKS,
-			filter: getTypeFilter(args),
 		});
 
-		const results = analyzeHeavyBundles(snapshots, args.limit);
+		const results = filterByName(analyzeHeavyBundles(snapshots, Infinity), args).slice(0, args.limit);
 
 		console.log(formatRanking({
 			items: results,
@@ -237,7 +246,8 @@ const topTotalSizeCommand = new Command('top-total-size')
 	.addHelpText('after', '\nHow it works:\n  ' + TOP_TOTAL_SIZE_HOW_IT_WORKS.join('\n  ') + '\n')
 	.addOption(createPathOption('Scan for extensions starting from this directory'))
 	.addOption(createLimitOption())
-	.addOption(createTypeOption())
+	.addOption(createIncludeOption())
+	.addOption(createExcludeOption())
 	.action(async (args) => {
 		const fields: Set<SnapshotField> = new Set(['bundleSize', 'totalSize', 'dependencies', 'dependencyTreeSize']);
 		const { snapshots, duration, scanned } = await collectPackages({
@@ -245,10 +255,9 @@ const topTotalSizeCommand = new Command('top-total-size')
 			fields,
 			title: `TOP ${args.limit} extensions with largest total transferred size`,
 			howItWorks: TOP_TOTAL_SIZE_HOW_IT_WORKS,
-			filter: getTypeFilter(args),
 		});
 
-		const results = analyzeHeavyTotal(snapshots, args.limit);
+		const results = filterByName(analyzeHeavyTotal(snapshots, Infinity), args).slice(0, args.limit);
 
 		console.log(formatRanking({
 			items: results,
@@ -282,7 +291,8 @@ const configCommand = new Command('config')
 	.addHelpText('after', '\nHow it works:\n  ' + CONFIG_HOW_IT_WORKS.join('\n  ')
 		+ '\n\nExamples:\n  $ chef diag config --key namespace\n  $ chef diag config --key concat --key adjustConfigPhp\n  $ chef diag config --key targets --value "chrome 100"\n  $ chef diag config --key input --key output --except\n  $ chef diag config --key minification --missing\n')
 	.addOption(createPathOption('Scan for extensions starting from this directory'))
-	.addOption(createTypeOption())
+	.addOption(createIncludeOption())
+	.addOption(createExcludeOption())
 	.requiredOption('-k, --key <key...>', 'Config parameter name(s) to search (repeatable)')
 	.option('-v, --value <value>', 'Filter by parameter value (substring match)')
 	.option('-e, --except', 'Invert: find extensions with keys OTHER than the specified ones')
@@ -305,12 +315,11 @@ const configCommand = new Command('config')
 			fields,
 			title,
 			howItWorks: CONFIG_HOW_IT_WORKS,
-			filter: getTypeFilter(args),
 		});
 
 		if (args.missing)
 		{
-			const results = analyzeConfigMissing(snapshots, keys);
+			const results = filterByName(analyzeConfigMissing(snapshots, keys), args);
 
 			console.log(formatRanking({
 				items: results,
@@ -327,7 +336,7 @@ const configCommand = new Command('config')
 
 		if (args.except)
 		{
-			const results = analyzeConfigExcept(snapshots, new Set(keys));
+			const results = filterByName(analyzeConfigExcept(snapshots, new Set(keys)), args);
 
 			console.log(formatRanking({
 				items: results,
@@ -343,7 +352,7 @@ const configCommand = new Command('config')
 			return;
 		}
 
-		const results = analyzeConfig(snapshots, keys, args.value);
+		const results = filterByName(analyzeConfig(snapshots, keys, args.value), args);
 
 		console.log(formatRanking({
 			items: results,
@@ -444,7 +453,8 @@ const unusedDepsCommand = new Command('unused-deps')
 	.addHelpText('after', '\nHow it works:\n  ' + UNUSED_DEPS_HOW_IT_WORKS.join('\n  ') + '\n')
 	.addOption(createPathOption('Scan for extensions starting from this directory'))
 	.addOption(createLimitOption())
-	.addOption(createTypeOption())
+	.addOption(createIncludeOption())
+	.addOption(createExcludeOption())
 	.action(async (args) => {
 		const fields: Set<SnapshotField> = new Set(['dependencies', 'importedExtensions']);
 		const { snapshots, duration, scanned } = await collectPackages({
@@ -452,10 +462,9 @@ const unusedDepsCommand = new Command('unused-deps')
 			fields,
 			title: `TOP ${args.limit} extensions with unused dependencies`,
 			howItWorks: UNUSED_DEPS_HOW_IT_WORKS,
-			filter: getTypeFilter(args),
 		});
 
-		const results = analyzeUnusedDeps(snapshots, args.limit);
+		const results = filterByName(analyzeUnusedDeps(snapshots, Infinity), args).slice(0, args.limit);
 
 		console.log(formatRanking({
 			items: results,
@@ -493,6 +502,8 @@ const circularDepsCommand = new Command('circular-deps')
 		+ '\n\nExamples:\n  $ chef diag circular-deps\n  $ chef diag circular-deps main.core\n  $ chef diag circular-deps main.core ui.buttons crm.timeline\n')
 	.argument('[extensions...]', 'Extensions to check (all if omitted)')
 	.addOption(createPathOption('Scan for extensions starting from this directory'))
+	.addOption(createIncludeOption())
+	.addOption(createExcludeOption())
 	.action(async (extensions: string[], args) => {
 		if (extensions.length === 0)
 		{
@@ -504,7 +515,7 @@ const circularDepsCommand = new Command('circular-deps')
 		}
 	});
 
-async function checkAllCircularDeps(args: { path: string }): Promise<void>
+async function checkAllCircularDeps(args: { path: string; include?: string[]; exclude?: string[] }): Promise<void>
 {
 	const fields: Set<SnapshotField> = new Set();
 	const { snapshots, duration: collectDuration, scanned } = await collectPackages({
@@ -544,15 +555,17 @@ async function checkAllCircularDeps(args: { path: string }): Promise<void>
 
 	spinner.stop();
 
-	if (results.length === 0)
+	const filtered = filterByName(results, args);
+
+	if (filtered.length === 0)
 	{
 		console.log('  No circular dependencies found');
 	}
 	else
 	{
-		results.sort((a, b) => a.name.localeCompare(b.name));
+		filtered.sort((a, b) => a.name.localeCompare(b.name));
 
-		for (const result of results)
+		for (const result of filtered)
 		{
 			console.log(` ${chalk.red('✗')} ${result.name} ${chalk.red(`${result.cycles.length} circular ${result.cycles.length === 1 ? 'dependency' : 'dependencies'}`)}`);
 
@@ -567,10 +580,10 @@ async function checkAllCircularDeps(args: { path: string }): Promise<void>
 
 	const totalDuration = collectDuration + (performance.now() - start);
 	const durationStr = (totalDuration / 1000).toFixed(2);
-	console.log(` ${chalk.dim(`Checked ${scanned} extensions, found ${results.length} with circular dependencies in ${durationStr}s`)}`);
+	console.log(` ${chalk.dim(`Checked ${scanned} extensions, found ${filtered.length} with circular dependencies in ${durationStr}s`)}`);
 	console.log('');
 
-	if (hasCircular)
+	if (filtered.length > 0)
 	{
 		process.exit(1);
 	}
@@ -648,6 +661,8 @@ const circularImportsCommand = new Command('circular-imports')
 		+ '\n\nExamples:\n  $ chef diag circular-imports\n  $ chef diag circular-imports main.core\n')
 	.argument('[extensions...]', 'Extensions to check (all if omitted)')
 	.addOption(createPathOption('Scan for extensions starting from this directory'))
+	.addOption(createIncludeOption())
+	.addOption(createExcludeOption())
 	.action(async (extensions: string[], args) => {
 		if (extensions.length === 0)
 		{
@@ -659,7 +674,7 @@ const circularImportsCommand = new Command('circular-imports')
 		}
 	});
 
-async function checkAllCircularImports(args: { path: string }): Promise<void>
+async function checkAllCircularImports(args: { path: string; include?: string[]; exclude?: string[] }): Promise<void>
 {
 	const fields: Set<SnapshotField> = new Set();
 	const { snapshots, duration: collectDuration, scanned } = await collectPackages({
@@ -705,15 +720,18 @@ async function checkAllCircularImports(args: { path: string }): Promise<void>
 
 	spinner.stop();
 
-	if (results.length === 0)
+	const filtered = filterByName(results, args);
+	const filteredCycles = filtered.reduce((sum, r) => sum + r.cycles.length, 0);
+
+	if (filtered.length === 0)
 	{
 		console.log('  No circular imports found');
 	}
 	else
 	{
-		results.sort((a, b) => a.name.localeCompare(b.name));
+		filtered.sort((a, b) => a.name.localeCompare(b.name));
 
-		for (const result of results)
+		for (const result of filtered)
 		{
 			console.log(` ${chalk.red('✗')} ${result.name} ${chalk.red(`${result.cycles.length} circular ${result.cycles.length === 1 ? 'import' : 'imports'}`)}`);
 
@@ -728,7 +746,7 @@ async function checkAllCircularImports(args: { path: string }): Promise<void>
 
 	const totalDuration = collectDuration + (performance.now() - start);
 	const durationStr = (totalDuration / 1000).toFixed(2);
-	console.log(` ${chalk.dim(`Checked ${scanned} extensions, found ${totalCycles} circular ${totalCycles === 1 ? 'import' : 'imports'} in ${results.length} ${results.length === 1 ? 'extension' : 'extensions'} in ${durationStr}s`)}`);
+	console.log(` ${chalk.dim(`Checked ${scanned} extensions, found ${filteredCycles} circular ${filteredCycles === 1 ? 'import' : 'imports'} in ${filtered.length} ${filtered.length === 1 ? 'extension' : 'extensions'} in ${durationStr}s`)}`);
 	console.log('');
 }
 
@@ -817,7 +835,8 @@ const findUsagesCommand = new Command('find-usages')
 		console.log('');
 
 		const extension: BasePackage | null = PackageResolver.resolve(extensionName);
-		const usages = await findUsages(extensionName, extension, args.path);
+		const globals = extension ? await findExportedGlobals(extension) : new Set<string>();
+		const usages = await findUsages(extensionName, extension, globals, args.path);
 		const groups = groupByType(usages);
 		const duration = ((performance.now() - start) / 1000).toFixed(2);
 
@@ -932,6 +951,8 @@ const unusedCommand = new Command('unused')
 	.description('Find extensions that are never referenced anywhere')
 	.addHelpText('after', '\nHow it works:\n  ' + UNUSED_HOW_IT_WORKS.join('\n  ') + '\n')
 	.addOption(createPathOption('Scan for extensions starting from this directory'))
+	.addOption(createIncludeOption())
+	.addOption(createExcludeOption())
 	.action(async (args) => {
 		const fields: Set<SnapshotField> = new Set(['dependencies']);
 		const { snapshots, duration: collectDuration, scanned } = await collectPackages({
@@ -943,7 +964,7 @@ const unusedCommand = new Command('unused')
 		});
 
 		const start = performance.now();
-		const results = await analyzeOrphans(snapshots, args.path);
+		const results = filterByName(await analyzeOrphans(snapshots, args.path), args);
 		const searchDuration = performance.now() - start;
 		const totalDuration = collectDuration + searchDuration;
 
