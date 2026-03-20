@@ -1,6 +1,8 @@
 import * as path from 'node:path';
 import { existsSync, statSync } from 'node:fs';
 
+import { stripComments } from './analyzers/file-scanner';
+
 import type { BasePackage } from '../../modules/packages/base-package';
 
 export type PackageSnapshot = {
@@ -88,7 +90,7 @@ export async function createSnapshot(
 	return snapshot;
 }
 
-async function findExportedGlobals(extension: BasePackage): Promise<Set<string>>
+export async function findExportedGlobals(extension: BasePackage): Promise<Set<string>>
 {
 	const namespace = extension.getBundleConfig().get('namespace') ?? '';
 	if (!namespace)
@@ -221,7 +223,7 @@ async function findUsedExtensions(extension: BasePackage): Promise<UsedExtension
 		}
 
 		// Strip comments to avoid false positives
-		const code = content.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+		const code = stripComments(content);
 
 		// import ... from 'extension.name' or import 'extension.name' (side-effect)
 		const importPattern = /(?:from\s+|import\s+)['"]([a-z][a-z0-9._-]+)['"]/g;

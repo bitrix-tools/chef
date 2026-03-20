@@ -1,9 +1,6 @@
 import * as path from 'node:path';
-import { readFile } from 'node:fs/promises';
 
-import fg from 'fast-glob';
-
-import { createSpinner } from '../progress-spinner';
+import { scanJsAndPhpFiles, stripLineComments, escapeRegex } from './file-scanner';
 
 import type { BasePackage } from '../../../modules/packages/base-package';
 
@@ -23,29 +20,6 @@ const TYPE_LABELS: Record<UsageLocation['type'], string> = {
 	'config-rel': 'config.php rel',
 };
 
-const JS_IGNORE = [
-	'**/node_modules/**',
-	'**/dist/**',
-	'**/*.bundle.js',
-	'**/*.bundle.css',
-	'**/*.min.js',
-	'**/bundle.config.js',
-	'**/bundle.config.ts',
-];
-
-const PHP_IGNORE = [
-	'**/vendor/**',
-	'**/node_modules/**',
-	'**/lang/**',
-	'**/db/**',
-	'**/images/**',
-	'**/test/**',
-	'**/tests/**',
-	'**/meta/**',
-	'**/updates/**',
-	'**/routes/**',
-];
-
 export function getTypeLabel(type: UsageLocation['type']): string
 {
 	return TYPE_LABELS[type];
@@ -54,97 +28,45 @@ export function getTypeLabel(type: UsageLocation['type']): string
 export async function findUsages(
 	extensionName: string,
 	extension: BasePackage | null,
+	globals: Set<string>,
 	startDirectory: string,
 ): Promise<UsageLocation[]>
 {
 	const usages: UsageLocation[] = [];
-	const namespace = extension?.getBundleConfig().get('namespace') ?? '';
-	let filesScanned = 0;
 
-	const spinner = createSpinner('Searching JS/TS files...');
-
-	let jsCount = 0;
-	let phpCount = 0;
-
-	await scanFiles(
-		['**/*.js', '**/*.ts'],
-		JS_IGNORE,
+	await scanJsAndPhpFiles(
 		startDirectory,
 		(file, content) => {
-			jsCount++;
-			spinner.update(`JS/TS: ${jsCount} files`);
-			findJsUsages(content, file, extensionName, namespace, usages);
+			findJsUsages(content, file, extensionName, globals, usages);
 		},
-	);
-
-	spinner.update(`JS/TS: ${jsCount} files, searching PHP...`);
-
-	await scanFiles(
-		['**/*.php'],
-		PHP_IGNORE,
-		startDirectory,
 		(file, content) => {
-			phpCount++;
-			spinner.update(`JS/TS: ${jsCount} files, PHP: ${phpCount} files`);
-			findPhpUsages(content, file, extensionName, namespace, usages);
+			findPhpUsages(content, file, extensionName, globals, usages);
 		},
 	);
-
-	spinner.stop();
 
 	return usages;
 }
 
-async function scanFiles(
-	patterns: string[],
-	ignore: string[],
-	cwd: string,
-	onFile: (file: string, content: string) => void,
-): Promise<void>
-{
-	const stream = fg.stream(patterns, {
-		cwd,
-		ignore,
-		onlyFiles: true,
-		absolute: true,
-		dot: true,
-	});
-
-	for await (const entry of stream)
-	{
-		const file = entry.toString();
-		let content: string;
-		try
-		{
-			content = await readFile(file, 'utf-8');
-		}
-		catch
-		{
-			continue;
-		}
-
-		onFile(file, content);
-	}
-}
-
-function findJsUsages(
+export function findJsUsages(
 	content: string,
 	file: string,
 	extensionName: string,
-	namespace: string,
+	globals: Set<string>,
 	usages: UsageLocation[],
 ): void
 {
 	const hasName = content.includes(extensionName);
-	const hasNamespace = namespace && content.includes(namespace);
+	const matchingGlobals = [...globals].filter((g) => content.includes(g));
 
-	if (!hasName && !hasNamespace)
+	if (!hasName && matchingGlobals.length === 0)
 	{
 		return;
 	}
 
 	const lines = content.split('\n');
 	let inBlockComment = false;
+	let pendingLoadExtension = false;
+	let parenDepth = 0;
 
 	for (let i = 0; i < lines.length; i++)
 	{
@@ -156,6 +78,29 @@ function findJsUsages(
 
 		if (!code.trim())
 		{
+			continue;
+		}
+
+		// Track multiline BX.loadExtension(...) / BX.loadExt(...) / Runtime.loadExtension(...)
+		if (pendingLoadExtension)
+		{
+			if (hasName && (code.includes(`'${extensionName}'`) || code.includes(`"${extensionName}"`)))
+			{
+				usages.push({ file, line: lineNumber, content: line.trim(), type: 'js-load-extension' });
+			}
+
+			for (const char of code)
+			{
+				if (char === '(') { parenDepth++; }
+				if (char === ')') { parenDepth--; }
+			}
+
+			if (parenDepth <= 0)
+			{
+				pendingLoadExtension = false;
+				parenDepth = 0;
+			}
+
 			continue;
 		}
 
@@ -174,40 +119,67 @@ function findJsUsages(
 			if (loadPattern.test(code))
 			{
 				usages.push({ file, line: lineNumber, content: line.trim(), type: 'js-load-extension' });
+
+				const depth = countParenDepth(code, loadPattern);
+				if (depth > 0)
+				{
+					pendingLoadExtension = true;
+					parenDepth = depth;
+				}
+
 				continue;
 			}
 		}
 
-		// BX.Namespace.Something access
-		if (hasNamespace && code.includes(namespace))
+		// BX.loadExtension / BX.loadExt / Runtime.loadExtension — start of multiline call (name on next line)
+		const loadPattern = /(?:BX\.loadExt(?:ension)?|Runtime\.loadExtension)\s*\(/;
+		if (hasName && loadPattern.test(code))
 		{
-			const nsPattern = new RegExp(`\\b${escapeRegex(namespace)}\\b`);
-			if (nsPattern.test(code))
+			const depth = countParenDepth(code, loadPattern);
+			if (depth > 0)
 			{
-				usages.push({ file, line: lineNumber, content: line.trim(), type: 'js-namespace' });
+				pendingLoadExtension = true;
+				parenDepth = depth;
+				continue;
+			}
+		}
+
+		// BX.Namespace.ExportedName access (e.g. BX.UI.Button, BX.UI.ButtonColor)
+		for (const global of matchingGlobals)
+		{
+			if (code.includes(global))
+			{
+				const globalPattern = new RegExp(`\\b${escapeRegex(global)}\\b`);
+				if (globalPattern.test(code))
+				{
+					usages.push({ file, line: lineNumber, content: line.trim(), type: 'js-namespace' });
+					break;
+				}
 			}
 		}
 	}
 }
 
-function findPhpUsages(
+export function findPhpUsages(
 	content: string,
 	file: string,
 	extensionName: string,
-	namespace: string,
+	globals: Set<string>,
 	usages: UsageLocation[],
 ): void
 {
 	const hasName = content.includes(extensionName);
-	const hasNamespace = namespace && content.includes(namespace);
+	const matchingGlobals = [...globals].filter((g) => content.includes(g));
 
-	if (!hasName && !hasNamespace)
+	if (!hasName && matchingGlobals.length === 0)
 	{
 		return;
 	}
 
 	const lines = content.split('\n');
 	let inBlockComment = false;
+	let pendingCall: 'php-extension-load' | 'php-cjscore' | null = null;
+	let parenDepth = 0;
 
 	for (let i = 0; i < lines.length; i++)
 	{
@@ -222,22 +194,68 @@ function findPhpUsages(
 			continue;
 		}
 
-		if (hasName && code.includes(extensionName))
+		// Track multiline Extension::load(...) / CJSCore::Init(...) calls
+		if (pendingCall)
 		{
-			// Extension::load('ext.name') or Extension::load(['ext.name', ...])
-			if (/Extension::load\s*\(/.test(code))
+			if (hasName && (code.includes(`'${extensionName}'`) || code.includes(`"${extensionName}"`)))
+			{
+				usages.push({ file, line: lineNumber, content: line.trim(), type: pendingCall });
+			}
+
+			for (const char of code)
+			{
+				if (char === '(') { parenDepth++; }
+				if (char === ')') { parenDepth--; }
+			}
+
+			if (parenDepth <= 0)
+			{
+				pendingCall = null;
+				parenDepth = 0;
+			}
+
+			continue;
+		}
+
+		// Extension::load(...) or \Bitrix\Main\UI\Extension::load(...)
+		if (/Extension::load\s*\(/.test(code))
+		{
+			if (hasName && (code.includes(`'${extensionName}'`) || code.includes(`"${extensionName}"`)))
 			{
 				usages.push({ file, line: lineNumber, content: line.trim(), type: 'php-extension-load' });
-				continue;
 			}
 
-			// CJSCore::Init(['ext.name']) or CJSCore::Init('ext.name')
-			if (/CJSCore::Init\s*\(/.test(code))
+			// Check if call spans multiple lines (open paren without matching close)
+			const depth = countParenDepth(code, /Extension::load\s*\(/);
+			if (depth > 0)
+			{
+				pendingCall = 'php-extension-load';
+				parenDepth = depth;
+			}
+
+			continue;
+		}
+
+		// CJSCore::Init(...) — same multiline handling
+		if (/CJSCore::Init\s*\(/.test(code))
+		{
+			if (hasName && (code.includes(`'${extensionName}'`) || code.includes(`"${extensionName}"`)))
 			{
 				usages.push({ file, line: lineNumber, content: line.trim(), type: 'php-cjscore' });
-				continue;
 			}
 
+			const depth = countParenDepth(code, /CJSCore::Init\s*\(/);
+			if (depth > 0)
+			{
+				pendingCall = 'php-cjscore';
+				parenDepth = depth;
+			}
+
+			continue;
+		}
+
+		if (hasName && code.includes(extensionName))
+		{
 			// config.php rel array
 			if (file.endsWith('config.php'))
 			{
@@ -246,106 +264,42 @@ function findPhpUsages(
 			}
 		}
 
-		// Namespace usage in inline JS within PHP (e.g. BX.UI.Button in <script> tags)
-		if (hasNamespace && code.includes(namespace))
+		// Namespace.ExportedName usage in inline JS within PHP (e.g. BX.UI.Button in <script> tags)
+		for (const global of matchingGlobals)
 		{
-			const nsPattern = new RegExp(`\\b${escapeRegex(namespace)}\\b`);
-			if (nsPattern.test(code))
+			if (code.includes(global))
 			{
-				usages.push({ file, line: lineNumber, content: line.trim(), type: 'js-namespace' });
+				const globalPattern = new RegExp(`\\b${escapeRegex(global)}\\b`);
+				if (globalPattern.test(code))
+				{
+					usages.push({ file, line: lineNumber, content: line.trim(), type: 'js-namespace' });
+					break;
+				}
 			}
 		}
 	}
 }
 
 /**
- * Strips single-line (//, #) and block comments from a line,
- * tracking multi-line block comment state across calls.
+ * Count open-minus-close parentheses starting from the call pattern match.
+ * Returns > 0 if the call is not closed on this line.
  */
-function stripLineComments(
-	line: string,
-	inBlockComment: boolean,
-): { code: string; stillInComment: boolean }
+function countParenDepth(code: string, callPattern: RegExp): number
 {
-	let result = '';
-	let i = 0;
-	let inBlock = inBlockComment;
-
-	while (i < line.length)
+	const match = callPattern.exec(code);
+	if (!match)
 	{
-		if (inBlock)
-		{
-			const closeIndex = line.indexOf('*/', i);
-			if (closeIndex === -1)
-			{
-				return { code: result, stillInComment: true };
-			}
-
-			i = closeIndex + 2;
-			inBlock = false;
-			continue;
-		}
-
-		// Block comment start
-		if (line[i] === '/' && line[i + 1] === '*')
-		{
-			inBlock = true;
-			i += 2;
-			continue;
-		}
-
-		// Single-line comment
-		if (line[i] === '/' && line[i + 1] === '/')
-		{
-			return { code: result, stillInComment: false };
-		}
-
-		// PHP # comment (only at start of meaningful content or after whitespace)
-		if (line[i] === '#' && (result.trim() === '' || line[i - 1] === ' ' || line[i - 1] === '\t'))
-		{
-			return { code: result, stillInComment: false };
-		}
-
-		// Skip string contents to avoid false positives on comment chars inside strings
-		if (line[i] === '"' || line[i] === "'" || line[i] === '`')
-		{
-			const quote = line[i];
-			result += line[i];
-			i++;
-			while (i < line.length && line[i] !== quote)
-			{
-				if (line[i] === '\\')
-				{
-					result += line[i];
-					i++;
-				}
-
-				if (i < line.length)
-				{
-					result += line[i];
-					i++;
-				}
-			}
-
-			if (i < line.length)
-			{
-				result += line[i];
-				i++;
-			}
-
-			continue;
-		}
-
-		result += line[i];
-		i++;
+		return 0;
 	}
 
-	return { code: result, stillInComment: inBlock };
-}
+	let depth = 0;
+	for (let i = match.index; i < code.length; i++)
+	{
+		if (code[i] === '(') { depth++; }
+		if (code[i] === ')') { depth--; }
+	}
 
-function escapeRegex(str: string): string
-{
-	return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	return depth;
 }
 
 export function groupByType(usages: UsageLocation[]): Map<UsageLocation['type'], UsageLocation[]>
