@@ -128,18 +128,31 @@ chef diag <subcommand> [options]
 |----------|----------|
 | `-p, --path [path]` | Сканировать расширения, начиная с указанной директории |
 | `-l, --limit <n>` | Ограничить количество результатов (по умолчанию: 20) |
-| `-t, --type <type>` | Фильтр по типу: `js`, `ts` |
+| `-i, --include <patterns>` | Показать только расширения, соответствующие glob-паттерну |
+| `-x, --exclude <patterns>` | Исключить расширения по glob-паттерну |
+
+Паттерны поддерживают `*`, `**`, `?`, `[abc]` и другие glob-конструкции. Несколько паттернов через запятую или повторением опции:
 
 ```bash
-chef diag top-used                          # Самые востребованные расширения
-chef diag top-bundle-size --limit 10        # TOP 10 тяжёлых бандлов
-chef diag circular-deps                     # Все циклические зависимости
-chef diag circular-deps main.core           # Проверить конкретное расширение
-chef diag unused-deps                       # Неиспользуемые зависимости
-chef diag find-usages ui.buttons            # Где используется ui.buttons
-chef diag config --key namespace            # Расширения с namespace в конфиге
+--include 'ui.*'                # Только расширения ui.*
+--exclude 'main.*,im.*'        # Все, кроме main.* и im.*
+--include 'ui.*' -x 'ui.vue.*' # ui.*, но без ui.vue.*
+```
+
+### Примеры
+
+```bash
+chef diag top-used                             # Самые востребованные расширения
+chef diag top-bundle-size --limit 10           # TOP 10 тяжёлых бандлов
+chef diag top-used --exclude 'main.*,im.*'     # Исключить main и im из результатов
+chef diag circular-deps                        # Все циклические зависимости
+chef diag circular-deps main.core              # Проверить конкретное расширение
+chef diag unused-deps                          # Неиспользуемые зависимости
+chef diag find-usages ui.buttons               # Где используется ui.buttons
+chef diag config --key namespace               # Расширения с namespace в конфиге
 chef diag config --key minification --missing  # Расширения без минификации
-chef diag unused                            # Неиспользуемые расширения
+chef diag config --key input --except          # Расширения с параметрами кроме input
+chef diag unused                               # Неиспользуемые расширения
 ```
 
 ## chef aliases

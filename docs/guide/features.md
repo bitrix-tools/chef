@@ -65,11 +65,12 @@ chef build ui.buttons --production
 Размеры бандлов, дерево зависимостей, циклические зависимости, неиспользуемые расширения — `chef diag` анализирует расширения по всему проекту.
 
 ```bash
-chef diag top-used                   # Самые востребованные расширения
-chef diag top-bundle-size            # Самые тяжёлые бандлы
-chef diag circular-deps              # Циклические зависимости
-chef diag unused                     # Неиспользуемые расширения
-chef diag find-usages main.core      # Поиск использований
+chef diag top-used                             # Самые востребованные расширения
+chef diag top-bundle-size                      # Самые тяжёлые бандлы
+chef diag top-used --exclude 'main.*,im.*'     # Исключить main и im из результатов
+chef diag circular-deps                        # Циклические зависимости
+chef diag unused                               # Неиспользуемые расширения
+chef diag find-usages main.core                # Поиск использований
 ```
 
 ## Scaffold

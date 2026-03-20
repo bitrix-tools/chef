@@ -65,11 +65,12 @@ See [Production Build](/en/guide/production) for details.
 Bundle sizes, dependency trees, circular dependencies, unused extensions — `chef diag` analyzes extensions across the entire project.
 
 ```bash
-chef diag top-used                   # Most depended-on extensions
-chef diag top-bundle-size            # Largest bundles
-chef diag circular-deps              # Circular dependencies
-chef diag unused                     # Unused extensions
-chef diag find-usages main.core      # Find usages
+chef diag top-used                             # Most depended-on extensions
+chef diag top-bundle-size                      # Largest bundles
+chef diag top-used --exclude 'main.*,im.*'     # Exclude main and im from results
+chef diag circular-deps                        # Circular dependencies
+chef diag unused                               # Unused extensions
+chef diag find-usages main.core                # Find usages
 ```
 
 ## Scaffold

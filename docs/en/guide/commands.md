@@ -128,18 +128,31 @@ chef diag <subcommand> [options]
 |--------|-------------|
 | `-p, --path [path]` | Scan for extensions starting from this directory |
 | `-l, --limit <n>` | Limit the number of results (default: 20) |
-| `-t, --type <type>` | Filter by type: `js`, `ts` |
+| `-i, --include <patterns>` | Show only extensions matching the glob pattern |
+| `-x, --exclude <patterns>` | Exclude extensions matching the glob pattern |
+
+Patterns support `*`, `**`, `?`, `[abc]` and other glob constructs. Multiple patterns via comma or by repeating the option:
 
 ```bash
-chef diag top-used                          # Most depended-on extensions
-chef diag top-bundle-size --limit 10        # TOP 10 largest bundles
-chef diag circular-deps                     # All circular dependencies
-chef diag circular-deps main.core           # Check a specific extension
-chef diag unused-deps                       # Unused dependencies
-chef diag find-usages ui.buttons            # Where ui.buttons is used
-chef diag config --key namespace            # Extensions with namespace in config
+--include 'ui.*'                # Only ui.* extensions
+--exclude 'main.*,im.*'        # Everything except main.* and im.*
+--include 'ui.*' -x 'ui.vue.*' # ui.*, but without ui.vue.*
+```
+
+### Examples
+
+```bash
+chef diag top-used                             # Most depended-on extensions
+chef diag top-bundle-size --limit 10           # TOP 10 largest bundles
+chef diag top-used --exclude 'main.*,im.*'     # Exclude main and im from results
+chef diag circular-deps                        # All circular dependencies
+chef diag circular-deps main.core              # Check a specific extension
+chef diag unused-deps                          # Unused dependencies
+chef diag find-usages ui.buttons               # Where ui.buttons is used
+chef diag config --key namespace               # Extensions with namespace in config
 chef diag config --key minification --missing  # Extensions without minification
-chef diag unused                            # Unused extensions
+chef diag config --key input --except          # Extensions with params other than input
+chef diag unused                               # Unused extensions
 ```
 
 ## chef aliases
