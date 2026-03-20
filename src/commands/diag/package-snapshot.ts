@@ -62,12 +62,11 @@ export async function createSnapshot(
 
 	if (fields.has('bundleConfig'))
 	{
-		const config = extension.getBundleConfig();
-		const allEntries = config.getAll() as unknown as Record<string, unknown>;
+		const rawConfig = extension.getBundleConfig().getRawConfig();
 
-		for (const [key, value] of Object.entries(allEntries))
+		for (const [key, value] of Object.entries(rawConfig))
 		{
-			if (config.has(key) && value !== undefined)
+			if (value !== undefined)
 			{
 				snapshot.bundleConfig[key] = value;
 			}

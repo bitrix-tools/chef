@@ -37,33 +37,32 @@ export function analyzeConfig(
 	return results.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+export type ConfigExceptResult = {
+	name: string;
+	entries: { key: string; value: unknown }[];
+};
+
 export function analyzeConfigExcept(
 	packages: PackageSnapshot[],
 	excludeKeys: Set<string>,
-): ConfigResult[]
+): ConfigExceptResult[]
 {
-	const results: ConfigResult[] = [];
+	const results: ConfigExceptResult[] = [];
 
 	for (const pkg of packages)
 	{
-		for (const [key, value] of Object.entries(pkg.bundleConfig))
+		const entries = Object.entries(pkg.bundleConfig)
+			.filter(([key]) => !excludeKeys.has(key))
+			.sort(([a], [b]) => a.localeCompare(b))
+			.map(([key, value]) => ({ key, value }));
+
+		if (entries.length > 0)
 		{
-			if (!excludeKeys.has(key))
-			{
-				results.push({ name: pkg.name, key, value });
-			}
+			results.push({ name: pkg.name, entries });
 		}
 	}
 
-	return results.sort((a, b) => {
-		const nameCompare = a.name.localeCompare(b.name);
-		if (nameCompare !== 0)
-		{
-			return nameCompare;
-		}
-
-		return a.key.localeCompare(b.key);
-	});
+	return results.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export type ConfigMissingResult = {

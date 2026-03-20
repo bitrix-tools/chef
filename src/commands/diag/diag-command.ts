@@ -325,9 +325,25 @@ const configCommand = new Command('config')
 			return;
 		}
 
-		const results = args.except
-			? analyzeConfigExcept(snapshots, new Set(keys))
-			: analyzeConfig(snapshots, keys, args.value);
+		if (args.except)
+		{
+			const results = analyzeConfigExcept(snapshots, new Set(keys));
+
+			console.log(formatRanking({
+				items: results,
+				columns: [
+					{ label: 'Extension', value: (item) => item.name },
+					{ label: 'Key', value: (item) => formatConfigEntryKeys(item.entries) },
+					{ label: 'Value', value: (item) => formatConfigEntryValues(item.entries) },
+				],
+				scanned,
+				duration,
+			}));
+
+			return;
+		}
+
+		const results = analyzeConfig(snapshots, keys, args.value);
 
 		console.log(formatRanking({
 			items: results,
@@ -354,6 +370,29 @@ function formatConfigValue(value: unknown): string
 	}
 
 	return JSON.stringify(value, null, 2);
+}
+
+function formatConfigEntryKeys(entries: { key: string; value: unknown }[]): string
+{
+	const keyLines: string[] = [];
+
+	for (const entry of entries)
+	{
+		const valueLineCount = formatConfigValue(entry.value).split('\n').length;
+		keyLines.push(entry.key);
+
+		for (let i = 1; i < valueLineCount; i++)
+		{
+			keyLines.push('');
+		}
+	}
+
+	return keyLines.join('\n');
+}
+
+function formatConfigEntryValues(entries: { key: string; value: unknown }[]): string
+{
+	return entries.map((e) => formatConfigValue(e.value)).join('\n');
 }
 
 // endregion

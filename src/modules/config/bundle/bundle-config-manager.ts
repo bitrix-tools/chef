@@ -10,6 +10,8 @@ import { PreparedBundleConfig } from './prepared-bundle-config';
 
 export class BundleConfigManager extends ConfigManager<PreparedBundleConfig>
 {
+	#rawConfig: Record<string, unknown> = {};
+
 	constructor()
 	{
 		super();
@@ -19,12 +21,19 @@ export class BundleConfigManager extends ConfigManager<PreparedBundleConfig>
 		});
 	}
 
+	getRawConfig(): Record<string, unknown>
+	{
+		return this.#rawConfig;
+	}
+
 	loadFromFile(configPath: string): any
 	{
 		const require = createRequire(import.meta.url);
 		const sourceBundleConfig: { default: BundleConfig } & BundleConfig = require(path.resolve(configPath));
 
 		const config: Record<string, any> = { ...(sourceBundleConfig?.default ?? sourceBundleConfig) };
+
+		this.#rawConfig = { ...config };
 
 		// browserslist → targets (deprecated)
 		if ('browserslist' in config && !('targets' in config))

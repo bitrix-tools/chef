@@ -102,8 +102,7 @@ describe('analyzeConfigExcept', () => {
 		const results = analyzeConfigExcept(packages, new Set(['input', 'output']));
 
 		assert.equal(results.length, 1);
-		assert.equal(results[0].key, 'minification');
-		assert.equal(results[0].value, true);
+		assert.deepEqual(results[0].entries, [{ key: 'minification', value: true }]);
 	});
 
 	it('should return empty when all keys are excluded', () => {
@@ -116,7 +115,7 @@ describe('analyzeConfigExcept', () => {
 		assert.equal(results.length, 0);
 	});
 
-	it('should sort by name then key', () => {
+	it('should sort by name and group entries', () => {
 		const packages = [
 			createSnapshot({ name: 'b', bundleConfig: { z: 1, a: 2 } }),
 			createSnapshot({ name: 'a', bundleConfig: { m: 3 } }),
@@ -124,11 +123,11 @@ describe('analyzeConfigExcept', () => {
 
 		const results = analyzeConfigExcept(packages, new Set());
 
+		assert.equal(results.length, 2);
 		assert.equal(results[0].name, 'a');
+		assert.deepEqual(results[0].entries, [{ key: 'm', value: 3 }]);
 		assert.equal(results[1].name, 'b');
-		assert.equal(results[1].key, 'a');
-		assert.equal(results[2].name, 'b');
-		assert.equal(results[2].key, 'z');
+		assert.deepEqual(results[1].entries, [{ key: 'a', value: 2 }, { key: 'z', value: 1 }]);
 	});
 });
 
