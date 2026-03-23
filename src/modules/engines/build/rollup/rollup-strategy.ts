@@ -236,23 +236,23 @@ export class RollupBuildStrategy extends BuildStrategy
 		}
 	}
 
-	protected static createOxcMinifyPlugin(options: import('oxc-minify').MinifyOptions): Plugin
+	protected static createTerserPlugin(options: import('terser').MinifyOptions): Plugin
 	{
 		return {
-			name: 'oxc-minify',
-			async renderChunk(code, chunk) {
-				const { minify } = await import('oxc-minify');
-				const result = await minify(chunk.fileName, code, options);
+			name: 'terser',
+			async renderChunk(code) {
+				const { minify } = await import('terser');
+				const result = await minify(code, options);
 
-				if (result.errors.length > 0)
+				if (!result.code && result.code !== '')
 				{
 					const { ChefError } = await import('../../../../diagnostics/chef-error');
-					throw new ChefError(CF.MINIFICATION_ERROR, result.errors.map((e) => e.message).join('\n'));
+					throw new ChefError(CF.MINIFICATION_ERROR, 'Terser returned empty result');
 				}
 
 				return {
-					code: result.code,
-					map: result.map ?? null,
+					code: result.code!,
+					map: result.map ? (typeof result.map === 'string' ? JSON.parse(result.map) : result.map) : null,
 				};
 			},
 		};
@@ -717,7 +717,7 @@ export class RollupBuildStrategy extends BuildStrategy
 				}),
 				...(options.customPlugins ?? []),
 				stripCommentsPlugin({ banner: '/* eslint-disable */' }),
-				...(options.minify ? [RollupBuildStrategy.createOxcMinifyPlugin(typeof options.minify === 'object' ? options.minify : {})] : []),
+				...(options.minify ? [RollupBuildStrategy.createTerserPlugin(typeof options.minify === 'object' ? options.minify : {})] : []),
 			],
 			onwarn: onWarn,
 			treeshake: {

@@ -1,5 +1,5 @@
 import type { Plugin } from 'rollup';
-import type { MinifyOptions } from 'oxc-minify';
+import type { MinifyOptions } from 'terser';
 
 export interface BundleConfig {
 	input: string;

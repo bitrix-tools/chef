@@ -34,9 +34,9 @@ class TestableRollupStrategy extends RollupBuildStrategy
 		return RollupBuildStrategy.calculateBundlesSize(output);
 	}
 
-	static testCreateOxcMinifyPlugin(options: import('oxc-minify').MinifyOptions = {})
+	static testCreateTerserPlugin(options: import('terser').MinifyOptions = {})
 	{
-		return RollupBuildStrategy.createOxcMinifyPlugin(options);
+		return RollupBuildStrategy.createTerserPlugin(options);
 	}
 }
 
@@ -255,9 +255,9 @@ describe('RollupBuildStrategy', () => {
 		});
 	});
 
-	describe('createOxcMinifyPlugin', () => {
+	describe('createTerserPlugin', () => {
 		it('should minify JavaScript code', async () => {
-			const plugin = TestableRollupStrategy.testCreateOxcMinifyPlugin();
+			const plugin = TestableRollupStrategy.testCreateTerserPlugin();
 			const chunk = { fileName: 'app.js' };
 			const code = 'const message = "hello";\nconsole.log(message);\n';
 
@@ -269,7 +269,7 @@ describe('RollupBuildStrategy', () => {
 		});
 
 		it('should preserve functionality after minification', async () => {
-			const plugin = TestableRollupStrategy.testCreateOxcMinifyPlugin();
+			const plugin = TestableRollupStrategy.testCreateTerserPlugin();
 			const chunk = { fileName: 'app.js' };
 			const code = 'function add(a, b) { return a + b; }\n';
 
@@ -279,7 +279,7 @@ describe('RollupBuildStrategy', () => {
 		});
 
 		it('should handle empty options', async () => {
-			const plugin = TestableRollupStrategy.testCreateOxcMinifyPlugin({});
+			const plugin = TestableRollupStrategy.testCreateTerserPlugin({});
 			const chunk = { fileName: 'app.js' };
 			const code = 'const x = 1;\n';
 
