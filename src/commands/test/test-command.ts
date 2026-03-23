@@ -153,19 +153,51 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 						...(type !== 'e2e' ? [extension.getUnitTestsDirectoryPath()] : []),
 						...(type !== 'unit' ? [extension.getEndToEndTestsDirectoryPath()] : []),
 					];
-					const watcher = chokidar.watch(watchDirs);
+					const watcher = chokidar.watch(watchDirs, {
+						ignoreInitial: true,
+						ignored: ['**/*.map', '**/dist/**'],
+					});
 
 					watchers.push(watcher);
 
-					watcher.on('change', async () => {
+					let running = false;
+					let pendingRerun = false;
+					let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+					const rerun = async () => {
+						running = true;
 						PlaywrightUnitStrategy.clearBundleCache();
-						await queue.add(async () => {
-							const freshTasks = createTestTasks(extension, args, type);
-							await TaskRunner.run({
-								title: name,
-								tasks: freshTasks,
-							});
+						const freshTasks = createTestTasks(extension, args, type);
+						await TaskRunner.run({
+							title: name,
+							tasks: freshTasks,
 						});
+						running = false;
+
+						if (pendingRerun)
+						{
+							pendingRerun = false;
+							rerun();
+						}
+					};
+
+					watcher.on('change', () => {
+						if (debounceTimer)
+						{
+							clearTimeout(debounceTimer);
+						}
+
+						debounceTimer = setTimeout(() => {
+							debounceTimer = null;
+
+							if (running)
+							{
+								pendingRerun = true;
+								return;
+							}
+
+							rerun();
+						}, 300);
 					});
 				});
 			}
