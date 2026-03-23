@@ -4,7 +4,7 @@ Chef is a CLI tool for building, testing and maintaining Bitrix frontend extensi
 
 ## Build
 
-Rollup + Babel + PostCSS under the hood. TypeScript and Vue 3 SFC out of the box. Parallel builds for up to 4 extensions at once. Watch mode with hot reload.
+Rollup + Babel + PostCSS under the hood. TypeScript and Vue 3 SFC out of the box. Watch mode with hot reload.
 
 ```bash
 chef build ui.buttons              # Build an extension
@@ -204,7 +204,7 @@ When running `chef build`, for each package:
 3. **Update `config.php`** — analyze imports and write dependencies to `rel`
 4. **Source maps** — generate source maps (if enabled)
 
-Up to 4 packages are built in parallel.
+Packages are built sequentially.
 
 ### Namespaces
 
