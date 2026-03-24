@@ -51,6 +51,7 @@ export type BuildOptions = {
 	customPlugins?: Plugin[],
 	production?: boolean,
 	emitDeclaration?: boolean,
+	safeNamespaces?: boolean,
 };
 
 export type BuildCodeOptions = {

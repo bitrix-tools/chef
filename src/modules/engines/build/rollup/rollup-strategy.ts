@@ -20,6 +20,7 @@ import { CF } from '../../../../diagnostics/diagnostic-codes';
 import { FileFinder } from '../../../../utils/file-finder';
 import concatPlugin from './plugins/concat';
 import stripCommentsPlugin from './plugins/strip-comments';
+import safeNamespacesPlugin from './plugins/safe-namespaces';
 
 import type { ParsedCommandLine } from 'typescript';
 import type {
@@ -718,6 +719,7 @@ export class RollupBuildStrategy extends BuildStrategy
 				...(options.customPlugins ?? []),
 				stripCommentsPlugin({ banner: '/* eslint-disable */' }),
 				...(options.minify ? [RollupBuildStrategy.createTerserPlugin(typeof options.minify === 'object' ? options.minify : {})] : []),
+				...(options.safeNamespaces ? [safeNamespacesPlugin()] : []),
 			],
 			onwarn: onWarn,
 			treeshake: {

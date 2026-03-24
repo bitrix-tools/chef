@@ -9,6 +9,7 @@ import { RollupBuildStrategy } from '../../src/modules/engines/build/rollup/roll
 import { BundleConfigManager } from '../../src/modules/config/bundle/bundle-config-manager';
 import { PhpConfigManager } from '../../src/modules/config/php/php-config-manager';
 import { DeclarationEmitter } from '../../src/modules/engines/build/declaration-emitter';
+import { transformIifeLine } from '../../src/modules/engines/build/rollup/plugins/safe-namespaces';
 
 import type { BuildOptions } from '../../src/modules/engines/build/build-types';
 
@@ -52,6 +53,7 @@ function getBuildOptions(extensionPath: string, bundleConfig: BundleConfigManage
 		resolveFiles: bundleConfig.get('resolveFilesImport'),
 		minify: bundleConfig.get('minification'),
 		sourceMaps: bundleConfig.get('sourceMaps'),
+		safeNamespaces: bundleConfig.get('safeNamespaces'),
 	};
 }
 
@@ -1209,6 +1211,68 @@ export class SimpleComponent {
 			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
 			const content = fs.readFileSync(jsOutput, 'utf-8');
 			assert.isTrue(content.startsWith('/* eslint-disable */'), 'Bundle should start with eslint-disable');
+		});
+	});
+
+	describe('safe namespaces', () => {
+		const extensionPath = path.join(fixturesPath, 'safe-namespaces');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should keep own namespace unchanged', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+
+			assert.include(content, 'this.BX.Test.Namespace = this.BX.Test.Namespace || {}',
+				'Own namespace should stay unchanged — it is already safe from bundle init');
+		});
+
+		it('should apply optional chaining to dependency globals', () => {
+			const line = '})(this.BX.Test.Namespace = this.BX.Test.Namespace || {}, BX.Main.Core);';
+			const result = transformIifeLine(line);
+
+			assert.isNotNull(result);
+			assert.include(result!, 'this.BX.Test.Namespace = this.BX.Test.Namespace || {}',
+				'Own namespace should stay unchanged');
+			assert.include(result!, 'BX?.Main?.Core??{}',
+				'Dependency globals should use optional chaining');
+		});
+
+		it('should apply optional chaining to multiple dependency globals', () => {
+			const line = '})(this.BX.Messenger.v2.List = this.BX.Messenger.v2.List || {}, BX.Main.Core, BX.UI.Buttons);';
+			const result = transformIifeLine(line);
+
+			assert.isNotNull(result);
+			assert.include(result!, 'this.BX.Messenger.v2.List = this.BX.Messenger.v2.List || {}',
+				'Own namespace should stay unchanged');
+			assert.include(result!, 'BX?.Main?.Core??{}');
+			assert.include(result!, 'BX?.UI?.Buttons??{}');
+		});
+
+		it('should not use optional chaining when disabled', async () => {
+			const bundleConfig = loadBundleConfig(path.join(fixturesPath, 'namespace-extension'));
+			const options = getBuildOptions(path.join(fixturesPath, 'namespace-extension'), bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const jsOutput = path.join(fixturesPath, 'namespace-extension', 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+
+			assert.include(content, '|| {}', 'Should use standard fallback without safeNamespaces');
+			assert.notInclude(content, '?.', 'Should not contain optional chaining');
 		});
 	});
 
