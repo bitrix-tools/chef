@@ -1,6 +1,7 @@
-import './content.css';
 import { Card } from './card/card';
 import { List } from './list/list';
+
+import './content.css';
 
 export class Content
 {

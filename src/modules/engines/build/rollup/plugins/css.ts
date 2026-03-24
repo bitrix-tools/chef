@@ -276,26 +276,43 @@ export default function cssPlugin(options: CssPluginOptions): Plugin
 
 				visited.add(moduleId);
 
+				if (cssModules.has(moduleId))
+				{
+					cssOrder.push(moduleId);
+
+					return;
+				}
+
 				const moduleInfo = this.getModuleInfo(moduleId);
 				if (!moduleInfo)
 				{
 					return;
 				}
 
+				// Own CSS first, then recurse into JS dependencies
+				const cssImports: string[] = [];
+				const jsImports: string[] = [];
+
 				for (const importedId of moduleInfo.importedIds)
 				{
 					if (cssModules.has(importedId))
 					{
-						if (!visited.has(importedId))
-						{
-							cssOrder.push(importedId);
-							visited.add(importedId);
-						}
+						cssImports.push(importedId);
 					}
 					else
 					{
-						walk(importedId);
+						jsImports.push(importedId);
 					}
+				}
+
+				for (const id of cssImports)
+				{
+					walk(id);
+				}
+
+				for (const id of jsImports)
+				{
+					walk(id);
 				}
 			};
 

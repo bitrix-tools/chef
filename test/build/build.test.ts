@@ -915,6 +915,54 @@ return [
 		});
 	});
 
+	describe('css order', () => {
+		const extensionPath = path.join(fixturesPath, 'css-order');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should place own CSS before dependency CSS at every level', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const cssOutput = path.join(extensionPath, 'dist', 'app.bundle.css');
+			const content = fs.readFileSync(cssOutput, 'utf-8');
+
+			const appIndex = content.indexOf('.app');
+			const widgetIndex = content.indexOf('.widget');
+			const panelIndex = content.indexOf('.panel');
+
+			// app.css is entry's own CSS → first
+			assert.isBelow(appIndex, widgetIndex, 'Entry CSS (app) should come before dependency CSS (widget)');
+			// widget.css is widget's own CSS → before panel.css (widget's dependency)
+			assert.isBelow(widgetIndex, panelIndex, 'Widget CSS should come before its dependency CSS (panel)');
+		});
+
+		it('should place entry CSS first even when imported after JS dependencies', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			const cssOutput = path.join(extensionPath, 'dist', 'app.bundle.css');
+			const content = fs.readFileSync(cssOutput, 'utf-8');
+
+			const appIndex = content.indexOf('.app');
+			const panelIndex = content.indexOf('.panel');
+
+			// app.css is imported last in app.js (after widget.js which pulls panel.css)
+			// but it's entry's own CSS, so it should still appear first
+			assert.isBelow(appIndex, panelIndex, 'Entry CSS should come before any dependency CSS');
+		});
+	});
+
 	describe('skip_core logic', () => {
 		const extensionPath = path.join(fixturesPath, 'basic-extension');
 		const configPhpPath = path.join(extensionPath, 'config.php');
