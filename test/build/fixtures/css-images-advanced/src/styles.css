@@ -17,3 +17,15 @@
 .with-data-uri {
 	background-image: url('data:image/png;base64,iVBOR');
 }
+
+.with-query-param {
+	background-image: url('./images/large.png?v2');
+}
+
+.with-small-query {
+	background-image: url('./images/small.png?v=3');
+}
+
+.with-hash {
+	background-image: url('./images/large.png#section');
+}

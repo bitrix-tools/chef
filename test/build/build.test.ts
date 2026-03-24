@@ -699,6 +699,64 @@ return [
 
 			assert.include(content, 'data:image/png;base64,iVBOR', 'Existing data URIs should be preserved');
 		});
+
+		it('should copy large images to dist', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			const copiedImage = path.join(extensionPath, 'dist', 'images', 'large.png');
+			assert.isTrue(fs.existsSync(copiedImage), 'Large image should be copied to dist');
+
+			const original = fs.readFileSync(path.join(extensionPath, 'src', 'images', 'large.png'));
+			const copied = fs.readFileSync(copiedImage);
+			assert.isTrue(original.equals(copied), 'Copied image should match original');
+		});
+
+		it('should handle query parameters in image URLs', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			const cssOutput = path.join(extensionPath, 'dist', 'bundle.css');
+			const content = fs.readFileSync(cssOutput, 'utf-8');
+
+			assert.include(content, 'large.png?v2', 'Query parameter should be preserved in URL');
+
+			const copiedImage = path.join(extensionPath, 'dist', 'images', 'large.png');
+			assert.isTrue(fs.existsSync(copiedImage), 'Image with query param should still be copied');
+		});
+
+		it('should inline small images with query parameters', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			const cssOutput = path.join(extensionPath, 'dist', 'bundle.css');
+			const content = fs.readFileSync(cssOutput, 'utf-8');
+
+			assert.notMatch(content, /small\.png\?v=3/, 'Small image with query should be inlined, not kept as URL');
+		});
+
+		it('should handle hash fragments in image URLs', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			const cssOutput = path.join(extensionPath, 'dist', 'bundle.css');
+			const content = fs.readFileSync(cssOutput, 'utf-8');
+
+			assert.include(content, 'large.png#section', 'Hash fragment should be preserved in URL');
+		});
+
+		it('should not copy small images to dist', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			const smallImage = path.join(extensionPath, 'dist', 'images', 'small.png');
+			assert.isFalse(fs.existsSync(smallImage), 'Small images should be inlined, not copied');
+		});
 	});
 
 	describe('js image import', () => {

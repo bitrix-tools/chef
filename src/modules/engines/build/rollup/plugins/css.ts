@@ -13,6 +13,12 @@ interface CssPluginOptions {
 	packageRoot: string;
 }
 
+interface AssetToCopy {
+	filePath: string;
+	fileName: string;
+	source: Buffer;
+}
+
 const mimeTypes: Record<string, string> = {
 	png: 'image/png',
 	jpg: 'image/jpeg',
@@ -66,14 +72,60 @@ function encodeSvgToDataUri(svg: string): string
 	return `data:image/svg+xml;charset=utf-8,${encoded}`;
 }
 
-function inlineUrl(cssFileDir: string, urlValue: string, maxSizeBytes: number, optimizeSvg: ((svg: string) => string) | null): string | null
+interface InlineResult {
+	type: 'inlined';
+	dataUri: string;
+}
+
+interface CopyResult {
+	type: 'copy';
+	asset: AssetToCopy;
+}
+
+function splitUrlSuffix(urlValue: string): { filePath: string; suffix: string }
+{
+	const hashIndex = urlValue.indexOf('#');
+	const queryIndex = urlValue.indexOf('?');
+
+	let splitIndex = -1;
+	if (hashIndex !== -1 && queryIndex !== -1)
+	{
+		splitIndex = Math.min(hashIndex, queryIndex);
+	}
+	else if (hashIndex !== -1)
+	{
+		splitIndex = hashIndex;
+	}
+	else if (queryIndex !== -1)
+	{
+		splitIndex = queryIndex;
+	}
+
+	if (splitIndex === -1)
+	{
+		return { filePath: urlValue, suffix: '' };
+	}
+
+	return {
+		filePath: urlValue.slice(0, splitIndex),
+		suffix: urlValue.slice(splitIndex),
+	};
+}
+
+function processUrl(
+	cssFileDir: string,
+	urlValue: string,
+	maxSizeBytes: number,
+	optimizeSvg: ((svg: string) => string) | null,
+): InlineResult | CopyResult | null
 {
 	if (urlValue.startsWith('data:') || urlValue.startsWith('http'))
 	{
 		return null;
 	}
 
-	const filePath = path.resolve(cssFileDir, urlValue);
+	const { filePath: relativeFilePath, suffix } = splitUrlSuffix(urlValue);
+	const filePath = path.resolve(cssFileDir, relativeFilePath);
 
 	let fileBuffer: Buffer;
 	try
@@ -87,7 +139,12 @@ function inlineUrl(cssFileDir: string, urlValue: string, maxSizeBytes: number, o
 
 	if (fileBuffer.length >= maxSizeBytes)
 	{
-		return null;
+		const fileName = path.normalize(relativeFilePath);
+
+		return {
+			type: 'copy',
+			asset: { filePath, fileName, source: fileBuffer },
+		};
 	}
 
 	const ext = path.extname(filePath).slice(1).toLowerCase();
@@ -101,27 +158,42 @@ function inlineUrl(cssFileDir: string, urlValue: string, maxSizeBytes: number, o
 	{
 		const optimized = optimizeSvg(fileBuffer.toString('utf-8'));
 
-		return encodeSvgToDataUri(optimized);
+		return { type: 'inlined', dataUri: encodeSvgToDataUri(optimized) };
 	}
 
 	const base64 = fileBuffer.toString('base64');
 
-	return `data:${mime};base64,${base64}`;
+	return { type: 'inlined', dataUri: `data:${mime};base64,${base64}` };
 }
 
-function inlineUrls(css: string, cssFilePath: string, maxSizeBytes: number, optimizeSvg: ((svg: string) => string) | null): string
+function processUrls(
+	css: string,
+	cssFilePath: string,
+	maxSizeBytes: number,
+	optimizeSvg: ((svg: string) => string) | null,
+): { css: string; assets: AssetToCopy[] }
 {
 	const cssFileDir = path.dirname(cssFilePath);
+	const assets: AssetToCopy[] = [];
 
-	return css.replace(/url\(\s*(['"]?)(.+?)\1\s*\)/g, (match, _quote, urlValue) => {
-		const inlined = inlineUrl(cssFileDir, urlValue, maxSizeBytes, optimizeSvg);
-		if (inlined)
+	const processed = css.replace(/url\(\s*(['"]?)(.+?)\1\s*\)/g, (match, _quote, urlValue) => {
+		const result = processUrl(cssFileDir, urlValue, maxSizeBytes, optimizeSvg);
+		if (!result)
 		{
-			return `url("${inlined}")`;
+			return match;
 		}
+
+		if (result.type === 'inlined')
+		{
+			return `url("${result.dataUri}")`;
+		}
+
+		assets.push(result.asset);
 
 		return match;
 	});
+
+	return { css: processed, assets };
 }
 
 async function autoprefix(css: string, targets: string[], filePath: string): Promise<string>
@@ -144,6 +216,7 @@ async function autoprefix(css: string, targets: string[], filePath: string): Pro
 export default function cssPlugin(options: CssPluginOptions): Plugin
 {
 	const cssModules = new Map<string, string>();
+	const assetsToCopy = new Map<string, AssetToCopy>();
 
 	return {
 		name: 'css',
@@ -163,7 +236,13 @@ export default function cssPlugin(options: CssPluginOptions): Plugin
 
 			if (shouldInline)
 			{
-				css = inlineUrls(css, id, maxSizeBytes, optimizeSvg);
+				const result = processUrls(css, id, maxSizeBytes, optimizeSvg);
+				css = result.css;
+
+				for (const asset of result.assets)
+				{
+					assetsToCopy.set(asset.filePath, asset);
+				}
 			}
 
 			if (options.targets.length > 0)
@@ -241,6 +320,15 @@ export default function cssPlugin(options: CssPluginOptions): Plugin
 				fileName,
 				source: cssChunks.join('\n'),
 			});
+
+			for (const asset of assetsToCopy.values())
+			{
+				this.emitFile({
+					type: 'asset',
+					fileName: asset.fileName,
+					source: asset.source,
+				});
+			}
 		},
 	};
 }
