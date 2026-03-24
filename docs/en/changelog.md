@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.1.0 <Badge type="tip" text="3/24/2026" />
+
+New safeNamespaces option in bundle.config — safe dependency namespace access via optional chaining in the IIFE wrapper. Fixed copying large CSS images to dist and CSS ordering in bundles.
+
+## v1.0.0 <Badge type="tip" text="3/24/2026" />
+
+- `chef lint` command — extension linting via ESLint 9 with TypeScript support, caching, and auto-fix
+- `chef diag` command — project diagnostics: top dependencies, bundle sizes, circular dependencies, unused extensions, usage search
+- `chef aliases` and `chef init hooks` commands — TypeScript path alias generation and VCS hooks for auto-updating
+- `chef --version` flag to check installed version
+- Bundle minification via Terser instead of oxc-minify
+- Extension config validation before build with detailed error messages
+- Warning when `.env.test` is missing before running tests
+- Test watcher debounce to prevent concurrent reruns
+- `--include`/`--exclude` filters for diagnostic commands
+
 ## v0.0.0-beta.15 <Badge type="tip" text="3/13/2026" />
 
 - Generate `.d.ts` namespace declarations for TypeScript extensions
