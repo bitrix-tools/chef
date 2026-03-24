@@ -20,12 +20,12 @@ describe('chef aliases', () => {
 	});
 
 	it('should generate aliases.tsconfig.json', async () => {
-		const { exitCode, output, stderr } = await runChef(
+		const { exitCode, output } = await runChef(
 			['aliases'],
 			{ cwd: tmpRepo },
 		);
 
-		assert.equal(exitCode, 0, `stdout: ${output}\nstderr: ${stderr}`);
+		assert.equal(exitCode, 0);
 		assert.isTrue(fs.existsSync(path.join(tmpRepo, 'aliases.tsconfig.json')));
 		assert.include(output, 'aliases');
 	});
