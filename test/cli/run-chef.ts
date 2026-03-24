@@ -8,7 +8,8 @@ type ChefResult = {
 	output: string;
 };
 
-const chefBin = path.resolve(import.meta.dirname, '../../bin/chef');
+const chefCli = path.resolve(import.meta.dirname, '../../src/cli.ts');
+const tsxBin = path.resolve(import.meta.dirname, '../../node_modules/.bin/tsx');
 const fixturesPath = path.resolve(import.meta.dirname, 'fixtures');
 
 export const sourceRepo = path.join(fixturesPath, 'source-repo');
@@ -28,7 +29,7 @@ export function runChef(args: string[], options?: {
 	const timeout = options?.timeout ?? 30_000;
 
 	return new Promise((resolve) => {
-		const child = spawn('node', [chefBin, ...args], {
+		const child = spawn(tsxBin, [chefCli, ...args], {
 			cwd,
 			env: {
 				...process.env,
