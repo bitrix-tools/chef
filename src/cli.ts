@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import { createRequire } from 'node:module';
 
 import { Command, program } from 'commander';
 
@@ -68,6 +69,7 @@ function checkCwdPreAction(thisCommand: Command, actionCommand: Command)
 
 program
 	.name('chef')
+	.version(createRequire(import.meta.url)('../package.json').version)
 	.description('CLI toolkit for building, testing and maintaining Bitrix JS extensions')
 	.addCommand(lazyCommand('build', 'Build JS extensions for Bitrix', () => import('./commands/build/build-command')))
 	.addCommand(lazyCommand('lint', 'Run linting for Bitrix JS extensions', () => import('./commands/lint/lint-command')))
