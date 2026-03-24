@@ -104,6 +104,7 @@ export default {
 | `babel` | `boolean` | Enable/disable Babel (default: true) |
 | `rebuild` | `string[]` | Extensions to rebuild after building the current one |
 | `emitDeclaration` | `boolean` | Generate `.d.ts` with namespace declarations (default: true) |
+| `safeNamespaces` | `boolean` | Safe access to dependency namespaces via optional chaining |
 
 > JavaScript configuration (`bundle.config.js`) is also supported.
 

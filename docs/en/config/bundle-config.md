@@ -35,6 +35,7 @@ export default {
 | `rebuild` | `string[]` | Rebuild dependent extensions |
 | `transformClasses` | `boolean` | Transpile classes |
 | `emitDeclaration` | `boolean` | Generate `.d.ts` with namespace declarations (default: `true`) |
+| `safeNamespaces` | `boolean` | Safe access to dependency namespaces via optional chaining |
 
 ## Plugins
 
@@ -156,6 +157,40 @@ export default {
   emitDeclaration: false,
 };
 ```
+
+## Safe Namespaces
+
+By default, if an extension depends on another extension that hasn't been loaded on the page, including the bundle will cause a fatal error — JavaScript cannot access a non-existent namespace (e.g., `BX.Main.Core`).
+
+The `safeNamespaces` option enables optional chaining for dependency namespace references in the IIFE wrapper. If a dependency is missing, the extension receives an empty object instead of a fatal error. This allows you to check for the dependency in code and work with it conditionally:
+
+```js
+if (BX.Main?.Core)
+{
+  // Dependency is loaded, safe to use
+}
+```
+
+```ts
+export default {
+  input: './src/index.ts',
+  output: './dist/my.bundle.js',
+  namespace: 'BX.My.Extension',
+  safeNamespaces: true,
+};
+```
+
+When enabled, dependency references in the IIFE wrapper use `?.` and `??`:
+
+```js
+// Before:
+})(this.BX.My.Extension = this.BX.My.Extension || {}, BX.Main.Core, BX.UI.Buttons);
+
+// After:
+})(this.BX.My.Extension = this.BX.My.Extension || {}, BX?.Main?.Core??{}, BX?.UI?.Buttons??{});
+```
+
+The extension's own namespace is not transformed — it is already safely initialized at the top of the bundle.
 
 ## Environment Variables
 
