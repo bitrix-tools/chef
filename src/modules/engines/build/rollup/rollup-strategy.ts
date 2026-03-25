@@ -529,8 +529,22 @@ export class RollupBuildStrategy extends BuildStrategy
 	{
 		const { checkTypes } = await import('./plugins/typescript');
 
+		const tsConfigPath = FileFinder.findUpFile({
+			fileName: 'tsconfig.json',
+			fromDir: path.dirname(options.input),
+			rootDir: Environment.getRoot() ?? undefined,
+		});
+
+		let compilerOptions: import('typescript').CompilerOptions | undefined;
+		if (typeof tsConfigPath === 'string' && tsConfigPath.length > 0)
+		{
+			const tsConfig = await this.#loadTsConfig(tsConfigPath, options.packageRoot);
+			compilerOptions = tsConfig.options;
+		}
+
 		return checkTypes({
 			packageRoot: options.packageRoot,
+			compilerOptions,
 		});
 	}
 

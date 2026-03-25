@@ -11,10 +11,12 @@
 		"strict": true,
 		"lib": [
 			"ESNext",
-			"DOM"
+			"DOM",
+			"DOM.Iterable",
+			"WebWorker"
 		]
 	},
 	"include": [
-		"**/src/**/*.ts",
+		"**/*.ts",
 	]
 }
