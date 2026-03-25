@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.1.1 <Badge type="tip" text="3/25/2026" />
+
+Fixed namespace for dependencies without bundle.config — uses BX in source environment, BX for bitrix/ extensions and window for others in project environment. Comments are no longer stripped from JS extensions, only from TypeScript.
+
 ## v1.1.0 <Badge type="tip" text="3/24/2026" />
 
 New safeNamespaces option in bundle.config — safe dependency namespace access via optional chaining in the IIFE wrapper. Fixed copying large CSS images to dist and CSS ordering in bundles.
