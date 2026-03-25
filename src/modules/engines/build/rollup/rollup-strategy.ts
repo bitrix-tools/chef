@@ -58,7 +58,7 @@ export class RollupBuildStrategy extends BuildStrategy
 				return { ...acc, ...extension.getGlobal() };
 			}
 
-			return acc;
+			return { ...acc, [dependency]: 'BX' };
 		}, {})
 	}
 
