@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.1.2 <Badge type="tip" text="3/25/2026" />
+
+Fixed type checking during build: compilerOptions from tsconfig.json (including lib) are now passed to the type checker. Updated tsconfig.json template with DOM.Iterable and WebWorker libraries.
+
 ## v1.1.1 <Badge type="tip" text="3/25/2026" />
 
 Fixed namespace for dependencies without bundle.config — uses BX in source environment, BX for bitrix/ extensions and window for others in project environment. Comments are no longer stripped from JS extensions, only from TypeScript.

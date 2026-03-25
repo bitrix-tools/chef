@@ -1,5 +1,9 @@
 # История изменений
 
+## v1.1.2 <Badge type="tip" text="25.03.2026" />
+
+Исправлена проверка типов при сборке: теперь учитываются настройки compilerOptions из tsconfig.json (включая lib). Обновлён шаблон tsconfig.json — добавлены библиотеки DOM.Iterable и WebWorker.
+
 ## v1.1.1 <Badge type="tip" text="25.03.2026" />
 
 Исправлен неймспейс для зависимостей без bundle.config — в source-окружении используется BX, в project — BX для расширений из bitrix/, window для остальных. Комментарии больше не удаляются из JS-расширений, только из TypeScript.
