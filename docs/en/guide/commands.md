@@ -71,6 +71,31 @@ chef test --grep "should render"                  # Filter by name
 chef test main.core --project chromium firefox    # Specific browsers
 ```
 
+## chef typecheck
+
+Check TypeScript types in extensions.
+
+```bash
+chef typecheck [extensions...] [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `extensions` | Extension names or glob patterns |
+| `-p, --path [path]` | Search for extensions starting from this directory |
+| `--file <patterns...>` | Check specific files (paths relative to extension root) |
+
+```bash
+chef typecheck main.core                       # Check a specific extension
+chef typecheck ui.bbcode.*                     # Check a group of extensions
+chef typecheck main.core --file src/lib/dom.ts # Check a specific file
+chef typecheck                                 # Check all in current directory
+```
+
+::: tip
+Types are checked automatically during build (`chef build`). The `chef typecheck` command is useful when you need to check types without a full build.
+:::
+
 ## chef lint
 
 Lint extensions with ESLint.

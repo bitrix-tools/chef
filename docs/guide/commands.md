@@ -71,6 +71,31 @@ chef test --grep "should render"                  # Фильтрация по и
 chef test main.core --project chromium firefox    # Конкретные браузеры
 ```
 
+## chef typecheck
+
+Проверка типов TypeScript в расширениях.
+
+```bash
+chef typecheck [extensions...] [options]
+```
+
+| Параметр | Описание |
+|----------|----------|
+| `extensions` | Имена расширений или glob-паттерны |
+| `-p, --path [path]` | Искать расширения, начиная с указанной директории |
+| `--file <patterns...>` | Проверить конкретные файлы (пути относительно директории расширения) |
+
+```bash
+chef typecheck main.core                       # Проверить конкретное расширение
+chef typecheck ui.bbcode.*                     # Проверить группу расширений
+chef typecheck main.core --file src/lib/dom.ts # Проверить конкретный файл
+chef typecheck                                 # Проверить всё в текущей директории
+```
+
+::: tip
+При сборке (`chef build`) типы проверяются автоматически. Команда `chef typecheck` полезна, когда нужно проверить типы без полной сборки.
+:::
+
 ## chef lint
 
 Линтинг расширений через ESLint.

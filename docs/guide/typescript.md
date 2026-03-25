@@ -41,10 +41,10 @@ chef create ui.buttons    # создаст bundle.config.ts и src/ui.buttons.ts
     "allowJs": true,
     "checkJs": false,
     "strict": true,
-    "lib": ["ESNext", "DOM"]
+    "lib": ["ESNext", "DOM", "DOM.Iterable", "WebWorker"]
   },
   "include": [
-    "**/src/**/*.ts"
+    "**/*.ts"
   ]
 }
 ```
@@ -213,8 +213,15 @@ npm install --save-dev @playwright/test
 
 ## Проверка типов
 
-Chef не запускает `tsc --noEmit` автоматически при сборке — он только компилирует `.ts` в `.js` через Rollup. Для явной проверки типов запустите вручную:
+Chef проверяет типы автоматически при сборке (`chef build`). Если есть ошибки типов, сборка завершится с ошибкой.
+
+Для проверки типов без сборки используйте команду `chef typecheck`:
 
 ```bash
-npx tsc --noEmit
+chef typecheck main.core                       # Проверить расширение
+chef typecheck ui.bbcode.*                     # Проверить группу расширений
+chef typecheck main.core --file src/lib/dom.ts # Проверить конкретный файл
+chef typecheck                                 # Проверить всё в текущей директории
 ```
+
+При проверке используются настройки из `tsconfig.json` — включая `lib`, `strict` и другие `compilerOptions`. Это гарантирует, что ошибки в IDE и при сборке совпадают.

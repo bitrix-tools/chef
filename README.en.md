@@ -61,6 +61,7 @@ chef build my.extension
 |---------|-------------|
 | `chef build` | Build extensions (TypeScript, Babel, PostCSS) |
 | `chef test` | Run unit and E2E tests (use `unit`/`e2e` subcommands to run separately) |
+| `chef typecheck` | Check TypeScript types in extensions |
 | `chef lint` | Lint extensions with ESLint |
 | `chef diag` | Diagnostics: dependencies, bundle sizes, cycles, unused extensions |
 | `chef create <name>` | Scaffold a new extension |

@@ -41,10 +41,10 @@ Generated with recommended settings:
     "allowJs": true,
     "checkJs": false,
     "strict": true,
-    "lib": ["ESNext", "DOM"]
+    "lib": ["ESNext", "DOM", "DOM.Iterable", "WebWorker"]
   },
   "include": [
-    "**/src/**/*.ts"
+    "**/*.ts"
   ]
 }
 ```
@@ -213,8 +213,15 @@ npm install --save-dev @playwright/test
 
 ## Type Checking
 
-Chef does not run `tsc --noEmit` automatically during build — it only compiles `.ts` to `.js` via Rollup. For explicit type checking, run manually:
+Chef checks types automatically during build (`chef build`). If there are type errors, the build will fail.
+
+To check types without building, use the `chef typecheck` command:
 
 ```bash
-npx tsc --noEmit
+chef typecheck main.core                       # Check an extension
+chef typecheck ui.bbcode.*                     # Check a group of extensions
+chef typecheck main.core --file src/lib/dom.ts # Check a specific file
+chef typecheck                                 # Check all in current directory
 ```
+
+Type checking uses settings from `tsconfig.json` — including `lib`, `strict` and other `compilerOptions`. This ensures that errors in the IDE and during build are consistent.

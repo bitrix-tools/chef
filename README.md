@@ -61,6 +61,7 @@ chef build my.extension
 |---------|----------|
 | `chef build` | Сборка расширений (TypeScript, Babel, PostCSS) |
 | `chef test` | Запуск unit и E2E тестов (подкоманды `unit`/`e2e` для раздельного запуска) |
+| `chef typecheck` | Проверка типов TypeScript в расширениях |
 | `chef lint` | Линтинг расширений через ESLint |
 | `chef diag` | Диагностика: зависимости, размеры бандлов, циклы, неиспользуемые расширения |
 | `chef create <name>` | Создание нового расширения |
