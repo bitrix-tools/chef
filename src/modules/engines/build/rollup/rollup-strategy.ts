@@ -19,6 +19,7 @@ import { isExternalDependencyName } from '../../../../utils/is-external-dependen
 import { BuildStrategy } from '../build-strategy';
 import { CF } from '../../../../diagnostics/diagnostic-codes';
 import { FileFinder } from '../../../../utils/file-finder';
+import { loadTsConfig } from '../../../../utils/load-tsconfig';
 import concatPlugin from './plugins/concat';
 import stripCommentsPlugin from './plugins/strip-comments';
 import safeNamespacesPlugin from './plugins/safe-namespaces';
@@ -467,33 +468,7 @@ export class RollupBuildStrategy extends BuildStrategy
 
 	async #loadTsConfig(configPath: string, packageRoot: string): Promise<ParsedCommandLine>
 	{
-		const { default: ts } = await import('typescript');
-		const tsConfig = ts.readConfigFile(configPath, ts.sys.readFile);
-		if (tsConfig.config && tsConfig.config.extends)
-		{
-			tsConfig.config.extends = path.join(path.dirname(configPath), tsConfig.config.extends);
-		}
-
-		const host = ts.createCompilerHost({}, true);
-
-		const config = ts.parseJsonConfigFileContent(
-			tsConfig.config,
-			// @ts-ignore
-			host,
-			packageRoot,
-		);
-
-		const configDirname = path.dirname(configPath);
-
-		config.options.paths = Object.entries(config.options.paths ?? {}).reduce((acc, [extensionName, paths]) => {
-			acc[extensionName] = paths.map((filePath) => {
-				return path.join(configDirname, filePath.replace('./', ''));
-			});
-
-			return acc;
-		}, {});
-
-		return config;
+		return loadTsConfig(configPath, packageRoot);
 	}
 
 	async #createTypeScriptPlugin(tsConfig: ParsedCommandLine, packageRoot: string): Promise<Plugin>

@@ -67,7 +67,7 @@ function formatNotFoundError(name: string): string
 	const extensionPath = findExtensionPath(name);
 
 	const lines: string[] = [];
-	lines.push(chalk.red(`${CF.EXTENSION_NOT_FOUND}: Extension ${chalk.bold(name)} not found`));
+	lines.push(chalk.red(`${CF.NOT_FOUND}: Extension ${chalk.bold(name)} not found`));
 	lines.push('');
 
 	if (extensionPath)

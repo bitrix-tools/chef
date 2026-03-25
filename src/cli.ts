@@ -78,6 +78,7 @@ program
 	.addCommand(lazyCommand('flow-to-ts', 'Migrate Flow-typed JS code to TypeScript in extensions', () => import('./commands/flow-to-ts/flow-to-ts-command')))
 	.addCommand(lazyCommand('aliases', 'Regenerate path aliases for TypeScript', () => import('./commands/aliases/aliases-command')))
 	.addCommand(lazyCommand('init', 'Initialize testing and build tooling for your Bitrix project', () => import('./commands/init/init-command')))
+	.addCommand(lazyCommand('typecheck', 'Check TypeScript types in extensions', () => import('./commands/typecheck/typecheck-command')))
 	.addCommand(lazyCommand('diag', 'Diagnose and analyze extensions across the project', () => import('./commands/diag/diag-command')))
 	.hook('preAction', adjustCwdPreAction)
 	.hook('preAction', checkCwdPreAction)

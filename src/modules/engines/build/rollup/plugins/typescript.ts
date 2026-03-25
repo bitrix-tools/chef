@@ -21,6 +21,7 @@ export interface TypeCheckOptions
 {
 	packageRoot: string;
 	compilerOptions?: CompilerOptions;
+	files?: string[];
 }
 
 export interface TypeCheckResult
@@ -86,9 +87,21 @@ export async function checkTypes(options: TypeCheckOptions): Promise<TypeCheckRe
 	// TS2307: Cannot find module — expected for external Bitrix dependencies
 	// TS2304: Cannot find name — can come from unresolved external types
 	const ignoredCodes = new Set([2307, 2304]);
-	const errors = diagnostics.filter(
-		(d) => d.category === ts.DiagnosticCategory.Error && !ignoredCodes.has(d.code),
-	);
+	const filterFiles = options.files?.map((f) => path.resolve(f));
+
+	const errors = diagnostics.filter((d) => {
+		if (d.category !== ts.DiagnosticCategory.Error || ignoredCodes.has(d.code))
+		{
+			return false;
+		}
+
+		if (filterFiles && d.file)
+		{
+			return filterFiles.some((f) => d.file!.fileName === f);
+		}
+
+		return true;
+	});
 
 	if (errors.length === 0)
 	{
