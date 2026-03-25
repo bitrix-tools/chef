@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.2.0 <Badge type="tip" text="3/25/2026" />
+
+New chef typecheck command for checking TypeScript types in extensions. Supports extension names, glob patterns, --path and --file options. Not-found errors unified under CF2005.
+
 ## v1.1.2 <Badge type="tip" text="3/25/2026" />
 
 Fixed type checking during build: compilerOptions from tsconfig.json (including lib) are now passed to the type checker. Updated tsconfig.json template with DOM.Iterable and WebWorker libraries.
