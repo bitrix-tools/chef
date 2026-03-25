@@ -1,4 +1,5 @@
 import path from 'node:path';
+import fs from 'node:fs';
 
 import {
 	rollup,
@@ -58,8 +59,31 @@ export class RollupBuildStrategy extends BuildStrategy
 				return { ...acc, ...extension.getGlobal() };
 			}
 
-			return { ...acc, [dependency]: 'BX' };
+			return { ...acc, [dependency]: RollupBuildStrategy.guessNamespace(dependency) };
 		}, {})
+	}
+
+	protected static guessNamespace(dependency: string): string
+	{
+		const root = Environment.getRoot();
+		if (!root)
+		{
+			return 'window';
+		}
+
+		if (Environment.getType() === 'source')
+		{
+			return 'BX';
+		}
+
+		const segments = dependency.split('.');
+		const bitrixPath = path.join(root, 'bitrix', 'js', ...segments);
+		if (fs.existsSync(bitrixPath))
+		{
+			return 'BX';
+		}
+
+		return 'window';
 	}
 
 	static readonly #npmToBitrixMap: Record<string, string> = {
@@ -717,7 +741,7 @@ export class RollupBuildStrategy extends BuildStrategy
 					),
 				}),
 				...(options.customPlugins ?? []),
-				stripCommentsPlugin({ banner: '/* eslint-disable */' }),
+				...(options.typescript ? [stripCommentsPlugin({ banner: '/* eslint-disable */' })] : []),
 				...(options.minify ? [RollupBuildStrategy.createTerserPlugin(typeof options.minify === 'object' ? options.minify : {})] : []),
 				...(options.safeNamespaces ? [safeNamespacesPlugin()] : []),
 			],

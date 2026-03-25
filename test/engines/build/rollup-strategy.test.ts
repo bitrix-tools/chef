@@ -1,7 +1,13 @@
-import { describe, it } from 'mocha';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+
+import { describe, it, beforeEach, afterEach } from 'mocha';
 import { assert } from 'chai';
+import sinon from 'sinon';
 
 import { RollupBuildStrategy } from '../../../src/modules/engines/build/rollup/rollup-strategy';
+import { Environment } from '../../../src/environment/environment';
 import { CF } from '../../../src/diagnostics/diagnostic-codes';
 
 import type { RollupLog } from 'rollup';
@@ -37,6 +43,16 @@ class TestableRollupStrategy extends RollupBuildStrategy
 	static testCreateTerserPlugin(options: import('terser').MinifyOptions = {})
 	{
 		return RollupBuildStrategy.createTerserPlugin(options);
+	}
+
+	static testGuessNamespace(dependency: string): string
+	{
+		return RollupBuildStrategy.guessNamespace(dependency);
+	}
+
+	static testMakeGlobals(dependencies: string[]): Record<string, string>
+	{
+		return RollupBuildStrategy.makeGlobals(dependencies);
 	}
 }
 
@@ -318,6 +334,90 @@ describe('RollupBuildStrategy', () => {
 
 			const sizes = TestableRollupStrategy.testCalculateBundlesSize(output);
 			assert.equal(sizes[0].size, Buffer.byteLength('const кириллица = 1;', 'utf8'));
+		});
+	});
+
+	describe('guessNamespace', () => {
+		let sandbox: sinon.SinonSandbox;
+		let tmpDir: string;
+
+		beforeEach(() => {
+			sandbox = sinon.createSandbox();
+			tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'chef-test-'));
+		});
+
+		afterEach(() => {
+			sandbox.restore();
+			fs.rmSync(tmpDir, { recursive: true });
+		});
+
+		it('should return window when root is not set', () => {
+			sandbox.stub(Environment, 'getRoot').returns(null);
+
+			assert.equal(TestableRollupStrategy.testGuessNamespace('rest.client'), 'window');
+		});
+
+		it('should return BX in source environment', () => {
+			sandbox.stub(Environment, 'getRoot').returns(tmpDir);
+			sandbox.stub(Environment, 'getType').returns('source');
+
+			assert.equal(TestableRollupStrategy.testGuessNamespace('rest.client'), 'BX');
+		});
+
+		it('should return BX for extensions in bitrix/js in project environment', () => {
+			fs.mkdirSync(path.join(tmpDir, 'bitrix', 'js', 'rest', 'client'), { recursive: true });
+
+			sandbox.stub(Environment, 'getRoot').returns(tmpDir);
+			sandbox.stub(Environment, 'getType').returns('project');
+
+			assert.equal(TestableRollupStrategy.testGuessNamespace('rest.client'), 'BX');
+		});
+
+		it('should return window for extensions not in bitrix/js in project environment', () => {
+			sandbox.stub(Environment, 'getRoot').returns(tmpDir);
+			sandbox.stub(Environment, 'getType').returns('project');
+
+			assert.equal(TestableRollupStrategy.testGuessNamespace('vendor.utils'), 'window');
+		});
+
+		it('should return window in unknown environment', () => {
+			sandbox.stub(Environment, 'getRoot').returns(tmpDir);
+			sandbox.stub(Environment, 'getType').returns('unknown');
+
+			assert.equal(TestableRollupStrategy.testGuessNamespace('some.ext'), 'window');
+		});
+	});
+
+	describe('makeGlobals', () => {
+		let sandbox: sinon.SinonSandbox;
+
+		beforeEach(() => {
+			sandbox = sinon.createSandbox();
+		});
+
+		afterEach(() => {
+			sandbox.restore();
+		});
+
+		it('should use BX fallback for unresolved dependencies in source environment', () => {
+			sandbox.stub(Environment, 'getRoot').returns('/path/to/modules');
+			sandbox.stub(Environment, 'getType').returns('source');
+
+			const globals = TestableRollupStrategy.testMakeGlobals(['rest.client', 'pull.client']);
+
+			assert.equal(globals['rest.client'], 'BX');
+			assert.equal(globals['pull.client'], 'BX');
+		});
+
+		it('should use window fallback for unresolved dependencies in project without bitrix path', () => {
+			const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'chef-test-'));
+			sandbox.stub(Environment, 'getRoot').returns(tmpDir);
+			sandbox.stub(Environment, 'getType').returns('project');
+
+			const globals = TestableRollupStrategy.testMakeGlobals(['vendor.utils']);
+
+			assert.equal(globals['vendor.utils'], 'window');
+			fs.rmSync(tmpDir, { recursive: true });
 		});
 	});
 });
