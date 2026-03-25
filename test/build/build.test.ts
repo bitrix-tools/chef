@@ -1276,6 +1276,41 @@ export class SimpleComponent {
 		});
 	});
 
+	describe('namespace fallback for externals', () => {
+		const extensionPath = path.join(fixturesPath, 'namespace-with-externals');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should use fallback namespace for unresolved external dependencies', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+			assert.include(result.dependencies, 'main.core');
+			assert.include(result.dependencies, 'rest.client');
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+
+			// Find the IIFE closing line with globals
+			const iifeClosing = content.split('\n').find((line) => line.startsWith('})(this.'));
+			assert.isString(iifeClosing, 'Should have IIFE closing line');
+
+			// Globals should not contain Rollup auto-generated names like rest_client
+			assert.notInclude(iifeClosing!, 'rest_client',
+				'Should not use Rollup auto-generated global name');
+			assert.notInclude(iifeClosing!, 'main_core',
+				'Should not use Rollup auto-generated global name');
+		});
+	});
+
 	describe('minification', () => {
 		const extensionPath = path.join(fixturesPath, 'minify-extension');
 
