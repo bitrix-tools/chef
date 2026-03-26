@@ -180,47 +180,7 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 		{
 			onStatus('Building test bundle...');
 
-			// Expose function for browser to send tokens directly via CDP
-			await page.exposeFunction('__chefSendToken', (data: string) => {
-				try
-				{
-					const token = JSON.parse(data) as TestToken;
-					if (token.id === 'TEST_FAILED' && token.error?.stack && tracer)
-					{
-						token.error.stack = mapStack(token.error.stack, tracer);
-					}
-					report.push(token);
-					options.onToken?.(token);
-				}
-				catch
-				{
-					// Skip malformed tokens
-				}
-			});
-
-			const { code: testsCodeBundle, map: sourceMap, css } = await this.#getCachedBundle(options);
-
-			tracer = sourceMap ? new TraceMap(sourceMap as any) : null;
-
-			const testsPageUrl = new URL('/dev/ui/cli/mocha-wrapper.php', playwrightConfig.use.baseURL);
-			testsPageUrl.searchParams.set('extension', options.packageName);
-
-			onStatus('Loading test page...');
-			await page.goto(testsPageUrl.toString());
-
-			// Close extra pages (about:blank) so CDP /json only shows the test page.
-			// This prevents WipRemoteVmConnection from connecting to the wrong page.
-			if (cdpPort)
-			{
-				for (const p of context.pages())
-				{
-					if (p !== page)
-					{
-						await p.close();
-					}
-				}
-			}
-
+			// Subscribe to page events BEFORE goto/addScriptTag to capture all messages
 			page.on('console', async (message) => {
 				try
 				{
@@ -269,6 +229,51 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 					consoleLogs.push({ type: 'error', text: `[console capture error: ${err}]` });
 				}
 			});
+
+			page.on('pageerror', (error) => {
+				consoleLogs.push({ type: 'error', text: error.message });
+			});
+
+			// Expose function for browser to send tokens directly via CDP
+			await page.exposeFunction('__chefSendToken', (data: string) => {
+				try
+				{
+					const token = JSON.parse(data) as TestToken;
+					if (token.id === 'TEST_FAILED' && token.error?.stack && tracer)
+					{
+						token.error.stack = mapStack(token.error.stack, tracer);
+					}
+					report.push(token);
+					options.onToken?.(token);
+				}
+				catch
+				{
+					// Skip malformed tokens
+				}
+			});
+
+			const { code: testsCodeBundle, map: sourceMap, css } = await this.#getCachedBundle(options);
+
+			tracer = sourceMap ? new TraceMap(sourceMap as any) : null;
+
+			const testsPageUrl = new URL('/dev/ui/cli/mocha-wrapper.php', playwrightConfig.use.baseURL);
+			testsPageUrl.searchParams.set('extension', options.packageName);
+
+			onStatus('Loading test page...');
+			await page.goto(testsPageUrl.toString());
+
+			// Close extra pages (about:blank) so CDP /json only shows the test page.
+			// This prevents WipRemoteVmConnection from connecting to the wrong page.
+			if (cdpPort)
+			{
+				for (const p of context.pages())
+				{
+					if (p !== page)
+					{
+						await p.close();
+					}
+				}
+			}
 
 			const grep = options.grep ?? null;
 			const timeout = isDebug ? 60000 : 10000;

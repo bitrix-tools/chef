@@ -10,6 +10,39 @@ import type { BasePackage } from '../../../modules/packages/base-package';
 import type { Task, TaskResult, TaskDetail } from '../../../modules/task/task-types';
 import type { BrowserType, ConsoleLog } from '../../../modules/engines/test/test-types';
 
+function deduplicateConsoleLogs(sets: ConsoleLog[][]): ConsoleLog[]
+{
+	if (sets.length <= 1)
+	{
+		return sets[0] ?? [];
+	}
+
+	// Use the longest set as the base, then add any unique entries from others
+	const base = sets.reduce((a, b) => a.length >= b.length ? a : b);
+	const seen = new Set(base.map((log) => `${log.type}:${log.text}`));
+	const result = [...base];
+
+	for (const set of sets)
+	{
+		if (set === base)
+		{
+			continue;
+		}
+
+		for (const log of set)
+		{
+			const key = `${log.type}:${log.text}`;
+			if (!seen.has(key))
+			{
+				seen.add(key);
+				result.push(log);
+			}
+		}
+	}
+
+	return result;
+}
+
 const KNOWN_BROWSERS: Record<string, BrowserType> = {
 	chromium: 'chromium',
 	firefox: 'firefox',
@@ -133,7 +166,7 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 			const browsers = await resolveBrowsers();
 			const reporter = createReporter(args.reporter, onUpdate);
 			reporter.setBrowserCount(browsers.length);
-			const allConsoleLogs: ConsoleLog[] = [];
+			const consoleLogSets: ConsoleLog[][] = [];
 			const allErrors: Error[] = [];
 			let hasTests = false;
 
@@ -159,7 +192,7 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 
 				if (testResult.consoleLogs.length > 0)
 				{
-					allConsoleLogs.push(...testResult.consoleLogs);
+					consoleLogSets.push(testResult.consoleLogs);
 				}
 			});
 
@@ -190,6 +223,7 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 				};
 			}
 
+			const allConsoleLogs = deduplicateConsoleLogs(consoleLogSets);
 			const { failed } = reporter.finish(allConsoleLogs);
 
 			return {

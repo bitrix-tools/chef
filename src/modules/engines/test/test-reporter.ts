@@ -559,17 +559,36 @@ export class TestReporter
 			}
 		}
 
-		// Console output
+		// Console output (deduplicated with counts)
 		if (consoleLogs.length > 0)
 		{
-			lines.push('');
-			lines.push(`${PREFIX} ${chalk.bold('Console output:')}`);
+			const grouped: Array<{ type: string; text: string; count: number }> = [];
+			const seen = new Map<string, number>();
+
 			for (const log of consoleLogs)
 			{
-				const prefix = log.type === 'error' ? chalk.red('error')
-					: log.type === 'warning' ? chalk.yellow('warn')
+				const key = `${log.type}:${log.text}`;
+				const index = seen.get(key);
+				if (index !== undefined)
+				{
+					grouped[index].count++;
+				}
+				else
+				{
+					seen.set(key, grouped.length);
+					grouped.push({ type: log.type, text: log.text, count: 1 });
+				}
+			}
+
+			lines.push('');
+			lines.push(`${PREFIX} ${chalk.bold('Console output:')}`);
+			for (const { type, text, count } of grouped)
+			{
+				const prefix = type === 'error' ? chalk.red('error')
+					: type === 'warning' ? chalk.yellow('warn')
 					: chalk.gray('log');
-				lines.push(`${PREFIX} ${chalk.gray('[')}${prefix}${chalk.gray(']')} ${log.text}`);
+				const countSuffix = count > 1 ? chalk.yellow(` ×${count}`) : '';
+				lines.push(`${PREFIX} ${chalk.gray('[')}${prefix}${chalk.gray(']')} ${text}${countSuffix}`);
 			}
 		}
 
