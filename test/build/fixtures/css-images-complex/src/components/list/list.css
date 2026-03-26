@@ -1,0 +1,7 @@
+.list {
+	background-image: url('./list-bg.png');
+}
+
+.list-empty {
+	background-image: url('./item/empty.png');
+}

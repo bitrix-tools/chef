@@ -1,0 +1,7 @@
+.item {
+	background-image: url('./item-icon.png');
+}
+
+.item-shared {
+	background-image: url('../../../shared/icons/logo.png');
+}

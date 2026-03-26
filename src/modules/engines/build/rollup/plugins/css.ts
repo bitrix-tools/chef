@@ -80,6 +80,7 @@ interface InlineResult {
 interface CopyResult {
 	type: 'copy';
 	asset: AssetToCopy;
+	suffix: string;
 }
 
 function splitUrlSuffix(urlValue: string): { filePath: string; suffix: string }
@@ -117,6 +118,7 @@ function processUrl(
 	urlValue: string,
 	maxSizeBytes: number,
 	optimizeSvg: ((svg: string) => string) | null,
+	packageRoot: string,
 ): InlineResult | CopyResult | null
 {
 	if (urlValue.startsWith('data:') || urlValue.startsWith('http'))
@@ -139,11 +141,20 @@ function processUrl(
 
 	if (fileBuffer.length >= maxSizeBytes)
 	{
-		const fileName = path.normalize(relativeFilePath);
+		let relativeToPkg = path.relative(packageRoot, filePath);
+		if (relativeToPkg.startsWith(`src${path.sep}`))
+		{
+			relativeToPkg = relativeToPkg.slice(4);
+		}
+
+		const fileName = relativeToPkg.startsWith(`images${path.sep}`)
+			? relativeToPkg
+			: path.join('images', relativeToPkg);
 
 		return {
 			type: 'copy',
 			asset: { filePath, fileName, source: fileBuffer },
+			suffix,
 		};
 	}
 
@@ -171,13 +182,16 @@ function processUrls(
 	cssFilePath: string,
 	maxSizeBytes: number,
 	optimizeSvg: ((svg: string) => string) | null,
+	packageRoot: string,
+	outputCssPath: string,
 ): { css: string; assets: AssetToCopy[] }
 {
 	const cssFileDir = path.dirname(cssFilePath);
+	const outputCssDir = path.dirname(outputCssPath);
 	const assets: AssetToCopy[] = [];
 
 	const processed = css.replace(/url\(\s*(['"]?)(.+?)\1\s*\)/g, (match, _quote, urlValue) => {
-		const result = processUrl(cssFileDir, urlValue, maxSizeBytes, optimizeSvg);
+		const result = processUrl(cssFileDir, urlValue, maxSizeBytes, optimizeSvg, packageRoot);
 		if (!result)
 		{
 			return match;
@@ -190,7 +204,11 @@ function processUrls(
 
 		assets.push(result.asset);
 
-		return match;
+		// Rewrite url() to point to the copied file relative to output CSS
+		const assetOutputPath = path.join(path.dirname(outputCssPath), result.asset.fileName);
+		const relativeUrl = path.relative(outputCssDir, assetOutputPath).replaceAll('\\', '/');
+
+		return `url("${relativeUrl}${result.suffix}")`;
 	});
 
 	return { css: processed, assets };
@@ -236,7 +254,7 @@ export default function cssPlugin(options: CssPluginOptions): Plugin
 
 			if (shouldInline)
 			{
-				const result = processUrls(css, id, maxSizeBytes, optimizeSvg);
+				const result = processUrls(css, id, maxSizeBytes, optimizeSvg, options.packageRoot, options.extract);
 				css = result.css;
 
 				for (const asset of result.assets)

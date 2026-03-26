@@ -1,0 +1,15 @@
+.header {
+	background-image: url('./header-bg.png');
+}
+
+.header-icon {
+	background-image: url('../../shared/icons/logo.png');
+}
+
+.header-banner {
+	background-image: url('../../images/banner.png');
+}
+
+.header-bg-versioned {
+	background-image: url('./header-bg.png?v=2');
+}

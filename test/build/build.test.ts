@@ -761,6 +761,138 @@ return [
 		});
 	});
 
+	describe('css images complex structure', () => {
+		const extensionPath = path.join(fixturesPath, 'css-images-complex');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should copy images preserving directory structure relative to src', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const expectedFiles = [
+				'images/shared/icons/logo.png',
+				'images/components/header/header-bg.png',
+				'images/components/list/list-bg.png',
+				'images/components/list/item/empty.png',
+				'images/components/list/item/item-icon.png',
+				'images/banner.png',
+			];
+
+			for (const file of expectedFiles)
+			{
+				const filePath = path.join(extensionPath, 'dist', file);
+				assert.isTrue(fs.existsSync(filePath), `${file} should be copied to dist`);
+			}
+		});
+
+		it('should rewrite CSS urls to point to copied files relative to output CSS', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			const cssOutput = path.join(extensionPath, 'dist', 'extension.bundle.css');
+			const content = fs.readFileSync(cssOutput, 'utf-8');
+
+			// All urls should point to files relative to dist/ under images/
+			assert.include(content, 'url("images/shared/icons/logo.png")', 'Root CSS should reference shared icon');
+			assert.include(content, 'url("images/components/header/header-bg.png")', 'Header CSS should reference header bg');
+			assert.include(content, 'url("images/components/list/list-bg.png")', 'List CSS should reference list bg');
+			assert.include(content, 'url("images/components/list/item/empty.png")', 'List CSS should reference item empty');
+			assert.include(content, 'url("images/components/list/item/item-icon.png")', 'Item CSS should reference item icon');
+			assert.include(content, 'url("images/banner.png")', 'Header CSS should reference banner from images/');
+		});
+
+		it('should not duplicate images/ prefix for files already in images/ directory', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			// src/images/banner.png should become dist/images/banner.png, not dist/images/images/banner.png
+			const correct = path.join(extensionPath, 'dist', 'images', 'banner.png');
+			const wrong = path.join(extensionPath, 'dist', 'images', 'images', 'banner.png');
+
+			assert.isTrue(fs.existsSync(correct), 'Image from images/ should be at dist/images/banner.png');
+			assert.isFalse(fs.existsSync(wrong), 'Should not have double images/ prefix');
+		});
+
+		it('should preserve query parameters in rewritten URLs', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			const cssOutput = path.join(extensionPath, 'dist', 'extension.bundle.css');
+			const content = fs.readFileSync(cssOutput, 'utf-8');
+
+			assert.include(content, 'header-bg.png?v=2', 'Query parameters should be preserved');
+		});
+
+		it('should deduplicate shared images referenced from multiple CSS files', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			// logo.png is referenced from main.css, header.css, and item.css
+			// It should be copied only once
+			const logoPath = path.join(extensionPath, 'dist', 'images', 'shared', 'icons', 'logo.png');
+			assert.isTrue(fs.existsSync(logoPath), 'Shared logo should exist');
+
+			const original = fs.readFileSync(path.join(extensionPath, 'src', 'shared', 'icons', 'logo.png'));
+			const copied = fs.readFileSync(logoPath);
+			assert.isTrue(original.equals(copied), 'Copied image should match original');
+		});
+
+		it('should skip nonexistent files in url() without errors', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const cssOutput = path.join(extensionPath, 'dist', 'extension.bundle.css');
+			const content = fs.readFileSync(cssOutput, 'utf-8');
+
+			// Nonexistent file should keep original url() unchanged
+			assert.include(content, 'nonexistent.png', 'Missing file URL should remain unchanged');
+		});
+
+		it('should not modify external URLs and data URIs', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			const cssOutput = path.join(extensionPath, 'dist', 'extension.bundle.css');
+			const content = fs.readFileSync(cssOutput, 'utf-8');
+
+			assert.include(content, 'https://example.com/logo.png', 'External URLs should not be modified');
+			assert.include(content, 'data:image/png;base64,iVBOR', 'Data URIs should not be modified');
+		});
+
+		it('should not leave images outside dist directory', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			await buildService.build(options);
+
+			const distFiles = fs.readdirSync(path.join(extensionPath, 'dist'), { recursive: true });
+			const imageFiles = (distFiles as string[]).filter((f) => f.endsWith('.png'));
+
+			// All images should be inside dist/
+			for (const file of imageFiles)
+			{
+				assert.isFalse(file.startsWith('..'), `Image ${file} should not escape dist directory`);
+			}
+		});
+	});
+
 	describe('js image import', () => {
 		const extensionPath = path.join(fixturesPath, 'js-image-import');
 
