@@ -4,10 +4,8 @@ this.BX.Test = this.BX.Test || {};
 (function (exports) {
 	'use strict';
 
-	
 	class UserService {
 	    #users = [];
-	    
 	    add(user) {
 	        this.#users.push(user);
 	    }

@@ -24,7 +24,7 @@ export default function stripCommentsPlugin(options: { banner?: string } = {}): 
 	};
 }
 
-function stripComments(code: string): string
+export function stripComments(code: string): string
 {
 	let result = '';
 	let i = 0;
@@ -74,7 +74,19 @@ function stripComments(code: string): string
 		// Single-line comment
 		if (code[i] === '/' && code[i + 1] === '/')
 		{
+			const isOwnLine = isCommentOnOwnLine(result);
+			if (isOwnLine)
+			{
+				result = trimTrailingWhitespaceLine(result);
+			}
+
 			while (i < code.length && code[i] !== '\n')
+			{
+				i++;
+			}
+
+			// Skip the newline if the comment was on its own line
+			if (isOwnLine && i < code.length && code[i] === '\n')
 			{
 				i++;
 			}
@@ -85,6 +97,12 @@ function stripComments(code: string): string
 		// Multi-line comment
 		if (code[i] === '/' && code[i + 1] === '*')
 		{
+			const isOwnLine = isCommentOnOwnLine(result);
+			if (isOwnLine)
+			{
+				result = trimTrailingWhitespaceLine(result);
+			}
+
 			const commentEnd = code.indexOf('*/', i + 2);
 			if (commentEnd === -1)
 			{
@@ -93,6 +111,20 @@ function stripComments(code: string): string
 			else
 			{
 				i = commentEnd + 2;
+
+				// Skip trailing whitespace and newline after block comment on its own line
+				if (isOwnLine)
+				{
+					while (i < code.length && (code[i] === ' ' || code[i] === '\t'))
+					{
+						i++;
+					}
+
+					if (i < code.length && code[i] === '\n')
+					{
+						i++;
+					}
+				}
 			}
 
 			continue;
@@ -159,8 +191,41 @@ function stripComments(code: string): string
 		i++;
 	}
 
-	// Clean up blank lines left by removed comments
-	return result.replace(/\n{3,}/g, '\n\n');
+	return result
+		// Clean up trailing whitespace left by inline comments
+		.replace(/[ \t]+\n/g, '\n')
+		// Clean up excessive blank lines
+		.replace(/\n{3,}/g, '\n\n');
+}
+
+/**
+ * Checks if the current position in result is at the start of a line
+ * (only whitespace between the last newline and the end of result).
+ */
+function isCommentOnOwnLine(result: string): boolean
+{
+	let j = result.length - 1;
+	while (j >= 0 && (result[j] === ' ' || result[j] === '\t'))
+	{
+		j--;
+	}
+
+	return j < 0 || result[j] === '\n';
+}
+
+/**
+ * Trims trailing whitespace after the last newline.
+ * Should only be called when isCommentOnOwnLine() returns true.
+ */
+function trimTrailingWhitespaceLine(result: string): string
+{
+	let j = result.length - 1;
+	while (j >= 0 && (result[j] === ' ' || result[j] === '\t'))
+	{
+		j--;
+	}
+
+	return result.slice(0, j + 1);
 }
 
 function isRegexStart(code: string, position: number, preceding: string): boolean
