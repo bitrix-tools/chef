@@ -11,6 +11,8 @@ import {
 	type RollupOutput,
 	type WarningHandlerWithDefault,
 	type OutputChunk,
+	type TreeshakingOptions,
+	type TreeshakingPreset,
 } from 'rollup';
 
 import { Environment } from '../../../../environment/environment';
@@ -260,6 +262,37 @@ export class RollupBuildStrategy extends BuildStrategy
 				return null;
 			},
 		}
+	}
+
+	static #resolveTreeshake(
+		value?: boolean | TreeshakingPreset | TreeshakingOptions,
+	): boolean | TreeshakingPreset | TreeshakingOptions
+	{
+		if (value === false)
+		{
+			return false;
+		}
+
+		if (typeof value === 'string')
+		{
+			return value;
+		}
+
+		if (typeof value === 'object')
+		{
+			return {
+				moduleSideEffects: false,
+				propertyReadSideEffects: false,
+				tryCatchDeoptimization: false,
+				...value,
+			};
+		}
+
+		return {
+			moduleSideEffects: false,
+			propertyReadSideEffects: false,
+			tryCatchDeoptimization: false,
+		};
 	}
 
 	protected static createTerserPlugin(options: import('terser').MinifyOptions): Plugin
@@ -739,11 +772,7 @@ export class RollupBuildStrategy extends BuildStrategy
 				...(options.safeNamespaces ? [safeNamespacesPlugin()] : []),
 			],
 			onwarn: onWarn,
-			treeshake: {
-				moduleSideEffects: false,
-				propertyReadSideEffects: false,
-				tryCatchDeoptimization: false,
-			},
+			treeshake: RollupBuildStrategy.#resolveTreeshake(options.treeshake),
 		}
 	}
 

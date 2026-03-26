@@ -109,6 +109,7 @@ export class PackageBuilder
 			resolve: bundleConfig.get('resolveNodeModules'),
 			babel: enforce?.babel ?? bundleConfig.get('babel'),
 			transformClasses: bundleConfig.get('transformClasses'),
+			treeshake: bundleConfig.get('treeshake'),
 			customPlugins: bundleConfig.get('plugins'),
 			production,
 			emitDeclaration: enforce?.emitDeclaration

@@ -1,4 +1,4 @@
-import type { Plugin } from 'rollup';
+import type { Plugin, TreeshakingOptions, TreeshakingPreset } from 'rollup';
 import type { MinifyOptions } from 'terser';
 
 export interface BuildDiagnostic {
@@ -43,6 +43,7 @@ export type BuildOptions = {
 		include?: string[];
 		exclude?: string[];
 	},
+	treeshake?: boolean | TreeshakingPreset | TreeshakingOptions,
 	minify?: boolean | MinifyOptions,
 	sourceMaps?: boolean,
 	vue?: boolean,

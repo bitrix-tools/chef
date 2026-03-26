@@ -1,4 +1,4 @@
-import type { Plugin } from 'rollup';
+import type { Plugin, TreeshakingOptions, TreeshakingPreset } from 'rollup';
 import type { MinifyOptions } from 'terser';
 
 export interface PreparedBundleConfig {
@@ -10,7 +10,7 @@ export interface PreparedBundleConfig {
 		css?: string[];
 	};
 	adjustConfigPhp: boolean;
-	treeshake: boolean;
+	treeshake: boolean | TreeshakingPreset | TreeshakingOptions;
 	'protected': boolean;
 	plugins: Plugin[];
 	resolveNodeModules: boolean;
