@@ -12,6 +12,8 @@ function createMockPackage(packagePath: string)
 {
 	return {
 		getPath: () => packagePath,
+		getOutputJsPath: () => `${packagePath}/dist/bundle.js`,
+		getOutputCssPath: () => `${packagePath}/dist/bundle.css`,
 	} as any;
 }
 

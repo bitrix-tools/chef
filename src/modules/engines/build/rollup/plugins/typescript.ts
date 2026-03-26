@@ -22,6 +22,7 @@ export interface TypeCheckOptions
 	packageRoot: string;
 	compilerOptions?: CompilerOptions;
 	files?: string[];
+	exclude?: string[];
 }
 
 export interface TypeCheckResult
@@ -71,8 +72,12 @@ export async function checkTypes(options: TypeCheckOptions): Promise<TypeCheckRe
 	const program = ts.createProgram(rootNames, typeCheckCompilerOptions, host, oldProgram);
 	oldProgram = program;
 
+	const excludeSet = new Set(options.exclude?.map((f) => path.resolve(f)) ?? []);
+
 	const sourceFiles = program.getSourceFiles().filter((file) => {
-		return file.fileName.startsWith(packageRoot) && !file.fileName.includes('/node_modules/');
+		return file.fileName.startsWith(packageRoot)
+			&& !file.fileName.includes('/node_modules/')
+			&& !excludeSet.has(file.fileName);
 	});
 
 	const diagnostics: Diagnostic[] = [];

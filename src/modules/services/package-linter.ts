@@ -34,6 +34,10 @@ export class PackageLinter
 			fix: options.fix,
 			files: options.files,
 			cache: options.cache,
+			exclude: [
+				this.#package.getOutputJsPath(),
+				this.#package.getOutputCssPath(),
+			],
 		});
 	}
 }

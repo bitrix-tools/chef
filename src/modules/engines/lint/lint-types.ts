@@ -4,6 +4,7 @@ export type LintOptions = {
 	fix?: boolean;
 	files?: string[];
 	cache?: boolean;
+	exclude?: string[];
 };
 
 export type LintFormatterLevel = 'succeed' | 'warn' | 'fail';

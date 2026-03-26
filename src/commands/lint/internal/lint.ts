@@ -17,6 +17,7 @@ type LintCommandOptions = {
 
 export type LintRunResult = {
 	name: string;
+	root: string;
 	taskGroupResult: TaskGroupResult;
 	lintResult: LintResult;
 };
@@ -122,6 +123,6 @@ export function lint(extension: BasePackage, options: LintCommandOptions = {}): 
 			tasks: [lintTask],
 		});
 
-		return { name, taskGroupResult, lintResult };
+		return { name, root, taskGroupResult, lintResult };
 	};
 }

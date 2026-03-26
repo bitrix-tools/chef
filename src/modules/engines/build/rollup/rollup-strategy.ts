@@ -520,6 +520,10 @@ export class RollupBuildStrategy extends BuildStrategy
 		return checkTypes({
 			packageRoot: options.packageRoot,
 			compilerOptions,
+			exclude: [
+				options.output.js,
+				options.output.css,
+			],
 		});
 	}
 

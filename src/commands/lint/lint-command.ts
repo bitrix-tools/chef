@@ -23,7 +23,7 @@ function collectFileStats(results: LintRunResult[]): ExtensionFiles[]
 {
 	const extensions: ExtensionFiles[] = [];
 
-	for (const { name, lintResult } of results)
+	for (const { name, root, lintResult } of results)
 	{
 		const files: FileStats[] = [];
 
@@ -35,7 +35,7 @@ function collectFileStats(results: LintRunResult[]): ExtensionFiles[]
 			}
 
 			files.push({
-				fileName: path.basename(file.filePath),
+				fileName: path.relative(root, file.filePath),
 				errors: file.messages.filter((m) => m.severity === 'error').length,
 				warnings: file.messages.filter((m) => m.severity === 'warning').length,
 			});

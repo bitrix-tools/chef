@@ -82,6 +82,10 @@ function createTypecheckTask(extension: BasePackage, options: TypecheckOptions):
 				packageRoot,
 				compilerOptions,
 				files,
+				exclude: [
+					extension.getOutputJsPath(),
+					extension.getOutputCssPath(),
+				],
 			});
 
 			if (result.errors.length > 0)

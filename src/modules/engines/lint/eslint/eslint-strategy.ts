@@ -72,7 +72,14 @@ export class ESLintStrategy extends LintStrategy
 			? options.files
 			: [path.join(options.sourcePath, '**/*.{js,ts}')];
 
-		const results = await eslint.lintFiles(patterns);
+		const excludeSet = new Set(options.exclude?.map((p) => path.resolve(p)) ?? []);
+
+		let results = await eslint.lintFiles(patterns);
+
+		if (excludeSet.size > 0)
+		{
+			results = results.filter((r) => !excludeSet.has(path.resolve(r.filePath)));
+		}
 
 		if (options.fix)
 		{
