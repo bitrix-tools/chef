@@ -247,6 +247,19 @@ describe('chef build', () => {
 		assertBundleMatchesExpected(dest, 'concat-extension', 'extension.bundle.css');
 	});
 
+	it('should not duplicate bundle when concat file has same basename as output', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'concat-same-basename');
+
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+
+		const bundle = fs.readFileSync(path.join(dest, 'app.js'), 'utf-8');
+		const exportCount = bundle.split('exports.App = App').length - 1;
+		assert.equal(exportCount, 1, 'Bundle content should appear exactly once');
+		assert.include(bundle, 'LegacyApp', 'Concat file with same basename should be included as-is');
+	});
+
 	// endregion
 
 	// region: error cases

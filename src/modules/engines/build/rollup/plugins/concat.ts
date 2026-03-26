@@ -77,8 +77,7 @@ export default function concatPlugin(options: { jsFiles?: Array<string>; cssFile
 					const fileName = path.basename(filePath);
 					const isOutputFile = outputJsFilePath && (
 						filePath === outputJsFilePath ||
-						path.resolve(filePath) === path.resolve(outputJsFilePath) ||
-						fileName === outputJsFileName
+						path.resolve(filePath) === path.resolve(outputJsFilePath)
 					);
 
 					if (isOutputFile && bundleContent)
