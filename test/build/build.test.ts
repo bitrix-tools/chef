@@ -817,7 +817,7 @@ return [
 			const options = getBuildOptions(extensionPath, bundleConfig);
 			await buildService.build(options);
 
-			// src/images/banner.png should become dist/images/banner.png, not dist/images/images/banner.png
+			// src/images/banner.png → strip src/ → images/banner.png → already starts with images/ → no dup
 			const correct = path.join(extensionPath, 'dist', 'images', 'banner.png');
 			const wrong = path.join(extensionPath, 'dist', 'images', 'images', 'banner.png');
 

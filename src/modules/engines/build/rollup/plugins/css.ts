@@ -142,9 +142,18 @@ function processUrl(
 	if (fileBuffer.length >= maxSizeBytes)
 	{
 		let relativeToPkg = path.relative(packageRoot, filePath);
-		if (relativeToPkg.startsWith(`src${path.sep}`))
+
+		// If file is outside packageRoot, fall back to just the filename
+		if (relativeToPkg.startsWith('..'))
 		{
-			relativeToPkg = relativeToPkg.slice(4);
+			relativeToPkg = path.basename(filePath);
+		}
+
+		// Strip everything up to and including "src/" segment
+		const srcIndex = relativeToPkg.lastIndexOf(`src${path.sep}`);
+		if (srcIndex !== -1)
+		{
+			relativeToPkg = relativeToPkg.slice(srcIndex + 4);
 		}
 
 		const fileName = relativeToPkg.startsWith(`images${path.sep}`)
