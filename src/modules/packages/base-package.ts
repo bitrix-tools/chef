@@ -121,6 +121,11 @@ export abstract class BasePackage
 		return fs.existsSync(this.getPhpConfigFilePath());
 	}
 
+	shouldUpdatePhpConfig(): boolean
+	{
+		return false;
+	}
+
 	getPhpConfig(): any
 	{
 		return this.#cache.remember('phpConfig', () => {

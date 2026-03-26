@@ -13,6 +13,11 @@ export class ExtensionPackage extends BasePackage
 		return this.getPath().split('/').shift();
 	}
 
+	shouldUpdatePhpConfig(): boolean
+	{
+		return true;
+	}
+
 	getPublicPath(): string
 	{
 		const segments = this.getName().split('.');

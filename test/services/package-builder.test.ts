@@ -12,6 +12,7 @@ import { BuildEngine } from '../../src/modules/engines/build/build-engine';
 import { ChefConfigManager } from '../../src/modules/config/project/chef-config-manager';
 import { BundleConfigManager } from '../../src/modules/config/bundle/bundle-config-manager';
 
+
 import type { BuildResult, BuildOptions } from '../../src/modules/engines/build/build-types';
 
 const fixturesPath = path.join(import.meta.dirname, '..', 'build', 'fixtures');
@@ -99,6 +100,7 @@ describe('PackageBuilder', () => {
 				getBundleConfig: () => bundleConfig,
 				getPhpConfig: () => phpConfig,
 				getPhpConfigFilePath: () => path.join(extensionPath, 'config.php'),
+				shouldUpdatePhpConfig: () => true,
 			} as any;
 
 			const builder = new PackageBuilder(mockPackage);
@@ -148,6 +150,7 @@ describe('PackageBuilder', () => {
 				getBundleConfig: () => bundleConfig,
 				getPhpConfig: () => phpConfig,
 				getPhpConfigFilePath: () => path.join(extensionPath, 'config.php'),
+				shouldUpdatePhpConfig: () => true,
 			} as any;
 
 			const builder = new PackageBuilder(mockPackage);
@@ -201,6 +204,7 @@ describe('PackageBuilder', () => {
 				getBundleConfig: () => bundleConfig,
 				getPhpConfig: () => phpConfig,
 				getPhpConfigFilePath: () => path.join(extensionPath, 'config.php'),
+				shouldUpdatePhpConfig: () => true,
 			} as any;
 
 			const builder = new PackageBuilder(mockPackage);
@@ -252,6 +256,7 @@ describe('PackageBuilder', () => {
 				getBundleConfig: () => bundleConfig,
 				getPhpConfig: () => phpConfig,
 				getPhpConfigFilePath: () => path.join(extensionPath, 'config.php'),
+				shouldUpdatePhpConfig: () => true,
 			} as any;
 
 			const builder = new PackageBuilder(mockPackage);

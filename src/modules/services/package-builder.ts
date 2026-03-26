@@ -49,7 +49,11 @@ export class PackageBuilder
 		const dependencies = buildResult.dependencies.filter(dep => !includes.has(dep));
 
 		phpConfig.set('rel', dependencies);
-		phpConfig.save(this.#package.getPhpConfigFilePath(), this.#package.getName());
+
+		if (this.#package.shouldUpdatePhpConfig())
+		{
+			phpConfig.save(this.#package.getPhpConfigFilePath(), this.#package.getName());
+		}
 
 		return buildResult;
 	}
