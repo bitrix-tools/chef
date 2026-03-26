@@ -26,7 +26,7 @@ export default {
 | `targets` | `string \| string[]` | Browser targets for transpilation |
 | `sourceMaps` | `boolean` | Generate source maps |
 | `minification` | `boolean \| object` | OXC minification options |
-| `treeshake` | `boolean` | Remove unused code (default: `true`) |
+| `treeshake` | `boolean \| string \| object` | Remove unused code. Accepts `boolean`, Rollup preset (`'smallest'`, `'safest'`, `'recommended'`), or `TreeshakingOptions` object (default: `true`) |
 | `plugins` | `Plugin[]` | Custom Rollup plugins |
 | `resolveNodeModules` | `boolean` | Resolve dependencies from node_modules |
 | `babel` | `boolean` | Enable/disable Babel transpilation (default: `true`) |

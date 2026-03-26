@@ -26,7 +26,7 @@ export default {
 | `targets` | `string \| string[]` | Целевые браузеры для транспиляции |
 | `sourceMaps` | `boolean` | Генерация source maps |
 | `minification` | `boolean \| object` | Настройки минификации OXC |
-| `treeshake` | `boolean` | Удаление неиспользуемого кода (по умолчанию: `true`) |
+| `treeshake` | `boolean \| string \| object` | Удаление неиспользуемого кода. Принимает `boolean`, пресет Rollup (`'smallest'`, `'safest'`, `'recommended'`) или объект `TreeshakingOptions` (по умолчанию: `true`) |
 | `plugins` | `Plugin[]` | Кастомные Rollup-плагины |
 | `resolveNodeModules` | `boolean` | Резолв зависимостей из node_modules |
 | `babel` | `boolean` | Включение/отключение Babel-транспиляции (по умолчанию: `true`) |

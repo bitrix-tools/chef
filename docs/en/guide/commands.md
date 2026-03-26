@@ -84,12 +84,14 @@ chef typecheck [extensions...] [options]
 | `extensions` | Extension names or glob patterns |
 | `-p, --path [path]` | Search for extensions starting from this directory |
 | `--file <patterns...>` | Check specific files (paths relative to extension root) |
+| `--exclude <patterns...>` | Exclude files from type checking (paths or glob patterns relative to extension root) |
 
 ```bash
-chef typecheck main.core                       # Check a specific extension
-chef typecheck ui.bbcode.*                     # Check a group of extensions
-chef typecheck main.core --file src/lib/dom.ts # Check a specific file
-chef typecheck                                 # Check all in current directory
+chef typecheck main.core                           # Check a specific extension
+chef typecheck ui.bbcode.*                         # Check a group of extensions
+chef typecheck main.core --file src/lib/dom.ts     # Check a specific file
+chef typecheck main.core --exclude 'src/legacy/**' # Exclude files from checking
+chef typecheck                                     # Check all in current directory
 ```
 
 ::: tip
@@ -110,13 +112,15 @@ chef lint [extensions...] [options]
 | `-p, --path [path]` | Search for and lint extensions starting from this directory |
 | `--fix` | Automatically fix problems |
 | `--file <patterns...>` | Lint specific files (glob patterns relative to `src/`) |
+| `--exclude <patterns...>` | Exclude files from linting (glob patterns relative to extension root) |
 | `--no-cache` | Disable caching (cache is enabled by default) |
 
 ```bash
-chef lint main.core                # Lint a specific extension
-chef lint ui.*                     # Lint a group of extensions
-chef lint main.core --fix          # Auto-fix problems
-chef lint main.core --file "*.ts"  # Lint only .ts files
+chef lint main.core                        # Lint a specific extension
+chef lint ui.*                             # Lint a group of extensions
+chef lint main.core --fix                  # Auto-fix problems
+chef lint main.core --file "*.ts"          # Lint only .ts files
+chef lint main.core --exclude 'src/old/**' # Exclude files from linting
 ```
 
 ::: tip

@@ -84,12 +84,14 @@ chef typecheck [extensions...] [options]
 | `extensions` | Имена расширений или glob-паттерны |
 | `-p, --path [path]` | Искать расширения, начиная с указанной директории |
 | `--file <patterns...>` | Проверить конкретные файлы (пути относительно директории расширения) |
+| `--exclude <patterns...>` | Исключить файлы из проверки (пути или glob-паттерны относительно директории расширения) |
 
 ```bash
-chef typecheck main.core                       # Проверить конкретное расширение
-chef typecheck ui.bbcode.*                     # Проверить группу расширений
-chef typecheck main.core --file src/lib/dom.ts # Проверить конкретный файл
-chef typecheck                                 # Проверить всё в текущей директории
+chef typecheck main.core                           # Проверить конкретное расширение
+chef typecheck ui.bbcode.*                         # Проверить группу расширений
+chef typecheck main.core --file src/lib/dom.ts     # Проверить конкретный файл
+chef typecheck main.core --exclude 'src/legacy/**' # Исключить файлы из проверки
+chef typecheck                                     # Проверить всё в текущей директории
 ```
 
 ::: tip
@@ -110,13 +112,15 @@ chef lint [extensions...] [options]
 | `-p, --path [path]` | Искать и линтить расширения, начиная с указанной директории |
 | `--fix` | Автоматически исправлять проблемы |
 | `--file <patterns...>` | Линтить конкретные файлы (glob-паттерны относительно `src/`) |
+| `--exclude <patterns...>` | Исключить файлы из линтинга (glob-паттерны относительно директории расширения) |
 | `--no-cache` | Отключить кеширование (по умолчанию кеш включён) |
 
 ```bash
-chef lint main.core                # Линтинг конкретного расширения
-chef lint ui.*                     # Линтинг группы расширений
-chef lint main.core --fix          # Автоматическое исправление
-chef lint main.core --file "*.ts"  # Линтить только .ts файлы
+chef lint main.core                        # Линтинг конкретного расширения
+chef lint ui.*                             # Линтинг группы расширений
+chef lint main.core --fix                  # Автоматическое исправление
+chef lint main.core --file "*.ts"          # Линтить только .ts файлы
+chef lint main.core --exclude 'src/old/**' # Исключить файлы из линтинга
 ```
 
 ::: tip
