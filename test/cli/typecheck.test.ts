@@ -79,6 +79,26 @@ describe('chef typecheck', () => {
 		assert.include(output, 'not found');
 	});
 
+	it('should exclude file with --exclude', async () => {
+		const { exitCode, output } = await runChef(
+			['typecheck', 'ui.ts-errors', '--exclude', 'src/index.ts'],
+			{ cwd: tmpRepo },
+		);
+
+		assert.equal(exitCode, 0);
+		assert.notInclude(output, 'CF1001');
+	});
+
+	it('should exclude files with --exclude glob pattern', async () => {
+		const { exitCode, output } = await runChef(
+			['typecheck', 'ui.ts-errors', '--exclude', 'src/ind*.ts'],
+			{ cwd: tmpRepo },
+		);
+
+		assert.equal(exitCode, 0);
+		assert.notInclude(output, 'CF1001');
+	});
+
 	it('should check by --path', async () => {
 		const { exitCode, output } = await runChef(
 			['typecheck', '--path', 'ui/install/js/ui/ts-valid'],

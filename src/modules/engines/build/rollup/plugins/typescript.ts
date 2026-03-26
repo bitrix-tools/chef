@@ -8,6 +8,7 @@ import type { CompilerOptions, Diagnostic } from 'typescript';
 import type { BuildDiagnostic } from '../../build-types';
 
 import { CF } from '../../../../../diagnostics/diagnostic-codes';
+import { createPathFilter } from '../../../../../utils/create-path-filter';
 
 export interface TypeScriptPluginOptions
 {
@@ -72,12 +73,13 @@ export async function checkTypes(options: TypeCheckOptions): Promise<TypeCheckRe
 	const program = ts.createProgram(rootNames, typeCheckCompilerOptions, host, oldProgram);
 	oldProgram = program;
 
-	const excludeSet = new Set(options.exclude?.map((f) => path.resolve(f)) ?? []);
+	const excludePatterns = options.exclude?.map((f) => path.resolve(f)) ?? [];
+	const isExcluded = createPathFilter(excludePatterns);
 
 	const sourceFiles = program.getSourceFiles().filter((file) => {
 		return file.fileName.startsWith(packageRoot)
 			&& !file.fileName.includes('/node_modules/')
-			&& !excludeSet.has(file.fileName);
+			&& !isExcluded(file.fileName);
 	});
 
 	const diagnostics: Diagnostic[] = [];

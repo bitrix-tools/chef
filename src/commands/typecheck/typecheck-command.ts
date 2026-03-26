@@ -22,6 +22,7 @@ import type { Task, TaskResult, TaskDetail } from '../../modules/task/task-types
 
 type TypecheckOptions = {
 	files?: string[];
+	exclude?: string[];
 };
 
 function createTypecheckTask(extension: BasePackage, options: TypecheckOptions): Task
@@ -60,6 +61,9 @@ function createTypecheckTask(extension: BasePackage, options: TypecheckOptions):
 			const files = options.files?.map((pattern) => {
 				return path.isAbsolute(pattern) ? pattern : path.join(packageRoot, pattern);
 			});
+			const exclude = options.exclude?.map((pattern) => {
+				return path.isAbsolute(pattern) ? pattern : path.join(packageRoot, pattern);
+			});
 
 			if (files)
 			{
@@ -85,6 +89,7 @@ function createTypecheckTask(extension: BasePackage, options: TypecheckOptions):
 				exclude: [
 					extension.getOutputJsPath(),
 					extension.getOutputCssPath(),
+					...(exclude ?? []),
 				],
 			});
 
@@ -126,6 +131,7 @@ typecheckCommand
 	.argument('[extensions...]', 'Extensions to check (e.g. main.core ui.buttons)')
 	.addOption(createPathOption('Search for extensions starting from this directory'))
 	.addOption(new Option('--file <patterns...>', 'Check specific files (paths relative to extension root)'))
+	.addOption(new Option('--exclude <patterns...>', 'Exclude files from type checking (paths relative to extension root)'))
 	.action(async (extensions: string[], args) => {
 		const queue = new SequentialQueue();
 		const results: TaskResult[] = [];
@@ -133,6 +139,7 @@ typecheckCommand
 
 		const typecheckOptions: TypecheckOptions = {
 			files: args.file,
+			exclude: args.exclude,
 		};
 
 		const extensionsStream: NodeJS.ReadableStream = (() => {

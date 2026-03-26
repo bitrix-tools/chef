@@ -114,6 +114,23 @@ describe('PackageLinter', () => {
 		assert.deepEqual(options.files, ['/test/src/app.js', '/test/src/utils.js']);
 	});
 
+	it('should merge user exclude with output paths', async () => {
+		const mockPackage = createMockPackage('/test');
+
+		sandbox.stub(Environment, 'getRoot').returns('/root');
+
+		const lintResult = createMockLintResult();
+		const lintStub = sandbox.stub(LintEngine.prototype, 'lint').resolves(lintResult);
+
+		const linter = new PackageLinter(mockPackage);
+		await linter.lint({ exclude: ['/test/src/legacy.js'] });
+
+		const options = lintStub.firstCall.args[0];
+		assert.include(options.exclude, '/test/dist/bundle.js');
+		assert.include(options.exclude, '/test/dist/bundle.css');
+		assert.include(options.exclude, '/test/src/legacy.js');
+	});
+
 	it('should pass cache option to lint engine', async () => {
 		const mockPackage = createMockPackage('/test');
 

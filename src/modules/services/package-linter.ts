@@ -11,6 +11,7 @@ type PackageLinterOptions = {
 	fix?: boolean;
 	files?: string[];
 	cache?: boolean;
+	exclude?: string[];
 };
 
 export class PackageLinter
@@ -37,6 +38,7 @@ export class PackageLinter
 			exclude: [
 				this.#package.getOutputJsPath(),
 				this.#package.getOutputCssPath(),
+				...(options.exclude ?? []),
 			],
 		});
 	}

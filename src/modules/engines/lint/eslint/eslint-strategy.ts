@@ -2,6 +2,7 @@ import * as path from 'node:path';
 
 import { LintStrategy } from '../lint-strategy';
 import { FileFinder } from '../../../../utils/file-finder';
+import { createPathFilter } from '../../../../utils/create-path-filter';
 
 import type { LintOptions, LintResult, LintFileResult } from '../lint-types';
 
@@ -72,13 +73,14 @@ export class ESLintStrategy extends LintStrategy
 			? options.files
 			: [path.join(options.sourcePath, '**/*.{js,ts}')];
 
-		const excludeSet = new Set(options.exclude?.map((p) => path.resolve(p)) ?? []);
+		const excludePatterns = options.exclude?.map((p) => path.resolve(p)) ?? [];
+		const isExcluded = createPathFilter(excludePatterns);
 
 		let results = await eslint.lintFiles(patterns);
 
-		if (excludeSet.size > 0)
+		if (excludePatterns.length > 0)
 		{
-			results = results.filter((r) => !excludeSet.has(path.resolve(r.filePath)));
+			results = results.filter((r) => !isExcluded(path.resolve(r.filePath)));
 		}
 
 		if (options.fix)

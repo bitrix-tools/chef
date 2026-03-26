@@ -42,4 +42,45 @@ export default [
 
 		assert.equal(exitCode, 1);
 	});
+
+	it('should exclude files with --exclude exact path', async () => {
+		fs.writeFileSync(path.join(tmpRepo, 'eslint.config.mjs'), `
+export default [
+	{
+		rules: {
+			'no-unused-vars': 'error',
+		},
+	},
+];
+`);
+
+		const { output } = await runChef(
+			['lint', 'ui.lint-errors', '--exclude', 'src/legacy.js'],
+			{ cwd: tmpRepo },
+		);
+
+		assert.notInclude(output, 'legacy.js');
+		assert.include(output, 'index.js');
+	});
+
+	it('should exclude files with --exclude glob pattern', async () => {
+		fs.writeFileSync(path.join(tmpRepo, 'eslint.config.mjs'), `
+export default [
+	{
+		rules: {
+			'no-unused-vars': 'error',
+		},
+	},
+];
+`);
+
+		const { exitCode, output } = await runChef(
+			['lint', 'ui.lint-errors', '--exclude', 'src/*.js'],
+			{ cwd: tmpRepo },
+		);
+
+		assert.equal(exitCode, 0);
+		assert.notInclude(output, 'index.js');
+		assert.notInclude(output, 'legacy.js');
+	});
 });

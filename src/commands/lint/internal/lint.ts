@@ -13,6 +13,7 @@ type LintCommandOptions = {
 	fix?: boolean;
 	files?: string[];
 	cache?: boolean;
+	exclude?: string[];
 };
 
 export type LintRunResult = {
@@ -39,6 +40,9 @@ export function lint(extension: BasePackage, options: LintCommandOptions = {}): 
 		const files = options.files?.map((pattern) => {
 			return path.isAbsolute(pattern) ? pattern : path.join(root, pattern);
 		});
+		const exclude = options.exclude?.map((pattern) => {
+			return path.isAbsolute(pattern) ? pattern : path.join(root, pattern);
+		});
 
 		let lintResult: LintResult = EMPTY_LINT_RESULT;
 
@@ -49,6 +53,7 @@ export function lint(extension: BasePackage, options: LintCommandOptions = {}): 
 					fix: options.fix,
 					files,
 					cache: options.cache,
+					exclude,
 				});
 
 				lintResult = result;

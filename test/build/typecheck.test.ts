@@ -57,6 +57,28 @@ describe('checkTypes', () => {
 		assert.isEmpty(result.errors);
 	});
 
+	it('should exclude files from type checking', async () => {
+		const extensionPath = path.join(fixturesPath, 'ts-multi-file');
+
+		const result = await checkTypes({
+			packageRoot: extensionPath,
+			exclude: [path.join(extensionPath, 'src/index.ts')],
+		});
+
+		assert.isEmpty(result.errors);
+	});
+
+	it('should exclude files by glob pattern', async () => {
+		const extensionPath = path.join(fixturesPath, 'ts-multi-file');
+
+		const result = await checkTypes({
+			packageRoot: extensionPath,
+			exclude: [path.join(extensionPath, 'src/ind*.ts')],
+		});
+
+		assert.isEmpty(result.errors);
+	});
+
 	it('should pass compilerOptions through', async () => {
 		const extensionPath = path.join(fixturesPath, 'ts-extension');
 
