@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.2.1 <Badge type="tip" text="3/26/2026" />
+
+- Fixed CSS image path generation when copying to dist — stable structure with images/ prefix and correct url() rewriting
+- Fixed config.php creation when building components and templates — file is only updated for extensions
+- Fixed console error capture in chef test — runtime errors and uncaught exceptions are now displayed, output is deduplicated across browsers
+- Fixed bundle duplication when concat file has the same basename as output
+- Fixed blank lines left by stripped comments in TypeScript builds
+- Excluded bundle output files from chef lint and chef typecheck
+- Added support for rollup-compatible treeshake option format in bundle.config
+- Added --exclude option for lint and typecheck commands
+
 ## v1.2.0 <Badge type="tip" text="3/25/2026" />
 
 New chef typecheck command for checking TypeScript types in extensions. Supports extension names, glob patterns, --path and --file options. Not-found errors unified under CF2005.
