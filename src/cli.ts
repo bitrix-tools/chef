@@ -6,6 +6,7 @@ import { Command, program } from 'commander';
 import { Environment } from './environment/environment';
 import { CF } from './diagnostics/diagnostic-codes';
 import { formatError } from './diagnostics/format-error';
+import { checkForUpdates } from './utils/update-notifier';
 
 function lazyCommand(name: string, description: string, loader: () => Promise<Record<string, unknown>>): Command
 {
@@ -88,5 +89,8 @@ program
 	.addCommand(lazyCommand('typecheck', 'Check TypeScript types in extensions', () => import('./commands/typecheck/typecheck-command')))
 	.addCommand(lazyCommand('diag', 'Diagnose and analyze extensions across the project', () => import('./commands/diag/diag-command')))
 	.hook('preAction', adjustCwdPreAction)
-	.hook('preAction', checkCwdPreAction)
-	.parseAsync(process.argv);
+	.hook('preAction', checkCwdPreAction);
+
+checkForUpdates();
+
+program.parseAsync(process.argv);
