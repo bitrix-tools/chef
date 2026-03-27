@@ -16,9 +16,10 @@ import { PlaywrightUnitStrategy } from '../../modules/engines/test/unit/playwrig
 import { Environment } from '../../environment/environment';
 import { formatInternalError } from '../../diagnostics/format-error';
 import { CF } from '../../diagnostics/diagnostic-codes';
+import { printSummary } from '../../shared/print-summary';
 
 import type { BasePackage } from '../../modules/packages/base-package';
-import type { Task } from '../../modules/task/task-types';
+import type { Task, TaskGroupResult } from '../../modules/task/task-types';
 import type { BrowserType } from '../../modules/engines/test/test-types';
 import type { FSWatcher } from 'chokidar';
 
@@ -130,6 +131,8 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 	const queue = new SequentialQueue();
 	const extensionsStream = createExtensionsStream(extensions, args);
 
+	const testResults: TaskGroupResult[] = [];
+	const startTime = Date.now();
 	const watchers: Array<FSWatcher> = [];
 
 	extensionsStream
@@ -137,10 +140,11 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 			const tasks = createTestTasks(extension, args, type);
 
 			await queue.add(async () => {
-				await TaskRunner.run({
+				const result = await TaskRunner.run({
 					title: extension.getName(),
 					tasks,
 				});
+				testResults.push(result);
 			});
 
 			if (args.watch)
@@ -218,10 +222,7 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 			}
 			else
 			{
-				if (count > 1)
-				{
-					console.log(`\n${chalk.green('✔')} Tested ${count} extensions`);
-				}
+				printSummary(testResults, startTime);
 
 				process.exit(0);
 			}

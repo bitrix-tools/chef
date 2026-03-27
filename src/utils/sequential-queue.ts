@@ -4,7 +4,7 @@ export class SequentialQueue
 	#pending = 0;
 	#idleResolvers: Array<() => void> = [];
 
-	add(fn: () => Promise<void>): Promise<void>
+	add(fn: () => Promise<any>): Promise<void>
 	{
 		this.#pending++;
 		this.#queue = this.#queue

@@ -8,9 +8,9 @@ import { getFileSize } from '../../../utils/get-file-size';
 import { rebuildTask } from '../tasks/rebuild-task';
 
 import type { BasePackage } from '../../../modules/packages/base-package';
-import type { Task, TaskResult, TaskDetail } from '../../../modules/task/task-types';
+import type { Task, TaskResult, TaskDetail, TaskGroupResult } from '../../../modules/task/task-types';
 
-export function plainBuild(extension: BasePackage, args: Record<string, any>): Promise<any>
+export function plainBuild(extension: BasePackage, args: Record<string, any>): Promise<TaskGroupResult>
 {
 	const name = extension.getName();
 

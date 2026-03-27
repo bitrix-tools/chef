@@ -9,9 +9,9 @@ import { directDependenciesTask } from '../../../shared/tasks/direct-dependencie
 import { dependenciesTreeTask } from '../../../shared/tasks/dependencies-tree-task';
 
 import type { BasePackage } from '../../../modules/packages/base-package';
-import type { Task } from '../../../modules/task/task-types';
+import type { Task, TaskGroupResult } from '../../../modules/task/task-types';
 
-export function verboseBuild(extension: BasePackage, args: Record<string, any>): Promise<any>
+export function verboseBuild(extension: BasePackage, args: Record<string, any>): Promise<TaskGroupResult>
 {
 	const previousJsSize = getFileSize(extension.getOutputJsPath());
 	const previousCssSize = getFileSize(extension.getOutputCssPath());

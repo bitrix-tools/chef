@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { SequentialQueue } from '../../utils/sequential-queue';
 import { MergeLock } from '../../utils/merge-lock';
+import { printSummary } from '../../shared/print-summary';
 
 import { watchOption } from './options/watch-option';
 import { createPathOption } from '../../shared/options/path-option';
@@ -19,6 +20,7 @@ import { build } from './internal/build';
 
 import type { FSWatcher } from 'chokidar';
 import type { BasePackage } from '../../modules/packages/base-package';
+import type { TaskGroupResult } from '../../modules/task/task-types';
 
 const buildCommand = new Command('build');
 
@@ -47,6 +49,8 @@ buildCommand
 			});
 		})();
 
+		const buildResults: TaskGroupResult[] = [];
+		const startTime = Date.now();
 		const watchers: Array<FSWatcher> = [];
 		const timers = new Map<string, NodeJS.Timeout>();
 		const mergeLock = new MergeLock(Environment.getRoot());
@@ -55,9 +59,10 @@ buildCommand
 			.on('data', async ({ extension }: { extension: BasePackage }) => {
 				const extensionId = extension.getName();
 
-				await queue.add(
-					build(extension, args),
-				);
+				await queue.add(async () => {
+					const result = await build(extension, args)();
+					buildResults.push(result);
+				});
 
 				if (args.watch)
 				{
@@ -110,10 +115,7 @@ buildCommand
 				}
 				else
 				{
-					if (count > 1)
-					{
-						console.log(`\n${chalk.green('✔')} Built ${count} extensions`);
-					}
+					printSummary(buildResults, startTime);
 
 					process.exit(0);
 				}

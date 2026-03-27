@@ -127,7 +127,7 @@ function printSummary(results: LintRunResult[], startTime: number): void
 		}
 		if (warned > 0)
 		{
-			summaryParts.push(chalk.yellow(`${warned} warnings`));
+			summaryParts.push(chalk.yellow(pluralize(' warning', warned)));
 		}
 
 		const total = passed + failed + warned;
