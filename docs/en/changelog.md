@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.3.1 <Badge type="tip" text="3/27/2026" />
+
+Added update notification for new chef versions. When running CLI in a terminal, npm registry is checked for updates with results cached for 24 hours. If a newer version is available, an informative message with update instructions is displayed after the command finishes.
+
 ## v1.3.0 <Badge type="tip" text="3/27/2026" />
 
 - Tab indentation in bundle output instead of spaces
