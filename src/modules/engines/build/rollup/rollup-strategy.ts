@@ -653,6 +653,7 @@ export class RollupBuildStrategy extends BuildStrategy
 		return babelPlugin({
 			babelHelpers: 'external',
 			extensions,
+			compact: false,
 			presets: [
 				[
 					presetEnv,
