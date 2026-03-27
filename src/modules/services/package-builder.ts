@@ -24,7 +24,7 @@ export class PackageBuilder
 		const buildEngine = await PackageBuilder.getBuildEngine();
 		const buildOptions = this.#getBuildOptions(options);
 
-		const validation = this.#validateBuildOptions(buildOptions);
+		const validation = await this.#validateBuildOptions(buildOptions);
 		if (validation && 'denied' in validation)
 		{
 			return validation.denied;
@@ -63,7 +63,7 @@ export class PackageBuilder
 		const buildEngine = await PackageBuilder.getBuildEngine();
 		const buildOptions = this.#getBuildOptions(options);
 
-		const validation = this.#validateBuildOptions(buildOptions);
+		const validation = await this.#validateBuildOptions(buildOptions);
 		if (validation && 'denied' in validation)
 		{
 			return validation.denied;
@@ -124,10 +124,10 @@ export class PackageBuilder
 		};
 	}
 
-	#validateBuildOptions(buildOptions: BuildOptions): { denied: BuildResult } | { warnings: string[] } | null
+	async #validateBuildOptions(buildOptions: BuildOptions): Promise<{ denied: BuildResult } | { warnings: string[] } | null>
 	{
 		const chefConfig = ChefConfigManager.getInstance().getConfig();
-		const issues = validateBuildOptions(buildOptions, chefConfig);
+		const issues = await validateBuildOptions(buildOptions, chefConfig);
 
 		if (issues.length === 0)
 		{

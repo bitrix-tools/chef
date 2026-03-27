@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises';
+
 import { denyLabels, parseDenyOption } from './chef-config';
 import { CF } from '../../../diagnostics/diagnostic-codes';
 
@@ -12,16 +14,17 @@ export interface ValidationIssue
 	message: string;
 }
 
-const denyChecks: Array<{ key: string; check: (options: BuildOptions) => boolean }> = [
+const denyChecks: Array<{ key: string; check: (options: BuildOptions) => boolean | Promise<boolean> }> = [
 	{ key: 'sfc', check: (o) => !!o.vue },
 	{ key: 'minification', check: (o) => !!o.minify },
 	{ key: 'standalone', check: (o) => !!o.standalone },
 	{ key: 'resolveNodeModules', check: (o) => !!o.resolve },
 	{ key: 'transformClasses', check: (o) => !!o.transformClasses },
 	{ key: 'sourceMaps', check: (o) => !!o.sourceMaps },
+	{ key: 'exportDefault', check: (o) => hasExportDefault(o.input) },
 ];
 
-export function validateBuildOptions(options: BuildOptions, config: ChefConfig): ValidationIssue[]
+export async function validateBuildOptions(options: BuildOptions, config: ChefConfig): Promise<ValidationIssue[]>
 {
 	const issues: ValidationIssue[] = [];
 	const deny = config.deny;
@@ -34,7 +37,7 @@ export function validateBuildOptions(options: BuildOptions, config: ChefConfig):
 	for (const { key, check } of denyChecks)
 	{
 		const rule = parseDenyOption(deny[key as keyof typeof deny]);
-		if (rule.enabled && check(options))
+		if (rule.enabled && await check(options))
 		{
 			issues.push({
 				code: CF.OPTION_DENIED,
@@ -46,4 +49,18 @@ export function validateBuildOptions(options: BuildOptions, config: ChefConfig):
 	}
 
 	return issues;
+}
+
+async function hasExportDefault(inputPath: string): Promise<boolean>
+{
+	try
+	{
+		const content = await fs.readFile(inputPath, 'utf-8');
+
+		return /(?:^|\n)\s*export\s+default\s/m.test(content);
+	}
+	catch
+	{
+		return false;
+	}
 }

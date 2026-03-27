@@ -17,6 +17,7 @@ export interface ChefConfig
 		resolveNodeModules?: DenyOption;
 		transformClasses?: DenyOption;
 		sourceMaps?: DenyOption;
+		exportDefault?: DenyOption;
 	};
 	defaults?: {
 		targets?: string | string[];
@@ -40,6 +41,7 @@ export const denyLabels: Record<string, string> = {
 	resolveNodeModules: 'Resolving node_modules',
 	transformClasses: 'Class transformation',
 	sourceMaps: 'Source maps',
+	exportDefault: 'export default',
 };
 
 export function parseDenyOption(option: DenyOption | undefined): { enabled: boolean; severity: DenySeverity; message?: string }
