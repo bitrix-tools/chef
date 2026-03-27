@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.3.0 <Badge type="tip" text="3/27/2026" />
+
+- Tab indentation in bundle output instead of spaces
+- Summary output when building or testing multiple extensions
+- deny.exportDefault rule in chef.config — block export default in entry points
+- Fixed false circular dependency reports and faster filtered scans
+- Suppressed Babel deoptimised styling warning for large files
+- Fixed TypeScript dependency transpilation in standalone test bundles
+
 ## v1.2.1 <Badge type="tip" text="3/26/2026" />
 
 - Fixed CSS image path generation when copying to dist — stable structure with images/ prefix and correct url() rewriting
