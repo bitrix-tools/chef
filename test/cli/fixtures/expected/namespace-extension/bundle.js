@@ -5,12 +5,12 @@ this.BX.Test = this.BX.Test || {};
 	'use strict';
 
 	class NamespaceComponent {
-	  greet() {
-	    return 'hello';
-	  }
+		greet() {
+			return 'hello';
+		}
 	}
 	function createComponent() {
-	  return new NamespaceComponent();
+		return new NamespaceComponent();
 	}
 
 	exports.NamespaceComponent = NamespaceComponent;

@@ -5,16 +5,16 @@ this.BX.Test = this.BX.Test || {};
 	'use strict';
 
 	class UserService {
-	    #users = [];
-	    add(user) {
-	        this.#users.push(user);
-	    }
-	    findByName(name) {
-	        return this.#users.find(u => u.name === name);
-	    }
-	    get count() {
-	        return this.#users.length;
-	    }
+			#users = [];
+			add(user) {
+					this.#users.push(user);
+			}
+			findByName(name) {
+					return this.#users.find(u => u.name === name);
+			}
+			get count() {
+					return this.#users.length;
+			}
 	}
 
 	exports.UserService = UserService;

@@ -3,9 +3,9 @@
 	'use strict';
 
 	class ImagesComponent {
-	  render() {
-	    return '<div class="images-test"></div>';
-	  }
+		render() {
+			return '<div class="images-test"></div>';
+		}
 	}
 
 	exports.ImagesComponent = ImagesComponent;

@@ -25,6 +25,7 @@ import { loadTsConfig } from '../../../../utils/load-tsconfig';
 import concatPlugin from './plugins/concat';
 import stripCommentsPlugin from './plugins/strip-comments';
 import safeNamespacesPlugin from './plugins/safe-namespaces';
+import tabIndentPlugin from './plugins/tab-indent';
 
 import type { ParsedCommandLine } from 'typescript';
 import type {
@@ -768,6 +769,7 @@ export class RollupBuildStrategy extends BuildStrategy
 				}),
 				...(options.customPlugins ?? []),
 				...(options.typescript ? [stripCommentsPlugin({ banner: '/* eslint-disable */' })] : []),
+				...(options.minify ? [] : [tabIndentPlugin()]),
 				...(options.minify ? [RollupBuildStrategy.createTerserPlugin(typeof options.minify === 'object' ? options.minify : {})] : []),
 				...(options.safeNamespaces ? [safeNamespacesPlugin()] : []),
 			],
@@ -849,6 +851,7 @@ export class RollupBuildStrategy extends BuildStrategy
 				commonjs({
 					sourceMap: false,
 				}),
+				tabIndentPlugin(),
 			],
 			onwarn: onWarning,
 			treeshake: false,

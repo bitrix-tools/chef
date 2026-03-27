@@ -10,12 +10,12 @@ var LegacyFirst = {
 	'use strict';
 
 	class ConcatComponent {
-	  constructor() {
-	    this.name = 'ConcatComponent';
-	  }
-	  getName() {
-	    return this.name;
-	  }
+		constructor() {
+			this.name = 'ConcatComponent';
+		}
+		getName() {
+			return this.name;
+		}
 	}
 
 	exports.ConcatComponent = ConcatComponent;

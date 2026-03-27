@@ -3,9 +3,9 @@
 	'use strict';
 
 	class AutoprefixerComponent {
-	  render() {
-	    return '<div class="autoprefixer-test"></div>';
-	  }
+		render() {
+			return '<div class="autoprefixer-test"></div>';
+		}
 	}
 
 	exports.AutoprefixerComponent = AutoprefixerComponent;

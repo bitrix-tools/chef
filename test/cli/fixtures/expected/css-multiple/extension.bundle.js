@@ -3,9 +3,9 @@
 	'use strict';
 
 	class MultiCssComponent {
-	  render() {
-	    return '<div class="multi-base multi-theme"></div>';
-	  }
+		render() {
+			return '<div class="multi-base multi-theme"></div>';
+		}
 	}
 
 	exports.MultiCssComponent = MultiCssComponent;
