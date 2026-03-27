@@ -117,6 +117,7 @@ export default {
 export default {
   deny: {
     sfc: true,                         // запретить Vue SFC
+    exportDefault: true,               // запретить export default
     standalone: {
       severity: 'warning',             // или предупреждать
       message: 'Standalone не рекомендуется',

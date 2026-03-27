@@ -117,6 +117,7 @@ A `chef.config.ts` file in the project root sets rules for all extensions:
 export default {
   deny: {
     sfc: true,                         // block Vue SFC
+    exportDefault: true,               // block export default
     standalone: {
       severity: 'warning',             // or just warn
       message: 'Standalone is not recommended',

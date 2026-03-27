@@ -23,6 +23,7 @@ export default {
     resolveNodeModules: true,     // запретить инлайн npm-зависимостей
     transformClasses: true,       // запретить трансформацию классов
     sourceMaps: true,             // запретить source maps
+    exportDefault: true,          // запретить export default в точке входа
   },
 };
 ```
@@ -36,9 +37,9 @@ export default {
       severity: 'error',
       message: 'SFC запрещены, используйте render functions',
     },
-    resolveNodeModules: {
-      severity: 'warning',
-      message: 'Инлайн npm-зависимостей не рекомендуется',
+    exportDefault: {
+      severity: 'error',
+      message: 'Используйте именованные экспорты вместо export default',
     },
   },
 };

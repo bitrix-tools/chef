@@ -23,6 +23,7 @@ export default {
     resolveNodeModules: true,     // block inlining npm dependencies
     transformClasses: true,       // block class transformation
     sourceMaps: true,             // block source maps
+    exportDefault: true,          // block export default in entry point
   },
 };
 ```
@@ -36,9 +37,9 @@ export default {
       severity: 'error',
       message: 'SFC are not allowed, use render functions',
     },
-    resolveNodeModules: {
-      severity: 'warning',
-      message: 'Inlining npm dependencies is not recommended',
+    exportDefault: {
+      severity: 'error',
+      message: 'Use named exports instead of export default',
     },
   },
 };
