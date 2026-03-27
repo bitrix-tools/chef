@@ -132,6 +132,11 @@ export class PackageResolver
 {
 	static #cache: MemoryCache = new MemoryCache();
 
+	static clearCache(): void
+	{
+		this.#cache.flush();
+	}
+
 	static resolve(packageName: string): BasePackage | null
 	{
 		return this.#cache.remember(packageName, () => {

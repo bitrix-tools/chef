@@ -505,7 +505,7 @@ export class RollupBuildStrategy extends BuildStrategy
 		return loadTsConfig(configPath, packageRoot);
 	}
 
-	async #createTypeScriptPlugin(tsConfig: ParsedCommandLine, packageRoot: string): Promise<Plugin>
+	async #createTypeScriptPlugin(tsConfig: ParsedCommandLine, packageRoot: string, overrides?: { include?: string[] }): Promise<Plugin>
 	{
 		const { default: bitrixTypescriptPlugin } = await import('./plugins/typescript');
 
@@ -526,7 +526,7 @@ export class RollupBuildStrategy extends BuildStrategy
 				baseUrl: tsConfig.options.baseUrl,
 				types: typesPath ? [typesPath] : [],
 			},
-			include: [`${packageRoot}/**`],
+			include: overrides?.include ?? [`${packageRoot}/**`],
 			exclude: [
 				...(tsConfig?.raw?.exclude ?? []),
 				`${packageRoot}/dist/**`,
@@ -815,12 +815,13 @@ export class RollupBuildStrategy extends BuildStrategy
 				RollupBuildStrategy.createEnvReplacePlugin(false),
 				...(options.standalone ? [RollupBuildStrategy.createStandalonePlugin()] : []),
 				await (async () => {
-					if (options.typescript)
+					const rootDir = Environment.getRoot();
+					if (rootDir)
 					{
 						const tsConfigPath = FileFinder.findUpFile({
 							fileName: 'tsconfig.json',
 							fromDir: options.packageRoot,
-							rootDir: Environment.getRoot(),
+							rootDir,
 						});
 
 						if (typeof tsConfigPath === 'string' && tsConfigPath.length > 0)
@@ -833,11 +834,16 @@ export class RollupBuildStrategy extends BuildStrategy
 							return await this.#createTypeScriptPlugin(
 								tsConfig,
 								options.packageRoot,
+								{ include: ['**'] },
 							);
 						}
 					}
 
-					return null;
+					return await this.#createTypeScriptPlugin(
+						{ options: { paths: undefined, baseUrl: undefined }, raw: {} } as any,
+						options.packageRoot,
+						{ include: ['**'] },
+					);
 				})(),
 				(await import('./plugins/css')).default({
 					extract: 'bundle.css',
