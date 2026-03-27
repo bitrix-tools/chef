@@ -10,7 +10,7 @@ export function createIncludeOption(): Option
 {
 	return new Option(
 		'-i, --include <patterns>',
-		'Include only extensions matching patterns, comma-separated (e.g. ui.*,crm.timeline.*)',
+		'Include only extensions matching patterns, repeatable (e.g. --include ui.* --include crm.* or --include ui.*,crm.*)',
 	).argParser(parsePatterns).default([]);
 }
 
@@ -18,7 +18,7 @@ export function createExcludeOption(): Option
 {
 	return new Option(
 		'-x, --exclude <patterns>',
-		'Exclude extensions matching patterns, comma-separated',
+		'Exclude extensions matching patterns, repeatable (e.g. --exclude ui.* or --exclude ui.*,crm.*)',
 	).argParser(parsePatterns).default([]);
 }
 

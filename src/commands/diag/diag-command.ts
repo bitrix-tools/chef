@@ -517,19 +517,33 @@ const circularDepsCommand = new Command('circular-deps')
 
 async function checkAllCircularDeps(args: { path: string; include?: string[]; exclude?: string[] }): Promise<void>
 {
+	const hasInclude = args.include && args.include.length > 0;
+	const excludeFilter = args.exclude?.length ? createNameFilter({ exclude: args.exclude }) : undefined;
 	const fields: Set<SnapshotField> = new Set();
 	const { snapshots, duration: collectDuration, scanned } = await collectPackages({
 		startDirectory: args.path,
 		fields,
 		title: 'Circular dependency scan',
 		howItWorks: CIRCULAR_DEPS_HOW_IT_WORKS,
-		filter: (extension) => extension instanceof ExtensionPackage,
+		includePatterns: hasInclude ? args.include : undefined,
+		filter: (extension) => {
+			if (!(extension instanceof ExtensionPackage))
+			{
+				return false;
+			}
+
+			if (excludeFilter && !excludeFilter(extension.getName()))
+			{
+				return false;
+			}
+
+			return true;
+		},
 	});
 
 	const start = performance.now();
 	const spinner = createSpinner(`Checking circular dependencies... 0/${snapshots.length}`);
 	let checked = 0;
-	let hasCircular = false;
 
 	type CircularResult = { name: string; cycles: string[][] };
 	const results: CircularResult[] = [];
@@ -548,24 +562,21 @@ async function checkAllCircularDeps(args: { path: string; include?: string[]; ex
 		const cycles = await findCircularDependencies({ target: extension });
 		if (cycles.length > 0)
 		{
-			hasCircular = true;
 			results.push({ name: snapshot.name, cycles });
 		}
 	}
 
 	spinner.stop();
 
-	const filtered = filterByName(results, args);
-
-	if (filtered.length === 0)
+	if (results.length === 0)
 	{
 		console.log('  No circular dependencies found');
 	}
 	else
 	{
-		filtered.sort((a, b) => a.name.localeCompare(b.name));
+		results.sort((a, b) => a.name.localeCompare(b.name));
 
-		for (const result of filtered)
+		for (const result of results)
 		{
 			console.log(` ${chalk.red('✗')} ${result.name} ${chalk.red(`${result.cycles.length} circular ${result.cycles.length === 1 ? 'dependency' : 'dependencies'}`)}`);
 
@@ -580,12 +591,12 @@ async function checkAllCircularDeps(args: { path: string; include?: string[]; ex
 
 	const totalDuration = collectDuration + (performance.now() - start);
 	const durationStr = (totalDuration / 1000).toFixed(2);
-	console.log(` ${chalk.dim(`Checked ${scanned} extensions, found ${filtered.length} with circular dependencies in ${durationStr}s`)}`);
+	console.log(` ${chalk.dim(`Checked ${snapshots.length} extensions, found ${results.length} with circular dependencies in ${durationStr}s`)}`);
 	console.log('');
 
-	if (filtered.length > 0)
+	if (results.length > 0)
 	{
-		process.exit(1);
+		process.exitCode = 1;
 	}
 }
 
@@ -633,7 +644,7 @@ async function checkSpecificCircularDeps(extensions: string[], args: { path: str
 
 	if (hasCircular)
 	{
-		process.exit(1);
+		process.exitCode = 1;
 	}
 }
 
@@ -676,13 +687,28 @@ const circularImportsCommand = new Command('circular-imports')
 
 async function checkAllCircularImports(args: { path: string; include?: string[]; exclude?: string[] }): Promise<void>
 {
+	const hasInclude = args.include && args.include.length > 0;
+	const excludeFilter = args.exclude?.length ? createNameFilter({ exclude: args.exclude }) : undefined;
 	const fields: Set<SnapshotField> = new Set();
 	const { snapshots, duration: collectDuration, scanned } = await collectPackages({
 		startDirectory: args.path,
 		fields,
 		title: 'Circular import scan',
 		howItWorks: CIRCULAR_IMPORTS_HOW_IT_WORKS,
-		filter: (extension) => extension instanceof ExtensionPackage,
+		includePatterns: hasInclude ? args.include : undefined,
+		filter: (extension) => {
+			if (!(extension instanceof ExtensionPackage))
+			{
+				return false;
+			}
+
+			if (excludeFilter && !excludeFilter(extension.getName()))
+			{
+				return false;
+			}
+
+			return true;
+		},
 	});
 
 	const start = performance.now();
@@ -720,18 +746,15 @@ async function checkAllCircularImports(args: { path: string; include?: string[];
 
 	spinner.stop();
 
-	const filtered = filterByName(results, args);
-	const filteredCycles = filtered.reduce((sum, r) => sum + r.cycles.length, 0);
-
-	if (filtered.length === 0)
+	if (results.length === 0)
 	{
 		console.log('  No circular imports found');
 	}
 	else
 	{
-		filtered.sort((a, b) => a.name.localeCompare(b.name));
+		results.sort((a, b) => a.name.localeCompare(b.name));
 
-		for (const result of filtered)
+		for (const result of results)
 		{
 			console.log(` ${chalk.red('✗')} ${result.name} ${chalk.red(`${result.cycles.length} circular ${result.cycles.length === 1 ? 'import' : 'imports'}`)}`);
 
@@ -746,7 +769,7 @@ async function checkAllCircularImports(args: { path: string; include?: string[];
 
 	const totalDuration = collectDuration + (performance.now() - start);
 	const durationStr = (totalDuration / 1000).toFixed(2);
-	console.log(` ${chalk.dim(`Checked ${scanned} extensions, found ${filteredCycles} circular ${filteredCycles === 1 ? 'import' : 'imports'} in ${filtered.length} ${filtered.length === 1 ? 'extension' : 'extensions'} in ${durationStr}s`)}`);
+	console.log(` ${chalk.dim(`Checked ${snapshots.length} extensions, found ${totalCycles} circular ${totalCycles === 1 ? 'import' : 'imports'} in ${results.length} ${results.length === 1 ? 'extension' : 'extensions'} in ${durationStr}s`)}`);
 	console.log('');
 }
 
@@ -801,7 +824,7 @@ async function checkSpecificCircularImports(extensions: string[]): Promise<void>
 
 	if (hasCircular)
 	{
-		process.exit(1);
+		process.exitCode = 1;
 	}
 }
 

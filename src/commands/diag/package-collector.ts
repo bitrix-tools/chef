@@ -2,6 +2,7 @@ import chalk from 'chalk';
 
 import { findPackages } from '../../utils/package/find-packages';
 import { PackageFactoryProvider } from '../../modules/packages/providers/package-factory-provider';
+import { PackageResolver } from '../../modules/packages/package-resolver';
 import { createSnapshot } from './package-snapshot';
 import { createSpinner } from './progress-spinner';
 
@@ -20,10 +21,11 @@ type CollectOptions = {
 	title: string;
 	howItWorks?: string[];
 	filter?: (extension: BasePackage) => boolean;
+	includePatterns?: string[];
 };
 
 export async function collectPackages(
-	{ startDirectory, fields, title, howItWorks, filter }: CollectOptions,
+	{ startDirectory, fields, title, howItWorks, filter, includePatterns }: CollectOptions,
 ): Promise<CollectResult>
 {
 	console.log('');
@@ -42,8 +44,9 @@ export async function collectPackages(
 	console.log('');
 
 	const start = performance.now();
-	const packageFactory = PackageFactoryProvider.create();
-	const stream = findPackages({ startDirectory, packageFactory });
+	const stream = includePatterns && includePatterns.length > 0
+		? PackageResolver.resolveStream(includePatterns)
+		: findPackages({ startDirectory, packageFactory: PackageFactoryProvider.create() });
 
 	const snapshots: PackageSnapshot[] = [];
 	let scanned = 0;

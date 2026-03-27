@@ -27,11 +27,14 @@ export function createSpinner(initialText: string): Spinner
 
 	if (isTTY)
 	{
-		timer = setInterval(() => {
+		const render = (): void => {
 			const colorFn = SPINNER_COLORS[frame % SPINNER_COLORS.length];
 			frame++;
 			process.stdout.write(`\r\x1B[2K${colorFn('○')} ${text}`);
-		}, SPINNER_INTERVAL);
+		};
+
+		render();
+		timer = setInterval(render, SPINNER_INTERVAL);
 	}
 
 	return {

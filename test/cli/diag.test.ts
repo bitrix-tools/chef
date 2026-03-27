@@ -104,6 +104,46 @@ describe('chef diag', () => {
 			assert.equal(exitCode, 0);
 			assert.include(output, 'no circular dependencies');
 		});
+
+		it('should detect self-dependency', async () => {
+			const { exitCode, output } = await runChef(['diag', 'circular-deps', 'ui.circular-self', ...pathArgs]);
+
+			assert.equal(exitCode, 1);
+			assert.include(output, 'ui.circular-self');
+			assert.match(output, /ui\.circular-self → ui\.circular-self/);
+		});
+
+		it('should only report direct A → B → A cycles, not longer chains', async () => {
+			const { exitCode, output } = await runChef(['diag', 'circular-deps', 'ui.circular-a', ...pathArgs]);
+
+			assert.equal(exitCode, 1);
+			// A → B → A is a direct cycle
+			assert.include(output, 'ui.circular-a');
+			assert.include(output, 'ui.circular-b');
+			// Should not contain longer chains
+			assert.notMatch(output, /→.*→.*→.*→/);
+		});
+
+		it('should filter extensions with --include', async () => {
+			const { exitCode, output } = await runChef(['diag', 'circular-deps', '--include', 'ui.circular-a.**', ...pathArgs]);
+
+			assert.include(output, 'ui.circular-a');
+			assert.notInclude(output, 'ui.circular-self');
+		});
+
+		it('should scan only matching extensions with --include', async () => {
+			const { output } = await runChef(['diag', 'circular-deps', '--include', 'ui.circular-a', ...pathArgs]);
+
+			// Should check only 1 extension, not all
+			assert.match(output, /Checked 1 extension/);
+		});
+
+		it('should not produce duplicate output', async () => {
+			const { output } = await runChef(['diag', 'circular-deps', '--include', 'ui.circular-**', ...pathArgs]);
+
+			const scanHeaders = output.match(/Circular dependency scan/g) || [];
+			assert.equal(scanHeaders.length, 1);
+		});
 	});
 
 	describe('circular-imports', () => {

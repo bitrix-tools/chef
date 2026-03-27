@@ -7,25 +7,32 @@ import { Environment } from './environment/environment';
 import { CF } from './diagnostics/diagnostic-codes';
 import { formatError } from './diagnostics/format-error';
 
-async function loadAndRun(loader: () => Promise<Record<string, unknown>>): Promise<void>
-{
-	const mod = await loader();
-	const command = Object.values(mod).find((v) => v instanceof Command) as Command;
-
-	(program.commands as Command[]) = program.commands.filter((c) => c.name() !== command.name());
-	program.addCommand(command);
-
-	await program.parseAsync(process.argv);
-}
-
 function lazyCommand(name: string, description: string, loader: () => Promise<Record<string, unknown>>): Command
 {
-	return new Command(name)
+	const lazy = new Command(name)
 		.description(description)
 		.allowUnknownOption(true)
 		.allowExcessArguments(true)
-		.helpOption(false)
-		.action(() => loadAndRun(loader));
+		.helpOption(false);
+
+	let executed = false;
+
+	lazy.action(async () => {
+		if (executed)
+		{
+			return;
+		}
+
+		executed = true;
+
+		const mod = await loader();
+		const command = Object.values(mod).find((v) => v instanceof Command) as Command;
+
+		const argv = process.argv.slice(process.argv.indexOf(name) + 1);
+		await command.parseAsync(argv, { from: 'user' });
+	});
+
+	return lazy;
 }
 
 function adjustCwdPreAction(thisCommand: Command, actionCommand: Command)
@@ -82,4 +89,4 @@ program
 	.addCommand(lazyCommand('diag', 'Diagnose and analyze extensions across the project', () => import('./commands/diag/diag-command')))
 	.hook('preAction', adjustCwdPreAction)
 	.hook('preAction', checkCwdPreAction)
-	.parse(process.argv);
+	.parseAsync(process.argv);
