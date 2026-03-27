@@ -6,9 +6,7 @@ import { describe, it, beforeEach, afterEach } from 'mocha';
 import { assert } from 'chai';
 
 import { runChef, sourceRepo } from './run-chef';
-
-const unitFixturesPath = path.resolve(import.meta.dirname, '../build/fixtures');
-const expectedPath = path.resolve(import.meta.dirname, 'fixtures/expected');
+import { expectedPath } from '../fixtures/index';
 
 function createTmpSourceRepo(): string
 {
@@ -17,21 +15,15 @@ function createTmpSourceRepo(): string
 	return tmp;
 }
 
-function injectFixture(tmpRepo: string, fixtureName: string, extensionPath: string): string
+function cleanDist(tmpRepo: string, fixtureName: string): string
 {
-	const src = path.join(unitFixturesPath, fixtureName);
-	const dest = path.join(tmpRepo, extensionPath);
-
-	fs.cpSync(src, dest, { recursive: true });
-
-	// Clean dist so build creates fresh output
-	const distPath = path.join(dest, 'dist');
+	const extDir = path.join(tmpRepo, 'ui/install/js/ui', fixtureName);
+	const distPath = path.join(extDir, 'dist');
 	if (fs.existsSync(distPath))
 	{
 		fs.rmSync(distPath, { recursive: true });
 	}
-
-	return dest;
+	return extDir;
 }
 
 function assertBundleMatchesExpected(extensionDir: string, fixtureName: string, bundleFile: string): void
@@ -45,7 +37,7 @@ function assertBundleMatchesExpected(extensionDir: string, fixtureName: string, 
 function buildFixture(tmpRepo: string, fixtureName: string): { dest: string; extPath: string }
 {
 	const extPath = `ui/install/js/ui/${fixtureName}`;
-	const dest = injectFixture(tmpRepo, fixtureName, extPath);
+	const dest = cleanDist(tmpRepo, fixtureName);
 	return { dest, extPath };
 }
 
@@ -265,8 +257,6 @@ describe('chef build', () => {
 	// region: error cases
 
 	it('should report JS syntax error', async () => {
-		buildFixture(tmpRepo, 'syntax-error');
-
 		const { output } = await runChef(
 			['build', '--path', 'ui/install/js/ui/syntax-error'],
 			{ cwd: tmpRepo },
@@ -277,8 +267,6 @@ describe('chef build', () => {
 	});
 
 	it('should report CSS syntax error', async () => {
-		buildFixture(tmpRepo, 'css-syntax-error');
-
 		const { output } = await runChef(
 			['build', '--path', 'ui/install/js/ui/css-syntax-error'],
 			{ cwd: tmpRepo },

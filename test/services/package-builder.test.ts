@@ -15,7 +15,7 @@ import { BundleConfigManager } from '../../src/modules/config/bundle/bundle-conf
 
 import type { BuildResult, BuildOptions } from '../../src/modules/engines/build/build-types';
 
-const fixturesPath = path.join(import.meta.dirname, '..', 'build', 'fixtures');
+const fixturesPath = path.resolve(import.meta.dirname, '../fixtures/source-repo/ui/install/js/ui');
 
 function createMockBuildResult(overrides: Partial<BuildResult> = {}): BuildResult
 {

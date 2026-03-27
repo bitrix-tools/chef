@@ -9,8 +9,7 @@ import { RollupBuildStrategy } from '../../src/modules/engines/build/rollup/roll
 import { Environment } from '../../src/environment/environment';
 import { PackageResolver } from '../../src/modules/packages/package-resolver';
 
-const sourceRepo = path.resolve(import.meta.dirname, '../cli/fixtures/source-repo');
-const projectRepo = path.resolve(import.meta.dirname, '../cli/fixtures/project-repo');
+import { sourceRepo, projectRepo } from '../fixtures/index';
 
 type RepoConfig = {
 	name: string;

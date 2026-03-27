@@ -13,7 +13,7 @@ import { transformIifeLine } from '../../src/modules/engines/build/rollup/plugin
 
 import type { BuildOptions } from '../../src/modules/engines/build/build-types';
 
-const fixturesPath = path.join(import.meta.dirname, 'fixtures');
+const fixturesPath = path.resolve(import.meta.dirname, '../fixtures/source-repo/ui/install/js/ui');
 
 function cleanDist(extensionPath: string): void
 {
@@ -1650,7 +1650,7 @@ export class SimpleComponent {
 
 	describe('error diagnostics', () => {
 		it('should return CF1002 for syntax errors', async () => {
-			const extensionPath = path.join(fixturesPath, 'syntax-error');
+			const extensionPath = path.join(fixturesPath, 'syntax-error-inline');
 			const bundleConfig = loadBundleConfig(extensionPath);
 			const options = getBuildOptions(extensionPath, bundleConfig);
 			const result = await buildService.build(options);

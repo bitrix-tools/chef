@@ -1,6 +1,10 @@
 import { spawn } from 'node:child_process';
 import * as path from 'node:path';
 
+import { sourceRepo, projectRepo } from '../fixtures/index';
+
+export { sourceRepo, projectRepo };
+
 type ChefResult = {
 	stdout: string;
 	stderr: string;
@@ -10,10 +14,6 @@ type ChefResult = {
 
 const chefCli = path.resolve(import.meta.dirname, '../../src/cli.ts');
 const tsxBin = path.resolve(import.meta.dirname, '../../node_modules/.bin/tsx');
-const fixturesPath = path.resolve(import.meta.dirname, 'fixtures');
-
-export const sourceRepo = path.join(fixturesPath, 'source-repo');
-export const projectRepo = path.join(fixturesPath, 'project-repo');
 
 function stripAnsi(text: string): string
 {

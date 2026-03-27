@@ -5,7 +5,7 @@ import { assert } from 'chai';
 
 import { checkTypes } from '../../src/modules/engines/build/rollup/plugins/typescript';
 
-const fixturesPath = path.join(import.meta.dirname, 'fixtures');
+const fixturesPath = path.resolve(import.meta.dirname, '../fixtures/source-repo/ui/install/js/ui');
 
 describe('checkTypes', () => {
 	it('should return no errors for valid TypeScript', async () => {
