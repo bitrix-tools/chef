@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.4.0 <Badge type="tip" text="3/29/2026" />
+
+- Reworked `.d.ts` file generation: entry-point traversal, cross-file type resolution, re-export aliases, abstract classes, function overloads, unique symbols, generics
+- Fixed transpilation of TypeScript files imported from outside the package root (e.g. `../../src/`)
+- Added declaration emitter test suite (99 cases)
+
 ## v1.3.1 <Badge type="tip" text="3/27/2026" />
 
 Added update notification for new chef versions. When running CLI in a terminal, npm registry is checked for updates with results cached for 24 hours. If a newer version is available, an informative message with update instructions is displayed after the command finishes.
