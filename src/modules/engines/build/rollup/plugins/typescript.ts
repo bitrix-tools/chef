@@ -127,7 +127,7 @@ export default async function typescriptPlugin(options: TypeScriptPluginOptions)
 	const {
 		packageRoot,
 		compilerOptions,
-		include = [`${packageRoot}/src/**`],
+		include,
 		exclude = [
 			`${packageRoot}/dist/**`,
 			`${packageRoot}/test/**`,

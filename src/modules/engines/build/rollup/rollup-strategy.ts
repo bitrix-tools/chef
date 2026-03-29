@@ -526,7 +526,7 @@ export class RollupBuildStrategy extends BuildStrategy
 				baseUrl: tsConfig.options.baseUrl,
 				types: typesPath ? [typesPath] : [],
 			},
-			include: overrides?.include ?? [`${packageRoot}/**`],
+			include: overrides?.include,
 			exclude: [
 				...(tsConfig?.raw?.exclude ?? []),
 				`${packageRoot}/dist/**`,
