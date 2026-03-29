@@ -332,60 +332,136 @@ describe('build', () => {
 
 	describe('emit declaration', () => {
 		const extensionPath = path.join(fixturesPath, 'ts-extension');
+		const inputPath = path.join(extensionPath, 'src', 'index.ts');
+		const namespace = 'BX.Test.Users';
 		let emitter: DeclarationEmitter;
+		let dtsOutput: string;
 
 		beforeEach(() => {
 			cleanDist(extensionPath);
 			fs.mkdirSync(path.join(extensionPath, 'dist'), { recursive: true });
 			emitter = new DeclarationEmitter();
+			dtsOutput = path.join(extensionPath, 'dist', 'bundle.d.ts');
 		});
 
 		afterEach(() => {
 			cleanDist(extensionPath);
 		});
 
-		it('should generate .d.ts file with namespace declaration', async () => {
-			const dtsOutput = path.join(extensionPath, 'dist', 'bundle.d.ts');
-
+		async function emitAndRead(): Promise<string>
+		{
 			await emitter.emit({
 				packageRoot: extensionPath,
-				namespace: 'BX.Test.Users',
+				input: inputPath,
+				namespace,
 				outputPath: dtsOutput,
 			});
 
-			assert.isTrue(fs.existsSync(dtsOutput), '.d.ts file should exist');
+			return fs.readFileSync(dtsOutput, 'utf-8');
+		}
 
-			const content = fs.readFileSync(dtsOutput, 'utf-8');
-			assert.include(content, 'declare namespace BX.Test.Users', 'Should contain namespace declaration');
-			assert.include(content, 'class UserService', 'Should contain exported class');
-			assert.include(content, 'findByName', 'Should contain method declaration');
-			assert.include(content, 'count', 'Should contain getter declaration');
-			assert.notInclude(content, '#private', 'Should not contain private field markers');
+		it('should generate .d.ts with namespace declaration', async () => {
+			const content = await emitAndRead();
+
+			assert.include(content, 'declare namespace BX.Test.Users');
+			assert.include(content, 'class UserService');
+			assert.include(content, 'findByName');
+			assert.include(content, 'get count(): number');
+			assert.notInclude(content, '#private');
 		});
 
-		it('should preserve JSDoc comments in .d.ts', async () => {
-			const dtsOutput = path.join(extensionPath, 'dist', 'bundle.d.ts');
+		it('should preserve JSDoc comments', async () => {
+			const content = await emitAndRead();
 
-			await emitter.emit({
-				packageRoot: extensionPath,
-				namespace: 'BX.Test.Users',
-				outputPath: dtsOutput,
-			});
-
-			const content = fs.readFileSync(dtsOutput, 'utf-8');
-			assert.include(content, 'Service for managing users', 'JSDoc should be preserved in .d.ts');
+			assert.include(content, 'Service for managing users');
 		});
 
-		it('should not generate .d.ts without namespace', async () => {
-			const dtsOutput = path.join(extensionPath, 'dist', 'bundle.d.ts');
-
+		it('should not generate .d.ts for window namespace', async () => {
 			await emitter.emit({
 				packageRoot: extensionPath,
+				input: inputPath,
 				namespace: 'window',
 				outputPath: dtsOutput,
 			});
 
-			assert.isFalse(fs.existsSync(dtsOutput), '.d.ts should not be generated for window namespace');
+			assert.isFalse(fs.existsSync(dtsOutput));
+		});
+
+		it('should resolve export type * re-exports', async () => {
+			const content = await emitAndRead();
+
+			assert.include(content, 'type SortOrder');
+			assert.include(content, 'type FilterOptions');
+			assert.include(content, 'interface Identifiable');
+		});
+
+		it('should include default-exported classes re-exported via export { ... }', async () => {
+			const content = await emitAndRead();
+
+			assert.include(content, 'class BaseEvent');
+			assert.include(content, 'class EventEmitter');
+		});
+
+		it('should include dependency types referenced in signatures', async () => {
+			const content = await emitAndRead();
+
+			// EventCallback is used in EventEmitter.subscribe(eventName, listener: EventCallback)
+			assert.include(content, 'EventCallback');
+		});
+
+		it('should not include private imports unused in public signatures', async () => {
+			const content = await emitAndRead();
+
+			// formatName is imported but not exported — it should not appear
+			assert.notInclude(content, 'formatName');
+		});
+
+		it('should place types and interfaces outside the namespace', async () => {
+			const content = await emitAndRead();
+			const namespaceStart = content.indexOf('declare namespace');
+
+			// type aliases and interfaces should appear before the namespace
+			assert.isBelow(content.indexOf('type SortOrder'), namespaceStart);
+			assert.isBelow(content.indexOf('type FilterOptions'), namespaceStart);
+			assert.isBelow(content.indexOf('interface Identifiable'), namespaceStart);
+
+			// classes should be inside
+			assert.isAbove(content.indexOf('class UserService'), namespaceStart);
+			assert.isAbove(content.indexOf('class BaseEvent'), namespaceStart);
+		});
+
+		it('should produce valid TypeScript declarations', async () => {
+			const content = await emitAndRead();
+
+			// Write a test file that references the generated declarations
+			const testFile = path.join(extensionPath, 'dist', 'validate.ts');
+			fs.writeFileSync(testFile, [
+				`/// <reference path="./bundle.d.ts" />`,
+				``,
+				`// Verify namespace members`,
+				`const svc: BX.Test.Users.UserService = new BX.Test.Users.UserService();`,
+				`const em: BX.Test.Users.EventEmitter = new BX.Test.Users.EventEmitter();`,
+				`const evt: BX.Test.Users.BaseEvent = new BX.Test.Users.BaseEvent('test');`,
+				``,
+				`// Verify top-level types`,
+				`const order: SortOrder = 'asc';`,
+				`const opts: FilterOptions = { query: 'test', limit: 10 };`,
+				`const item: Identifiable = { id: 1 };`,
+			].join('\n'), 'utf-8');
+
+			const ts = await import('typescript');
+			const program = ts.default.createProgram([testFile], {
+				strict: true,
+				noEmit: true,
+				skipLibCheck: true,
+				target: ts.default.ScriptTarget.ESNext,
+				module: ts.default.ModuleKind.ESNext,
+			});
+
+			const diagnostics = program.getSemanticDiagnostics();
+			const errors = diagnostics.map((d) => ts.default.flattenDiagnosticMessageText(d.messageText, '\n'));
+
+			assert.deepEqual(errors, [], `Generated .d.ts has type errors:\n${content}`);
 		});
 	});
 

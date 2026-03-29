@@ -160,6 +160,7 @@ export class PackageBuilder
 
 		await emitter.emit({
 			packageRoot: options.packageRoot,
+			input: options.input,
 			namespace: options.namespace,
 			outputPath,
 		});
