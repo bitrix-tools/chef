@@ -1,5 +1,4 @@
 import * as path from 'node:path';
-import { createRequire } from 'node:module';
 
 import { Command, program } from 'commander';
 
@@ -7,6 +6,7 @@ import { Environment } from './environment/environment';
 import { CF } from './diagnostics/diagnostic-codes';
 import { formatError } from './diagnostics/format-error';
 import { checkForUpdates } from './utils/update-notifier';
+import { getChefVersion } from './utils/chef-version';
 
 function lazyCommand(name: string, description: string, loader: () => Promise<Record<string, unknown>>): Command
 {
@@ -77,7 +77,7 @@ function checkCwdPreAction(thisCommand: Command, actionCommand: Command)
 
 program
 	.name('chef')
-	.version(createRequire(import.meta.url)('../package.json').version)
+	.version(getChefVersion())
 	.description('CLI toolkit for building, testing and maintaining Bitrix JS extensions')
 	.addCommand(lazyCommand('build', 'Build JS extensions for Bitrix', () => import('./commands/build/build-command')))
 	.addCommand(lazyCommand('lint', 'Run linting for Bitrix JS extensions', () => import('./commands/lint/lint-command')))

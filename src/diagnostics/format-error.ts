@@ -1,5 +1,3 @@
-import { createRequire } from 'node:module';
-
 import chalk from 'chalk';
 import boxen from 'boxen';
 
@@ -14,6 +12,7 @@ import {
 	formatStack,
 } from './code-frame';
 import { renderDiff } from './render-diff';
+import { getChefVersion } from '../utils/chef-version';
 
 export interface ErrorInfo
 {
@@ -127,20 +126,6 @@ export function formatError(error: ErrorInfo, indent = ''): string[]
 	return lines.map((line) => line === '' ? '' : `${indent}${line}`);
 }
 
-function getChefVersion(): string
-{
-	try
-	{
-		const require = createRequire(import.meta.url);
-		const pkg = require('../../package.json');
-
-		return pkg.version ?? 'unknown';
-	}
-	catch
-	{
-		return 'unknown';
-	}
-}
 
 function formatFullStack(stack: string): string[]
 {

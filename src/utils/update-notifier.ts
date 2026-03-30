@@ -2,10 +2,11 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { execFile } from 'node:child_process';
-import { createRequire } from 'node:module';
 
 import chalk from 'chalk';
 import boxen from 'boxen';
+
+import { getChefVersion } from './chef-version';
 
 const PACKAGE_NAME = '@bitrix/chef';
 const CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
@@ -15,13 +16,6 @@ interface UpdateCache
 {
 	lastCheck: number;
 	latestVersion: string;
-}
-
-function getCurrentVersion(): string
-{
-	const require = createRequire(import.meta.url);
-
-	return require('../../package.json').version;
 }
 
 function readCache(): UpdateCache | null
@@ -104,7 +98,7 @@ export function checkForUpdates(): void
 		return;
 	}
 
-	const currentVersion = getCurrentVersion();
+	const currentVersion = getChefVersion();
 	const cache = readCache();
 
 	if (cache && isNewerVersion(currentVersion, cache.latestVersion))
