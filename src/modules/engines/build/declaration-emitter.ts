@@ -125,7 +125,7 @@ export class DeclarationEmitter
 
 		for (const member of members)
 		{
-			if (/^(type|interface)\s/.test(member))
+			if (/^(type|interface)\s/m.test(member))
 			{
 				topLevelTypes.push(member);
 			}

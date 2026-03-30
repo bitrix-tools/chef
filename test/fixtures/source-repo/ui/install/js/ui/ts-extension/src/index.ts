@@ -2,9 +2,16 @@ import BaseEvent from './base-event';
 import EventEmitter from './event-emitter';
 import { formatName } from './format-name';
 
-interface User {
+/** Represents a user in the system */
+export interface User {
 	name: string;
 	age: number;
+}
+
+/** Result of a user search operation */
+export interface SearchResult {
+	user: User | null;
+	found: boolean;
 }
 
 /** Service for managing users */
@@ -20,9 +27,11 @@ export class UserService
 		this.#emitter.emit('add', new BaseEvent('add'));
 	}
 
-	findByName(name: string): User | undefined
+	findByName(name: string): SearchResult
 	{
-		return this.#users.find(u => u.name === name);
+		const user = this.#users.find(u => u.name === name) ?? null;
+
+		return { user, found: user !== null };
 	}
 
 	getDisplayName(user: User): string

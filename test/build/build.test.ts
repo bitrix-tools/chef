@@ -370,10 +370,12 @@ describe('build', () => {
 			assert.notInclude(content, '#private');
 		});
 
-		it('should preserve JSDoc comments', async () => {
+		it('should preserve JSDoc comments on interfaces and classes', async () => {
 			const content = await emitAndRead();
 
 			assert.include(content, 'Service for managing users');
+			assert.include(content, 'Represents a user in the system');
+			assert.include(content, 'Result of a user search operation');
 		});
 
 		it('should not generate .d.ts for window namespace', async () => {
@@ -425,9 +427,39 @@ describe('build', () => {
 			assert.isBelow(content.indexOf('type FilterOptions'), namespaceStart);
 			assert.isBelow(content.indexOf('interface Identifiable'), namespaceStart);
 
+			// exported interfaces should be outside the namespace
+			assert.isBelow(content.indexOf('interface User'), namespaceStart);
+			assert.isBelow(content.indexOf('interface SearchResult'), namespaceStart);
+
 			// classes should be inside
 			assert.isAbove(content.indexOf('class UserService'), namespaceStart);
 			assert.isAbove(content.indexOf('class BaseEvent'), namespaceStart);
+		});
+
+		it('should place JSDoc-annotated interfaces outside the namespace', async () => {
+			const content = await emitAndRead();
+			const namespaceStart = content.indexOf('declare namespace');
+
+			// Interfaces with JSDoc should still be placed outside, not inside namespace
+			const userInterface = content.indexOf('interface User');
+			const searchInterface = content.indexOf('interface SearchResult');
+
+			assert.isAbove(userInterface, -1, 'User interface should exist');
+			assert.isAbove(searchInterface, -1, 'SearchResult interface should exist');
+			assert.isBelow(userInterface, namespaceStart, 'JSDoc-annotated User interface should be outside namespace');
+			assert.isBelow(searchInterface, namespaceStart, 'JSDoc-annotated SearchResult interface should be outside namespace');
+		});
+
+		it('should resolve cross-references between top-level interfaces', async () => {
+			const content = await emitAndRead();
+
+			// SearchResult references User — both are top-level, so User should NOT be qualified
+			const searchResultBlock = content.slice(
+				content.indexOf('interface SearchResult'),
+				content.indexOf('}', content.indexOf('interface SearchResult')) + 1,
+			);
+			assert.include(searchResultBlock, 'User | null', 'SearchResult should reference User without namespace prefix');
+			assert.notInclude(searchResultBlock, 'BX.Test.Users.User', 'User should not be namespace-qualified in top-level type');
 		});
 
 		it('should produce valid TypeScript declarations', async () => {
@@ -447,6 +479,13 @@ describe('build', () => {
 				`const order: SortOrder = 'asc';`,
 				`const opts: FilterOptions = { query: 'test', limit: 10 };`,
 				`const item: Identifiable = { id: 1 };`,
+				``,
+				`// Verify exported interfaces with JSDoc (should be top-level, not in namespace)`,
+				`const user: User = { name: 'John', age: 30 };`,
+				`const result: SearchResult = { user, found: true };`,
+				``,
+				`// Verify class methods reference top-level types correctly`,
+				`const searchResult: SearchResult = svc.findByName('test');`,
 			].join('\n'), 'utf-8');
 
 			const ts = await import('typescript');

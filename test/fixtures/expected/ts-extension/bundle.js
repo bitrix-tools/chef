@@ -44,7 +44,11 @@ this.BX.Test = this.BX.Test || {};
 			this.#emitter.emit('add', new BaseEvent('add'));
 		}
 		findByName(name) {
-			return this.#users.find(u => u.name === name);
+			const user = this.#users.find(u => u.name === name) ?? null;
+			return {
+				user,
+				found: user !== null
+			};
 		}
 		getDisplayName(user) {
 			return formatName(user.name, '');
