@@ -10,7 +10,7 @@ this.BX.Test = this.BX.Test || {};
 			this.#message = message;
 		}
 		render() {
-			return main_core.Tag.render `<div>${this.#message}</div>`;
+			return main_core.Tag.render`<div>${this.#message}</div>`;
 		}
 	}
 

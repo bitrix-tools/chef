@@ -678,6 +678,86 @@ return [
 		});
 	});
 
+	describe('JS targets transpilation', () => {
+		const extensionPath = path.join(fixturesPath, 'js-extension');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should keep private fields for modern targets', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			options.targets = ['chrome 117'];
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(content, '#prefix', 'Private fields should remain native for modern targets');
+		});
+
+		it('should transpile private fields for old targets', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			options.targets = ['chrome 70'];
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.notInclude(content, '#prefix', 'Private fields should be transpiled for old targets');
+		});
+	});
+
+	describe('TypeScript targets transpilation', () => {
+		const extensionPath = path.join(fixturesPath, 'ts-extension');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should keep private fields for modern targets', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			options.typescript = true;
+			options.targets = ['chrome 117'];
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(content, '#users', 'Private fields should remain native for modern targets');
+		});
+
+		it('should transpile private fields for old targets', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			options.typescript = true;
+			options.targets = ['chrome 70'];
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.notInclude(content, '#users', 'Private fields should be transpiled for old targets');
+			assert.notInclude(content, '#emitter', 'Private fields should be transpiled for old targets');
+			assert.include(content, 'UserService', 'Class name should be preserved');
+		});
+	});
+
 	describe('css images', () => {
 		const extensionPath = path.join(fixturesPath, 'css-images');
 

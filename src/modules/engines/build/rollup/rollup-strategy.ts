@@ -645,7 +645,7 @@ export class RollupBuildStrategy extends BuildStrategy
 		}
 
 		const extensions = ['.js', '.jsx', '.mjs'];
-		if (options.typescript && options.transformClasses)
+		if (options.typescript)
 		{
 			extensions.push('.ts', '.tsx');
 		}
