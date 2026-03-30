@@ -33,6 +33,17 @@ export interface TypeCheckResult
 
 const tsExtensions = ['.ts', '.tsx', '.mts', '.cts'];
 
+/**
+ * TypeScript transpileModule outputs 4-space indentation by default.
+ * Normalize to 2-space so the tab-indent plugin converts correctly (2 spaces → 1 tab).
+ */
+function normalizeIndent(code: string): string
+{
+	return code.replace(/^( {4})+/gm, (match) => {
+		return '  '.repeat(match.length / 4);
+	});
+}
+
 let oldProgram: import('typescript').Program | undefined;
 
 export async function checkTypes(options: TypeCheckOptions): Promise<TypeCheckResult>
@@ -188,7 +199,7 @@ export default async function typescriptPlugin(options: TypeScriptPluginOptions)
 				});
 
 				return {
-					code: result.outputText,
+					code: normalizeIndent(result.outputText),
 					map: result.sourceMapText ? JSON.parse(result.sourceMapText) : undefined,
 				};
 			}
@@ -211,7 +222,7 @@ export default async function typescriptPlugin(options: TypeScriptPluginOptions)
 			});
 
 			return {
-				code: result.outputText,
+				code: normalizeIndent(result.outputText),
 				map: result.sourceMapText ? JSON.parse(result.sourceMapText) : undefined,
 			};
 		},

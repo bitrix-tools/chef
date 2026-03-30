@@ -5,13 +5,13 @@ this.BX.Test = this.BX.Test || {};
 	'use strict';
 
 	class TsComponent {
-			#message;
-			constructor(message) {
-					this.#message = message;
-			}
-			render() {
-					return main_core.Tag.render `<div>${this.#message}</div>`;
-			}
+		#message;
+		constructor(message) {
+			this.#message = message;
+		}
+		render() {
+			return main_core.Tag.render `<div>${this.#message}</div>`;
+		}
 	}
 
 	exports.TsComponent = TsComponent;
