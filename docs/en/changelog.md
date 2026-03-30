@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.4.1 <Badge type="tip" text="3/30/2026" />
+
+Fixed startup crash on global install. Fixed doubled indentation in TypeScript extension bundles
+
 ## v1.4.0 <Badge type="tip" text="3/29/2026" />
 
 - Reworked `.d.ts` file generation: entry-point traversal, cross-file type resolution, re-export aliases, abstract classes, function overloads, unique symbols, generics
