@@ -12,6 +12,9 @@ import { analyzeHeavyDeps } from './analyzers/heavy-deps-analyzer';
 import { analyzeDeepDeps } from './analyzers/deep-deps-analyzer';
 import { analyzeHeavyBundles } from './analyzers/heavy-bundles-analyzer';
 import { analyzeHeavyTotal } from './analyzers/heavy-total-analyzer';
+
+import type { HeavyBundlesSortKey } from './analyzers/heavy-bundles-analyzer';
+import type { HeavyTotalSortKey } from './analyzers/heavy-total-analyzer';
 import { analyzeConfig, analyzeConfigExcept, analyzeConfigMissing } from './analyzers/config-analyzer';
 import { analyzeUnusedDeps } from './analyzers/unused-deps-analyzer';
 import { PackageResolver } from '../../modules/packages/package-resolver';
@@ -23,6 +26,9 @@ import { ExtensionPackage } from '../../modules/packages/package/extension-packa
 import { createIncludeOption, createExcludeOption, createNameFilter } from './options/name-filter-option';
 
 import { findExportedGlobals } from './package-snapshot';
+import { formatTree } from './formatters/tree-formatter';
+import { findDependencyPath } from './analyzers/deps-path-analyzer';
+import { flattenTree } from '../../utils/flatten-tree';
 
 import type { UsageLocation } from './analyzers/find-usages-analyzer';
 import type { SnapshotField } from './package-snapshot';
@@ -189,8 +195,9 @@ const topDepsTreeCommand = new Command('top-deps-tree')
 // region: top-bundle-size
 
 const TOP_BUNDLE_SIZE_HOW_IT_WORKS = [
-	dim(`Measures the file size of compiled ${hi('JS')} and ${hi('CSS')} bundles`),
-	dim(`for each extension. Dependencies are ${hi('not')} included.`),
+	dim(`Measures the file size of compiled ${hi('JS')}, ${hi('CSS')} bundles`),
+	dim(`and referenced ${hi('assets')} (images, fonts, SVG).`),
+	dim(`Dependencies are ${hi('not')} included.`),
 	'',
 	dim(`This is the extension's own code that the browser will download.`),
 	dim(`To see the full picture with dependencies, use ${hi('top-total-size')}.`),
@@ -203,8 +210,10 @@ const topBundleSizeCommand = new Command('top-bundle-size')
 	.addOption(createLimitOption())
 	.addOption(createIncludeOption())
 	.addOption(createExcludeOption())
+	.option('--sort <column>', 'Sort by column: js, css, assets, total', 'total')
 	.action(async (args) => {
-		const fields: Set<SnapshotField> = new Set(['bundleSize']);
+		const sortBy = args.sort as HeavyBundlesSortKey;
+		const fields: Set<SnapshotField> = new Set(['bundleSize', 'assetsSize']);
 		const { snapshots, duration, scanned } = await collectPackages({
 			startDirectory: args.path,
 			fields,
@@ -212,7 +221,7 @@ const topBundleSizeCommand = new Command('top-bundle-size')
 			howItWorks: TOP_BUNDLE_SIZE_HOW_IT_WORKS,
 		});
 
-		const results = filterByName(analyzeHeavyBundles(snapshots, Infinity), args).slice(0, args.limit);
+		const results = filterByName(analyzeHeavyBundles(snapshots, Infinity, sortBy), args).slice(0, args.limit);
 
 		console.log(formatRanking({
 			items: results,
@@ -220,6 +229,7 @@ const topBundleSizeCommand = new Command('top-bundle-size')
 				{ label: 'Extension', value: (item) => item.name },
 				{ label: 'JS', value: (item) => formatSize({ size: item.js }), align: 'right' },
 				{ label: 'CSS', value: (item) => formatSize({ size: item.css }), align: 'right' },
+				{ label: 'Assets', value: (item) => item.assets > 0 ? formatSize({ size: item.assets }) : chalk.dim('—'), align: 'right' },
 				{ label: 'Total', value: (item) => chalk.bold(formatSize({ size: item.total })), align: 'right' },
 			],
 			scanned,
@@ -232,11 +242,11 @@ const topBundleSizeCommand = new Command('top-bundle-size')
 // region: top-total-size
 
 const TOP_TOTAL_SIZE_HOW_IT_WORKS = [
-	dim(`Total size = own bundle + all transitive dependency bundles.`),
+	dim(`Total size = own bundle + assets + all transitive dependency bundles.`),
 	dim(`This is ${hi('everything the browser downloads')} when the extension is loaded.`),
 	'',
-	dim(`${hi('Own')}   — extension bundle size (JS + CSS)`),
-	dim(`${hi('Total')} — own + all transitive dependency bundles`),
+	dim(`${hi('Own')}   — extension bundle size (JS + CSS + assets)`),
+	dim(`${hi('Total')} — own + all transitive dependency bundles and assets`),
 	dim(`${hi('Deps')}  — direct dependencies (config.php rel)`),
 	dim(`${hi('Tree')}  — total unique transitive dependencies`),
 ];
@@ -248,8 +258,10 @@ const topTotalSizeCommand = new Command('top-total-size')
 	.addOption(createLimitOption())
 	.addOption(createIncludeOption())
 	.addOption(createExcludeOption())
+	.option('--sort <column>', 'Sort by column: own, total, deps, tree', 'total')
 	.action(async (args) => {
-		const fields: Set<SnapshotField> = new Set(['bundleSize', 'totalSize', 'dependencies', 'dependencyTreeSize']);
+		const sortBy = args.sort as HeavyTotalSortKey;
+		const fields: Set<SnapshotField> = new Set(['bundleSize', 'assetsSize', 'totalSize', 'dependencies', 'dependencyTreeSize']);
 		const { snapshots, duration, scanned } = await collectPackages({
 			startDirectory: args.path,
 			fields,
@@ -257,7 +269,7 @@ const topTotalSizeCommand = new Command('top-total-size')
 			howItWorks: TOP_TOTAL_SIZE_HOW_IT_WORKS,
 		});
 
-		const results = filterByName(analyzeHeavyTotal(snapshots, Infinity), args).slice(0, args.limit);
+		const results = filterByName(analyzeHeavyTotal(snapshots, Infinity, sortBy), args).slice(0, args.limit);
 
 		console.log(formatRanking({
 			items: results,
@@ -1011,6 +1023,199 @@ const unusedCommand = new Command('unused')
 
 // endregion
 
+// region: deps-tree
+
+const DEPS_TREE_HOW_IT_WORKS = [
+	dim(`Reads the dependency tree from ${hi('config.php rel')} recursively.`),
+	'',
+	dim(`Duplicate subtrees are collapsed (shown as ${hi('(duplicate)')}).`),
+	dim(`${hi('--flat')}      show a flat list of all transitive dependencies`),
+	dim(`${hi('--depth N')}   limit tree depth`),
+	dim(`${hi('--why ext')}   find the shortest path to a specific dependency`),
+];
+
+const depsTreeCommand = new Command('deps-tree')
+	.description('Show the dependency tree for an extension')
+	.addHelpText('after', '\nHow it works:\n  ' + DEPS_TREE_HOW_IT_WORKS.join('\n  ')
+		+ '\n\nExamples:\n  $ chef diag deps-tree main.core\n  $ chef diag deps-tree ui.vue3 --flat\n  $ chef diag deps-tree crm.timeline --depth 2\n  $ chef diag deps-tree crm.timeline --why main.core\n')
+	.argument('<extension>', 'Extension name (e.g. ui.vue3)')
+	.option('-f, --flat', 'Show a flat list instead of a tree')
+	.option('-d, --depth <n>', 'Limit tree depth', parseInt)
+	.option('-w, --why <extension>', 'Find the path to a specific dependency')
+	.action(async (extensionName: string, args) => {
+		const start = performance.now();
+
+		const extension: BasePackage | null = PackageResolver.resolve(extensionName);
+		if (!extension)
+		{
+			console.log('');
+			console.log(` ${chalk.red('✗')} Extension ${chalk.bold(extensionName)} not found`);
+			console.log('');
+			return;
+		}
+
+		console.log('');
+		console.log(` ${chalk.bold(`Dependency tree for ${extensionName}`)}`);
+		printHowItWorks(DEPS_TREE_HOW_IT_WORKS);
+		console.log('');
+
+		const tree = await extension.getDependenciesTree();
+		const duration = ((performance.now() - start) / 1000).toFixed(2);
+		const flatDeps = flattenTree(tree, true);
+
+		if (args.why)
+		{
+			const path = findDependencyPath(tree, args.why);
+			if (path)
+			{
+				console.log(` ${chalk.bold(extensionName)} ${chalk.dim('→')} ${path.join(` ${chalk.dim('→')} `)}`);
+			}
+			else
+			{
+				console.log(` ${chalk.dim(`${extensionName} does not depend on ${args.why}`)}`);
+			}
+		}
+		else if (args.flat)
+		{
+			const sorted = [...flatDeps].sort((a, b) => a.name.localeCompare(b.name));
+
+			for (const node of sorted)
+			{
+				console.log(`  ${node.name}`);
+			}
+		}
+		else
+		{
+			const treeOutput = formatTree({
+				tree,
+				rootName: extensionName,
+				depth: args.depth,
+				unique: true,
+			});
+
+			for (const line of treeOutput.split('\n'))
+			{
+				console.log(` ${line}`);
+			}
+		}
+
+		console.log('');
+		console.log(` ${chalk.dim(`${flatDeps.length} unique ${flatDeps.length === 1 ? 'dependency' : 'dependencies'} in ${duration}s`)}`);
+		console.log('');
+	});
+
+// endregion
+
+// region: bundle-size
+
+const BUNDLE_SIZE_HOW_IT_WORKS = [
+	dim(`Shows the size of compiled ${hi('JS')}, ${hi('CSS')} bundles and ${hi('assets')}`),
+	dim(`(images, fonts, SVG) for a single extension.`),
+	dim(`Only assets referenced from the bundle are counted.`),
+	'',
+	dim(`${hi('--with-deps')}  include all transitive dependencies`),
+];
+
+const bundleSizeCommand = new Command('bundle-size')
+	.description('Show bundle size for an extension')
+	.addHelpText('after', '\nHow it works:\n  ' + BUNDLE_SIZE_HOW_IT_WORKS.join('\n  ')
+		+ '\n\nExamples:\n  $ chef diag bundle-size ui.buttons\n  $ chef diag bundle-size crm.timeline --with-deps\n')
+	.argument('<extension>', 'Extension name (e.g. ui.buttons)')
+	.option('--with-deps', 'Include all transitive dependencies')
+	.action(async (extensionName: string, args) => {
+		const start = performance.now();
+
+		const extension: BasePackage | null = PackageResolver.resolve(extensionName);
+		if (!extension)
+		{
+			console.log('');
+			console.log(` ${chalk.red('✗')} Extension ${chalk.bold(extensionName)} not found`);
+			console.log('');
+			return;
+		}
+
+		console.log('');
+		console.log(` ${chalk.bold(`Bundle size for ${extensionName}`)}`);
+		printHowItWorks(BUNDLE_SIZE_HOW_IT_WORKS);
+
+		const ownSize = extension.getBundlesSize();
+		const ownAssets = extension.getAssetsSize();
+		const ownTotal = ownSize.js + ownSize.css + ownAssets;
+
+		if (args.withDeps)
+		{
+			const flatDeps = await extension.getFlattedDependenciesTree();
+
+			let depsJs = 0;
+			let depsCss = 0;
+			let depsAssets = 0;
+
+			for (const dep of flatDeps)
+			{
+				const depExtension = PackageResolver.resolve(dep.name);
+				if (depExtension)
+				{
+					const depSize = depExtension.getBundlesSize();
+					depsJs += depSize.js;
+					depsCss += depSize.css;
+					depsAssets += depExtension.getAssetsSize();
+				}
+			}
+
+			const depsTotal = depsJs + depsCss + depsAssets;
+
+			console.log('');
+			console.log(`  ${chalk.bold('Own bundle:')}`);
+			console.log('');
+			printSizeRow('JS', ownSize.js);
+			printSizeRow('CSS', ownSize.css);
+			printSizeRow('Assets', ownAssets);
+			printSizeSeparator();
+			printSizeRow('Own total', ownTotal, true);
+
+			console.log('');
+			console.log(`  ${chalk.bold(`Dependencies (${flatDeps.length}):`)}`);
+			console.log('');
+			printSizeRow('JS', depsJs);
+			printSizeRow('CSS', depsCss);
+			printSizeRow('Assets', depsAssets);
+			printSizeSeparator();
+			printSizeRow('Deps total', depsTotal, true);
+
+			console.log('');
+			printSizeSeparator();
+			printSizeRow('Grand total', ownTotal + depsTotal, true);
+		}
+		else
+		{
+			console.log('');
+			printSizeRow('JS', ownSize.js);
+			printSizeRow('CSS', ownSize.css);
+			printSizeRow('Assets', ownAssets);
+			printSizeSeparator();
+			printSizeRow('Total', ownTotal, true);
+		}
+
+		const duration = ((performance.now() - start) / 1000).toFixed(2);
+		console.log('');
+		console.log(` ${chalk.dim(`Calculated in ${duration}s`)}`);
+		console.log('');
+	});
+
+function printSizeRow(label: string, size: number, bold: boolean = false): void
+{
+	const sizeStr = size > 0 ? formatSize({ size }) : chalk.dim('—');
+	const formatted = bold ? chalk.bold(sizeStr) : sizeStr;
+	console.log(`  ${label.padEnd(13)} ${formatted}`);
+}
+
+function printSizeSeparator(): void
+{
+	console.log(`  ${chalk.dim('─'.repeat(25))}`);
+}
+
+// endregion
+
 diagCommand
 	.addCommand(topUsedCommand)
 	.addCommand(topDepsCommand)
@@ -1022,6 +1227,8 @@ diagCommand
 	.addCommand(circularImportsCommand)
 	.addCommand(circularDepsCommand)
 	.addCommand(findUsagesCommand)
-	.addCommand(unusedCommand);
+	.addCommand(unusedCommand)
+	.addCommand(depsTreeCommand)
+	.addCommand(bundleSizeCommand);
 
 export { diagCommand };

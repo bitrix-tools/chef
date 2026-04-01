@@ -42,6 +42,34 @@ describe('analyzeHeavyBundles', () => {
 		assert.equal(results[0].name, 'a');
 	});
 
+	it('should sort by js when specified', () => {
+		const packages = [
+			createSnapshot({ name: 'a', bundleSize: { js: 100, css: 900 } }),
+			createSnapshot({ name: 'b', bundleSize: { js: 500, css: 0 } }),
+			createSnapshot({ name: 'c', bundleSize: { js: 300, css: 200 } }),
+		];
+
+		const results = analyzeHeavyBundles(packages, 10, 'js');
+
+		assert.equal(results[0].name, 'b');
+		assert.equal(results[1].name, 'c');
+		assert.equal(results[2].name, 'a');
+	});
+
+	it('should sort by css when specified', () => {
+		const packages = [
+			createSnapshot({ name: 'a', bundleSize: { js: 900, css: 100 } }),
+			createSnapshot({ name: 'b', bundleSize: { js: 0, css: 500 } }),
+			createSnapshot({ name: 'c', bundleSize: { js: 200, css: 300 } }),
+		];
+
+		const results = analyzeHeavyBundles(packages, 10, 'css');
+
+		assert.equal(results[0].name, 'b');
+		assert.equal(results[1].name, 'c');
+		assert.equal(results[2].name, 'a');
+	});
+
 	it('should respect limit', () => {
 		const packages = [
 			createSnapshot({ name: 'a', bundleSize: { js: 300, css: 0 } }),

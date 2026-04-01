@@ -142,8 +142,10 @@ chef diag <subcommand> [options]
 | `top-used` | Самые востребованные расширения (по числу зависимых) |
 | `top-deps` | Расширения с наибольшим числом прямых зависимостей |
 | `top-deps-tree` | Расширения с наибольшим деревом транзитивных зависимостей |
-| `top-bundle-size` | Расширения с самыми тяжёлыми бандлами |
+| `top-bundle-size` | Расширения с самыми тяжёлыми бандлами (JS + CSS + ассеты) |
 | `top-total-size` | Расширения с наибольшим суммарным размером (свой код + зависимости) |
+| `deps-tree` | Дерево зависимостей расширения |
+| `bundle-size` | Размер бандла расширения (JS + CSS + ассеты) |
 | `config` | Поиск расширений по параметрам `bundle.config` |
 | `unused-deps` | Расширения с неиспользуемыми зависимостями |
 | `circular-deps` | Проверка на циклические зависимости |
@@ -159,6 +161,7 @@ chef diag <subcommand> [options]
 | `-l, --limit <n>` | Ограничить количество результатов (по умолчанию: 20) |
 | `-i, --include <patterns>` | Показать только расширения, соответствующие glob-паттерну |
 | `-x, --exclude <patterns>` | Исключить расширения по glob-паттерну |
+| `--sort <column>` | Сортировка по колонке (для `top-bundle-size` и `top-total-size`) |
 
 Паттерны поддерживают `*`, `**`, `?`, `[abc]` и другие glob-конструкции. Несколько паттернов через запятую или повторением опции:
 
@@ -173,7 +176,14 @@ chef diag <subcommand> [options]
 ```bash
 chef diag top-used                             # Самые востребованные расширения
 chef diag top-bundle-size --limit 10           # TOP 10 тяжёлых бандлов
+chef diag top-bundle-size --sort js            # Сортировка по размеру JS
+chef diag top-total-size --sort own            # Сортировка по собственному размеру
 chef diag top-used --exclude 'main.*,im.*'     # Исключить main и im из результатов
+chef diag deps-tree im.v2.application.core     # Дерево зависимостей расширения
+chef diag deps-tree main.core --depth 2        # Ограничить глубину дерева
+chef diag deps-tree main.core --why ui.vue3    # Найти путь до конкретной зависимости
+chef diag bundle-size ui.buttons               # Размер бандла расширения
+chef diag bundle-size crm.timeline --with-deps # С размером всех зависимостей
 chef diag circular-deps                        # Все циклические зависимости
 chef diag circular-deps main.core              # Проверить конкретное расширение
 chef diag unused-deps                          # Неиспользуемые зависимости

@@ -2,27 +2,30 @@ export class PhpConfigParser
 {
 	parse(phpCode: string): Record<string, any>
 	{
-		const returnIndex = phpCode.indexOf('return');
-		if (returnIndex === -1)
+		// Find top-level 'return [' statements (not inside { } blocks).
+		// Last associative array wins. This handles early returns like:
+		//   if (!Loader::includeModule('im')) { return []; }
+		//   return ['rel' => [...], ...];
+		let lastResult: Record<string, any> = {};
+
+		for (const returnIndex of findTopLevelReturns(phpCode))
 		{
-			return {};
+			const afterReturn = phpCode.substring(returnIndex + 'return'.length).trimStart();
+			if (!afterReturn.startsWith('['))
+			{
+				continue;
+			}
+
+			const reader = new PhpArrayReader(afterReturn);
+			const result = reader.readValue();
+
+			if (result !== null && typeof result === 'object' && !Array.isArray(result))
+			{
+				lastResult = result;
+			}
 		}
 
-		const afterReturn = phpCode.substring(returnIndex + 'return'.length).trimStart();
-		if (!afterReturn.startsWith('['))
-		{
-			return {};
-		}
-
-		const reader = new PhpArrayReader(afterReturn);
-		const result = reader.readValue();
-
-		if (result !== null && typeof result === 'object' && !Array.isArray(result))
-		{
-			return result;
-		}
-
-		return {};
+		return lastResult;
 	}
 }
 
@@ -503,6 +506,89 @@ const KEYWORDS: Array<[string, any]> = [
 function isDigit(char: string): boolean
 {
 	return char >= '0' && char <= '9';
+}
+
+function findTopLevelReturns(phpCode: string): number[]
+{
+	const indices: number[] = [];
+	let braceDepth = 0;
+
+	for (let i = 0; i < phpCode.length; i++)
+	{
+		const char = phpCode[i];
+
+		if (char === "'" || char === '"')
+		{
+			i = skipStringLiteral(phpCode, i);
+			continue;
+		}
+
+		if (char === '/' && phpCode[i + 1] === '/')
+		{
+			while (i < phpCode.length && phpCode[i] !== '\n')
+			{
+				i++;
+			}
+
+			continue;
+		}
+
+		if (char === '/' && phpCode[i + 1] === '*')
+		{
+			i += 2;
+			while (i < phpCode.length && !(phpCode[i] === '*' && phpCode[i + 1] === '/'))
+			{
+				i++;
+			}
+
+			i++;
+			continue;
+		}
+
+		if (char === '{')
+		{
+			braceDepth++;
+			continue;
+		}
+
+		if (char === '}')
+		{
+			braceDepth--;
+			continue;
+		}
+
+		if (braceDepth === 0 && phpCode.substring(i, i + 6) === 'return' && !isIdentChar(phpCode[i + 6]))
+		{
+			indices.push(i);
+			i += 5;
+		}
+	}
+
+	return indices;
+}
+
+function skipStringLiteral(code: string, start: number): number
+{
+	const quote = code[start];
+	let i = start + 1;
+
+	while (i < code.length)
+	{
+		if (code[i] === '\\')
+		{
+			i += 2;
+			continue;
+		}
+
+		if (code[i] === quote)
+		{
+			return i;
+		}
+
+		i++;
+	}
+
+	return i;
 }
 
 function isIdentChar(char: string): boolean

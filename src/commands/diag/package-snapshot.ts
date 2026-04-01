@@ -13,7 +13,8 @@ export type PackageSnapshot = {
 	dependencies: string[];
 	dependencyTreeSize: number;
 	bundleSize: { js: number; css: number };
-	totalSize: { js: number; css: number };
+	assetsSize: number;
+	totalSize: { js: number; css: number; assets: number };
 	bundleConfig: Record<string, unknown>;
 	importedExtensions: Set<string>;
 	usedNamespaces: Set<string>;
@@ -34,7 +35,8 @@ export async function createSnapshot(
 		dependencies: [],
 		dependencyTreeSize: 0,
 		bundleSize: { js: 0, css: 0 },
-		totalSize: { js: 0, css: 0 },
+		assetsSize: 0,
+		totalSize: { js: 0, css: 0, assets: 0 },
 		bundleConfig: {},
 		importedExtensions: new Set(),
 		usedNamespaces: new Set(),
@@ -52,9 +54,14 @@ export async function createSnapshot(
 		snapshot.dependencyTreeSize = tree.length;
 	}
 
-	if (fields.has('bundleSize'))
+	if (fields.has('bundleSize') || fields.has('assetsSize'))
 	{
 		snapshot.bundleSize = extension.getBundlesSize();
+	}
+
+	if (fields.has('assetsSize'))
+	{
+		snapshot.assetsSize = extension.getAssetsSize();
 	}
 
 	if (fields.has('totalSize'))

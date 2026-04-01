@@ -27,6 +27,14 @@ export function totalTransferredSizeTask(extension: BasePackage): Task
 				details.push({ type: 'item', text: `→ CSS: ${formattedCssSize}` });
 			}
 
+			if (totalTransferredSize.assets > 0)
+			{
+				const formattedAssetsSize = formatSize({
+					size: totalTransferredSize.assets,
+				});
+				details.push({ type: 'item', text: `→ Assets: ${formattedAssetsSize}` });
+			}
+
 			return {
 				title: 'Total transferred size',
 				status: 'passed',

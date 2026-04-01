@@ -142,8 +142,10 @@ chef diag <subcommand> [options]
 | `top-used` | Most depended-on extensions |
 | `top-deps` | Extensions with the most direct dependencies |
 | `top-deps-tree` | Extensions with the largest transitive dependency tree |
-| `top-bundle-size` | Extensions with the largest bundles |
+| `top-bundle-size` | Extensions with the largest bundles (JS + CSS + assets) |
 | `top-total-size` | Extensions with the largest total size (own code + dependencies) |
+| `deps-tree` | Dependency tree for an extension |
+| `bundle-size` | Bundle size for an extension (JS + CSS + assets) |
 | `config` | Search extensions by `bundle.config` parameters |
 | `unused-deps` | Extensions with unused dependencies |
 | `circular-deps` | Check for circular dependencies |
@@ -159,6 +161,7 @@ chef diag <subcommand> [options]
 | `-l, --limit <n>` | Limit the number of results (default: 20) |
 | `-i, --include <patterns>` | Show only extensions matching the glob pattern |
 | `-x, --exclude <patterns>` | Exclude extensions matching the glob pattern |
+| `--sort <column>` | Sort by column (for `top-bundle-size` and `top-total-size`) |
 
 Patterns support `*`, `**`, `?`, `[abc]` and other glob constructs. Multiple patterns via comma or by repeating the option:
 
@@ -173,7 +176,14 @@ Patterns support `*`, `**`, `?`, `[abc]` and other glob constructs. Multiple pat
 ```bash
 chef diag top-used                             # Most depended-on extensions
 chef diag top-bundle-size --limit 10           # TOP 10 largest bundles
+chef diag top-bundle-size --sort js            # Sort by JS size
+chef diag top-total-size --sort own            # Sort by own bundle size
 chef diag top-used --exclude 'main.*,im.*'     # Exclude main and im from results
+chef diag deps-tree im.v2.application.core     # Dependency tree for an extension
+chef diag deps-tree main.core --depth 2        # Limit tree depth
+chef diag deps-tree main.core --why ui.vue3    # Find path to a specific dependency
+chef diag bundle-size ui.buttons               # Bundle size for an extension
+chef diag bundle-size crm.timeline --with-deps # Including all dependencies
 chef diag circular-deps                        # All circular dependencies
 chef diag circular-deps main.core              # Check a specific extension
 chef diag unused-deps                          # Unused dependencies

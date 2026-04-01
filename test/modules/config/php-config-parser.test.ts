@@ -317,4 +317,80 @@ describe('PhpConfigParser', () => {
 			assert.equal(result.settings.nested.deep, 42);
 		});
 	});
+
+	describe('early return guard', () => {
+		it('should skip early return [] and parse the main config', () => {
+			const result = parse(`<?php
+				if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
+				{
+					die();
+				}
+
+				if (!\\Bitrix\\Main\\Loader::includeModule('im'))
+				{
+					return [];
+				}
+
+				return [
+					'js' => './dist/core.bundle.js',
+					'rel' => [
+						'main.core',
+						'ui.vue3',
+					],
+					'skip_core' => false,
+				];
+			`);
+
+			assert.deepEqual(result.rel, ['main.core', 'ui.vue3']);
+			assert.equal(result.js, './dist/core.bundle.js');
+			assert.equal(result.skip_core, false);
+		});
+
+		it('should handle early return with non-empty array', () => {
+			const result = parse(`<?php
+				if ($condition)
+				{
+					return ['error' => true];
+				}
+
+				return [
+					'rel' => ['main.core'],
+					'js' => 'bundle.js',
+				];
+			`);
+
+			assert.deepEqual(result.rel, ['main.core']);
+			assert.equal(result.js, 'bundle.js');
+		});
+
+		it('should use last top-level return if multiple exist', () => {
+			const result = parse(`<?php
+				if (false)
+				{
+					return ['rel' => ['wrong']];
+				}
+
+				return [
+					'rel' => ['correct'],
+				];
+			`);
+
+			assert.deepEqual(result.rel, ['correct']);
+		});
+
+		it('should not treat return inside closure as top-level', () => {
+			const result = parse(`<?php
+				return [
+					'js' => 'script.js',
+					'oninit' => function() {
+						return ['settings' => ['key' => 'value']];
+					},
+					'rel' => ['main.core'],
+				];
+			`);
+
+			assert.equal(result.js, 'script.js');
+			assert.deepEqual(result.rel, ['main.core']);
+		});
+	});
 });

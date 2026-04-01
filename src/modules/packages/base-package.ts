@@ -462,14 +462,21 @@ export abstract class BasePackage
 		});
 	}
 
-	async getDependenciesSize(): Promise<{ js: number, css: number }>
+	getAssetsSize(): number
+	{
+		return this.#cache.remember('assetsSize', () => {
+			return new PackageSizeCalculator(this).getAssetsSize();
+		});
+	}
+
+	async getDependenciesSize(): Promise<{ js: number; css: number; assets: number }>
 	{
 		return this.#cache.remember('getDependenciesSize', () => {
 			return new PackageSizeCalculator(this).getDependenciesSize();
 		});
 	}
 
-	async getTotalTransferredSize(): Promise<{ css: number, js: number }>
+	async getTotalTransferredSize(): Promise<{ js: number; css: number; assets: number }>
 	{
 		return new PackageSizeCalculator(this).getTotalTransferredSize();
 	}
