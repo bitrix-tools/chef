@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.5.0 <Badge type="tip" text="4/1/2026" />
+
+- New diagnostic commands: `deps-tree` (dependency tree with `--depth`, `--flat`, `--why`) and `bundle-size` (bundle size with `--with-deps`)
+- Asset sizes (images, fonts, SVG) are now included in `top-bundle-size` and `top-total-size` — only files actually referenced from bundles are counted
+- Column sorting for `top-bundle-size` (`--sort js|css|assets|total`) and `top-total-size` (`--sort own|total|deps|tree`)
+- Fixed parsing of `config.php` files with early conditional returns
+- Fixed `.d.ts` generation: JSDoc-annotated interfaces are now placed outside the namespace
+- Fixed `preset-env` application to TypeScript files based on `targets`
+
 ## v1.4.1 <Badge type="tip" text="3/30/2026" />
 
 Fixed startup crash on global install. Fixed doubled indentation in TypeScript extension bundles
