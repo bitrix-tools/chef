@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.5.1 <Badge type="tip" text="4/1/2026" />
+
+- Fixed update check crash on Windows (EINVAL when spawning npm.cmd)
+- Diagnostic commands (chef diag) no longer write files to disk when resolving dependencies
+
 ## v1.5.0 <Badge type="tip" text="4/1/2026" />
 
 - New diagnostic commands: `deps-tree` (dependency tree with `--depth`, `--flat`, `--why`) and `bundle-size` (bundle size with `--with-deps`)
