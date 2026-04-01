@@ -1,10 +1,25 @@
-import { describe, it } from 'mocha';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
+import { describe, it, afterEach } from 'mocha';
 import { assert } from 'chai';
 
 import { runChef, sourceRepo } from './run-chef';
+import { extensionPath } from '../fixtures/index';
 
 describe('chef diag', () => {
 	const pathArgs = ['--path', sourceRepo];
+
+	// basic-extension has bundle.config.js but no config.php —
+	// getDependencies() must use generate() (in-memory) instead of build() (writes to disk).
+	const basicExtensionDist = path.join(extensionPath('basic-extension'), 'dist');
+
+	afterEach(() => {
+		if (fs.existsSync(basicExtensionDist))
+		{
+			fs.rmSync(basicExtensionDist, { recursive: true });
+			assert.fail('diag command created dist/ directory — getDependencies() must not write files');
+		}
+	});
 
 	describe('top-used', () => {
 		it('should show most depended-on extensions', async () => {

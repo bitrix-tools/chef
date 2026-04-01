@@ -380,7 +380,7 @@ export abstract class BasePackage
 			{
 				const { PackageBuilder } = await import('../services/package-builder');
 				const buildEngine = await PackageBuilder.getBuildEngine();
-				const buildResult = await buildEngine.build({
+				const buildResult = await buildEngine.generate({
 					input: this.getInputPath(),
 					output: { js: this.getOutputJsPath(), css: this.getOutputCssPath() },
 					packageRoot: this.getPath(),
