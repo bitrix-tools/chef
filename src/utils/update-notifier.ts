@@ -50,23 +50,32 @@ function writeCache(cache: UpdateCache): void
 
 function fetchLatestVersion(): void
 {
-	const npmPath = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+	try
+	{
+		const isWindows = process.platform === 'win32';
+		const npmPath = isWindows ? 'npm.cmd' : 'npm';
 
-	execFile(npmPath, ['view', PACKAGE_NAME, 'version'], {
-		timeout: 10_000,
-		env: { ...process.env, NO_UPDATE_NOTIFIER: '1' },
-	}, (error, stdout) => {
-		if (error)
-		{
-			return;
-		}
+		execFile(npmPath, ['view', PACKAGE_NAME, 'version'], {
+			timeout: 10_000,
+			env: { ...process.env, NO_UPDATE_NOTIFIER: '1' },
+			shell: isWindows,
+		}, (error, stdout) => {
+			if (error)
+			{
+				return;
+			}
 
-		const version = stdout.trim();
-		if (version && /^\d+\.\d+\.\d+/.test(version))
-		{
-			writeCache({ lastCheck: Date.now(), latestVersion: version });
-		}
-	});
+			const version = stdout.trim();
+			if (version && /^\d+\.\d+\.\d+/.test(version))
+			{
+				writeCache({ lastCheck: Date.now(), latestVersion: version });
+			}
+		});
+	}
+	catch
+	{
+		// ignore — update check is non-critical
+	}
 }
 
 function isNewerVersion(current: string, latest: string): boolean
