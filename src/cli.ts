@@ -88,6 +88,7 @@ program
 	.addCommand(lazyCommand('init', 'Initialize testing and build tooling for your Bitrix project', () => import('./commands/init/init-command')))
 	.addCommand(lazyCommand('typecheck', 'Check TypeScript types in extensions', () => import('./commands/typecheck/typecheck-command')))
 	.addCommand(lazyCommand('diag', 'Diagnose and analyze extensions across the project', () => import('./commands/diag/diag-command')))
+	.addCommand(lazyCommand('baseline', 'Check if a web feature is supported by current browser targets', () => import('./commands/baseline/baseline-command')))
 	.hook('preAction', adjustCwdPreAction)
 	.hook('preAction', checkCwdPreAction);
 
