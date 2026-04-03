@@ -299,6 +299,52 @@ chef init hooks [options]
 
 Поддерживает Git и Mercurial. Хуки запускают `chef aliases --quiet` после pull, merge, checkout и rebase, чтобы `aliases.tsconfig.json` всегда оставался актуальным.
 
+## chef baseline
+
+Проверка доступности веб-фич для текущих browser targets проекта.
+
+```bash
+chef baseline [query] [options]
+```
+
+| Параметр | Описание |
+|----------|----------|
+| `query` | ID фичи или поисковый запрос (`subgrid`, `"private fields"`, `Promise.any`) |
+| `--list` | Вывести все поддерживаемые и транспилируемые фичи |
+| `-p, --path [path]` | Путь к проекту (для чтения `.browserslistrc`) |
+
+Без аргументов или с `--list` выводит полный список доступных фич, сгруппированный по категориям (JavaScript, CSS, API, HTML).
+
+### Поиск фич
+
+Поиск работает по ID, названию, описанию и MDN-идентификаторам (`compat_features`). Запросы автоматически нормализуются — пробелы конвертируются в дефисы для сопоставления с ID.
+
+```bash
+chef baseline subgrid                 # Поиск по ID
+chef baseline "private fields"        # Поиск по compat_features
+chef baseline "container queries"     # Поиск CSS-фичи
+chef baseline "Promise.any"           # Поиск JS API
+```
+
+### Статусы
+
+В результатах отображается статус относительно текущих targets:
+
+- `✓ supported` — нативно поддерживается всеми целевыми браузерами
+- `~ transpiled` — JS-синтаксис, транспилируется Babel
+- `✗ unsupported` — не поддерживается, требуется полифил или фолбэк
+
+Для фич, транспилируемых Babel, отображается детализация по каждому трансформу — какие работают нативно, какие будут транспилированы.
+
+### Примеры
+
+```bash
+chef baseline                         # Все доступные фичи (supported + transpiled)
+chef baseline class-syntax            # Детали фичи с Babel-трансформами
+chef baseline "arrow functions"       # Поиск по описанию
+chef baseline --list                  # Полный список по категориям
+```
+
 ## chef flow-to-ts
 
 Миграция кода с типизацией Flow.js в TypeScript.

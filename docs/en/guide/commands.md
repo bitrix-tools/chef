@@ -299,6 +299,52 @@ chef init hooks [options]
 
 Supports Git and Mercurial. Hooks run `chef aliases --quiet` after pull, merge, checkout and rebase to keep `aliases.tsconfig.json` up to date.
 
+## chef baseline
+
+Check web feature availability for your project's browser targets.
+
+```bash
+chef baseline [query] [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `query` | Feature ID or search query (`subgrid`, `"private fields"`, `Promise.any`) |
+| `--list` | List all supported and transpiled features |
+| `-p, --path [path]` | Path to project (for reading `.browserslistrc`) |
+
+Without arguments or with `--list`, outputs a full list of available features grouped by category (JavaScript, CSS, API, HTML).
+
+### Searching features
+
+Search works by ID, name, description and MDN identifiers (`compat_features`). Queries are automatically normalized — spaces are converted to hyphens for ID matching.
+
+```bash
+chef baseline subgrid                 # Search by ID
+chef baseline "private fields"        # Search by compat_features
+chef baseline "container queries"     # Search CSS feature
+chef baseline "Promise.any"           # Search JS API
+```
+
+### Statuses
+
+Results show the status relative to current targets:
+
+- `✓ supported` — natively supported by all target browsers
+- `~ transpiled` — JS syntax, transpiled by Babel
+- `✗ unsupported` — not supported, requires a polyfill or fallback
+
+For Babel-transpiled features, a per-transform breakdown shows which parts work natively and which will be transpiled.
+
+### Examples
+
+```bash
+chef baseline                         # All available features (supported + transpiled)
+chef baseline class-syntax            # Feature details with Babel transforms
+chef baseline "arrow functions"       # Search by description
+chef baseline --list                  # Full list by category
+```
+
 ## chef flow-to-ts
 
 Migrate Flow.js typed code to TypeScript.

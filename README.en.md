@@ -64,6 +64,7 @@ chef build my.extension
 | `chef typecheck` | Check TypeScript types in extensions |
 | `chef lint` | Lint extensions with ESLint |
 | `chef diag` | Diagnostics: dependencies, bundle sizes, cycles, unused extensions |
+| `chef baseline` | Check web feature availability for current browser targets |
 | `chef create <name>` | Scaffold a new extension |
 | `chef aliases` | Regenerate TypeScript path aliases |
 | `chef init build` | Initialize TypeScript, aliases, and browserslist |

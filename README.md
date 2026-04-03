@@ -64,6 +64,7 @@ chef build my.extension
 | `chef typecheck` | Проверка типов TypeScript в расширениях |
 | `chef lint` | Линтинг расширений через ESLint |
 | `chef diag` | Диагностика: зависимости, размеры бандлов, циклы, неиспользуемые расширения |
+| `chef baseline` | Проверка доступности веб-фич для текущих browser targets |
 | `chef create <name>` | Создание нового расширения |
 | `chef aliases` | Регенерация алиасов путей для TypeScript |
 | `chef init build` | Инициализация TypeScript, алиасов и browserslist |
