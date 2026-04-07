@@ -30,15 +30,32 @@ export function plainBuild(extension: BasePackage, args: Record<string, any>): P
 
 			if (result.errors.length > 0)
 			{
-				const details: TaskDetail[] = result.errors.map((error) => ({
-					type: 'error' as const,
-					code: error.code,
-					message: error.message.replace(/^\[plugin [^\]]+\]\s*/, '').replaceAll(pathPrefix, ''),
-					frame: error.frame,
-					loc: error.loc?.file
-						? { file: error.loc.file, line: error.loc.line, column: error.loc.column, root }
-						: undefined,
-				}));
+				const details: TaskDetail[] = [
+					...result.errors.map((error) => ({
+						type: 'error' as const,
+						severity: 'error' as const,
+						code: error.code,
+						message: error.message.replace(/^\[plugin [^\]]+\]\s*/, '').replaceAll(pathPrefix, ''),
+						frame: error.frame,
+						loc: error.loc?.file
+							? { file: error.loc.file, line: error.loc.line, column: error.loc.column, root }
+							: undefined,
+						risk: error.risk,
+						gapInfo: error.gapInfo,
+					})),
+					...result.warnings.map((warning) => ({
+						type: 'error' as const,
+						severity: 'warning' as const,
+						code: warning.code,
+						message: warning.message.replace(/^\[plugin [^\]]+\]\s*/, '').replaceAll(pathPrefix, ''),
+						frame: warning.frame,
+						loc: warning.loc?.file
+							? { file: warning.loc.file, line: warning.loc.line, column: warning.loc.column, root }
+							: undefined,
+						risk: warning.risk,
+						gapInfo: warning.gapInfo,
+					})),
+				];
 
 				return {
 					title: chalk.bold(name),
@@ -72,12 +89,15 @@ export function plainBuild(extension: BasePackage, args: Record<string, any>): P
 				{
 					details.push({
 						type: 'error',
+						severity: 'warning',
 						code: warning.code,
-						message: warning.message.replaceAll(pathPrefix, ''),
+						message: warning.message.replace(/^\[plugin [^\]]+\]\s*/, '').replaceAll(pathPrefix, ''),
 						frame: warning.frame,
 						loc: warning.loc?.file
 							? { file: warning.loc.file, line: warning.loc.line, column: warning.loc.column, root }
 							: undefined,
+						risk: warning.risk,
+						gapInfo: warning.gapInfo,
 					});
 				}
 

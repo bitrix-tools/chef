@@ -2,6 +2,16 @@ import chalk from 'chalk';
 
 import { hasCodeFrame } from '../../diagnostics/code-frame';
 import { formatError, formatInternalError } from '../../diagnostics/format-error';
+import {
+	isBaselineCode,
+	extractFeatureLabel,
+	extractBrowsersStr,
+	extractFeatureName,
+	formatRiskLine,
+	formatBrowserLines,
+	formatCaniuseLink,
+	formatCodeLabel,
+} from '../../diagnostics/baseline-format';
 
 import type { TaskResult, TaskDetail, TaskGroupResult } from './task-types';
 
@@ -251,12 +261,12 @@ export class TaskReporter
 	#renderErrors(errors: TaskError[], severity: 'error' | 'warning', hasItemsBefore: boolean): void
 	{
 		const colorFn = severity === 'warning' ? chalk.yellow : chalk.red;
-		const withFrame = errors.filter((d) => hasCodeFrame(d));
-		const withoutFrame = errors.filter((d) => !hasCodeFrame(d));
+		const baseline = errors.filter((d) => isBaselineCode(d.code));
+		const regular = errors.filter((d) => !isBaselineCode(d.code));
 
-		if (errors.length === 1 && !hasItemsBefore)
+		if (errors.length === 1 && !hasItemsBefore && baseline.length === 0)
 		{
-			// Single error — inline, no section header
+			// Single regular error — inline, no section header
 			const error = errors[0];
 			console.log(formatError({ ...error, severity }, this.#detailPrefix).join('\n'));
 
@@ -270,7 +280,11 @@ export class TaskReporter
 		console.log('');
 		console.log(`${this.#detailPrefix}${sectionTitle}`);
 
-		// Frameless errors — compact list
+		// Regular errors — compact format
+		const withFrame = regular.filter((d) => hasCodeFrame(d));
+		const withoutFrame = regular.filter((d) => !hasCodeFrame(d));
+
+		// Frameless errors — compact list (first)
 		if (withoutFrame.length > 0)
 		{
 			console.log('');
@@ -281,7 +295,7 @@ export class TaskReporter
 			}
 		}
 
-		// Framed errors — with separators
+		// Framed regular errors — with separators
 		for (let i = 0; i < withFrame.length; i++)
 		{
 			const error = withFrame[i];
@@ -298,6 +312,51 @@ export class TaskReporter
 			console.log(`${this.#detailPrefix}${codePrefix}${shortMessage}`);
 
 			const errorLines = formatError({ ...error, severity, message: '' }, this.#detailPrefix);
+			if (errorLines.length > 0)
+			{
+				console.log('');
+				console.log(errorLines.join('\n'));
+			}
+		}
+
+		// Baseline errors — structured blocks (last)
+		for (let i = 0; i < baseline.length; i++)
+		{
+			const error = baseline[i];
+			const label = extractFeatureLabel(error.message);
+			const browsersStr = extractBrowsersStr(error.message);
+			const featureName = extractFeatureName(error.message);
+
+			if (i > 0 || regular.length > 0)
+			{
+				console.log('');
+				console.log(`${this.#detailPrefix}${chalk.dim('─'.repeat(40))}`);
+			}
+
+			console.log('');
+			console.log(`${this.#detailPrefix}${formatCodeLabel(error.code!, severity)} ${chalk.bold(label)}`);
+			console.log('');
+
+			if (error.risk)
+			{
+				console.log(`${this.#detailPrefix}${formatRiskLine(error.risk)}`);
+			}
+
+			if (browsersStr)
+			{
+				for (const line of formatBrowserLines(browsersStr, this.#detailPrefix))
+				{
+					console.log(line);
+				}
+			}
+
+			if (featureName)
+			{
+				console.log(`${this.#detailPrefix}${formatCaniuseLink(featureName)}`);
+			}
+
+			// Code frame
+			const errorLines = formatError({ ...error, severity, message: '', code: undefined }, this.#detailPrefix);
 			if (errorLines.length > 0)
 			{
 				console.log('');

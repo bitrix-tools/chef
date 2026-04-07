@@ -16,7 +16,7 @@ function shortenPaths(message: string, relativeRoot: string): string
 	return message.replaceAll(prefix, '');
 }
 
-function diagnosticToDetail(log: BuildDiagnostic, root: string, relativeRoot: string): TaskDetail
+function diagnosticToDetail(log: BuildDiagnostic, root: string, relativeRoot: string, severity?: 'error' | 'warning'): TaskDetail
 {
 	const loc = log.loc?.file
 		? { file: log.loc.file, line: log.loc.line, column: log.loc.column, root }
@@ -27,9 +27,12 @@ function diagnosticToDetail(log: BuildDiagnostic, root: string, relativeRoot: st
 	return {
 		type: 'error',
 		code: log.code,
+		severity,
 		message: shortenPaths(rawMessage, relativeRoot),
 		frame: log.frame,
 		loc,
+		risk: log.risk,
+		gapInfo: log.gapInfo,
 	};
 }
 
@@ -45,10 +48,15 @@ export function buildTask(extension: BasePackage, args: Record<string, any>): Ta
 
 			if (result.errors.length > 0)
 			{
+				const details = [
+					...result.errors.map((log) => diagnosticToDetail(log, root, relativeRoot, 'error')),
+					...result.warnings.map((log) => diagnosticToDetail(log, root, relativeRoot, 'warning')),
+				];
+
 				return {
 					title: 'Build failed',
 					status: 'failed',
-					details: result.errors.map((log) => diagnosticToDetail(log, root, relativeRoot)),
+					details,
 				};
 			}
 
@@ -57,7 +65,7 @@ export function buildTask(extension: BasePackage, args: Record<string, any>): Ta
 				return {
 					title: `Build completed with ${result.warnings.length} warning${result.warnings.length > 1 ? 's' : ''}`,
 					status: 'warning',
-					details: result.warnings.map((log) => diagnosticToDetail(log, root, relativeRoot)),
+					details: result.warnings.map((log) => diagnosticToDetail(log, root, relativeRoot, 'warning')),
 				};
 			}
 

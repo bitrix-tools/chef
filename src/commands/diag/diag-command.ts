@@ -1,4 +1,6 @@
+import path from 'node:path';
 import chalk from 'chalk';
+import table from 'text-table';
 import { Command } from 'commander';
 
 import { createPathOption } from '../../shared/options/path-option';
@@ -24,6 +26,21 @@ import { analyzeOrphans } from './analyzers/orphan-analyzer';
 import { findCircularImports } from './analyzers/circular-imports-analyzer';
 import { ExtensionPackage } from '../../modules/packages/package/extension-package';
 import { createIncludeOption, createExcludeOption, createNameFilter } from './options/name-filter-option';
+import { CF } from '../../diagnostics/diagnostic-codes';
+import { formatError } from '../../diagnostics/format-error';
+import { stripAnsi } from '../../diagnostics/code-frame';
+import {
+	cleanBaselineMessage,
+	extractBrowsersStr,
+	extractFeatureName,
+	extractFeatureLabel,
+	formatRiskLine,
+	formatCodeLabel,
+	formatBrowserLines,
+	formatCaniuseLink,
+	baselineSeverity,
+	riskColors,
+} from '../../diagnostics/baseline-format';
 
 import { findExportedGlobals } from './package-snapshot';
 import { formatTree } from './formatters/tree-formatter';
@@ -1216,6 +1233,441 @@ function printSizeSeparator(): void
 
 // endregion
 
+// region: baseline
+
+const BASELINE_HOW_IT_WORKS = [
+	dim(`Runs the build pipeline (without writing files) and checks each`),
+	dim(`source file for JS/CSS features unsupported by the target browsers.`),
+	'',
+	dim(`Uses the same ${hi('baseline-check')} that runs during ${hi('chef build')}.`),
+	dim(`Targets are resolved per-extension from ${hi('bundle.config')},`),
+	dim(`${hi('.browserslistrc')}, or the default ${hi('baseline widely available')}.`),
+	'',
+	dim(`Without arguments: scans all extensions and reports those with issues.`),
+	dim(`With arguments: checks only the specified extensions and shows details.`),
+];
+
+const BASELINE_CODES: Set<string> = new Set([CF.BASELINE_JS_UNSUPPORTED, CF.BASELINE_CSS_UNSUPPORTED, CF.BASELINE_JS_MAYBE_UNSUPPORTED]);
+
+type FeatureLocation = { file: string; line: number };
+type FeatureStat = { count: number; extensions: Map<string, FeatureLocation[]>; label: string; category: 'JS' | 'CSS'; severity: 'error' | 'warning'; code: string; risk: 'low' | 'medium' | 'high'; unsupportedIn?: string; gapInfo?: string; browsersStr?: string };
+
+function printFeatureOverview(featureStats: Map<string, FeatureStat>): void
+{
+	if (featureStats.size === 0)
+	{
+		return;
+	}
+
+	console.log('');
+	console.log(` ${chalk.bold('Features:')}`);
+
+	const riskOrder = { high: 0, medium: 1, low: 2 };
+	const sortFn = (a: [string, FeatureStat], b: [string, FeatureStat]) =>
+		riskOrder[a[1].risk] - riskOrder[b[1].risk]
+		|| (a[1].category === 'JS' ? 0 : 1) - (b[1].category === 'JS' ? 0 : 1)
+		|| b[1].extensions.size - a[1].extensions.size
+		|| b[1].count - a[1].count;
+
+	const errorFeatures = [...featureStats.entries()].filter(([, s]) => s.severity === 'error').sort(sortFn);
+	const warningFeatures = [...featureStats.entries()].filter(([, s]) => s.severity === 'warning').sort(sortFn);
+
+	const rows: string[][] = [];
+	for (const [feature, stat] of [...errorFeatures, ...warningFeatures])
+	{
+		const icon = stat.severity === 'error' ? chalk.red('✗') : chalk.yellow('⚠');
+		const extCount = stat.extensions.size;
+		const extLabel = extCount === 1 ? 'extension' : 'extensions';
+
+		const detail = stat.gapInfo
+			? chalk.dim(stat.gapInfo)
+			: stat.unsupportedIn
+				? chalk.red(`not supported in ${stat.unsupportedIn}`)
+				: '';
+
+		rows.push([
+			'',
+			icon,
+			formatCodeLabel(stat.code, stat.severity),
+			chalk.bold(stat.label),
+			riskColors[stat.risk](stat.risk),
+			detail,
+			chalk.dim(`(${extCount} ${extLabel})`),
+		]);
+	}
+
+	const output = table(rows, {
+		align: ['l', 'l', 'l', 'l', 'l', 'l', 'l'],
+		stringLength: (str) => stripAnsi(str).length,
+	});
+
+	console.log(output);
+}
+
+function printFeatureDetails(featureStats: Map<string, FeatureStat>): void
+{
+	if (featureStats.size === 0)
+	{
+		return;
+	}
+
+	const riskOrder = { high: 0, medium: 1, low: 2 };
+	const sortFn = (a: [string, FeatureStat], b: [string, FeatureStat]) =>
+		riskOrder[a[1].risk] - riskOrder[b[1].risk]
+		|| (a[1].category === 'JS' ? 0 : 1) - (b[1].category === 'JS' ? 0 : 1)
+		|| b[1].extensions.size - a[1].extensions.size
+		|| b[1].count - a[1].count;
+
+	const errorFeatures = [...featureStats.entries()].filter(([, s]) => s.severity === 'error').sort(sortFn);
+	const warningFeatures = [...featureStats.entries()].filter(([, s]) => s.severity === 'warning').sort(sortFn);
+
+	for (const [feature, stat] of [...errorFeatures, ...warningFeatures])
+	{
+		const icon = stat.severity === 'error' ? chalk.red('✗') : chalk.yellow('⚠');
+
+		console.log('');
+		console.log(` ${icon} ${formatCodeLabel(stat.code, stat.severity)} ${chalk.bold(stat.label)}`);
+		console.log('');
+		console.log(`   ${formatRiskLine(stat.risk)}`);
+
+		if (stat.browsersStr)
+		{
+			for (const line of formatBrowserLines(stat.browsersStr, '   '))
+			{
+				console.log(line);
+			}
+		}
+
+		console.log(`   ${formatCaniuseLink(feature)}`);
+
+		if (stat.severity === 'warning' && stat.category === 'JS')
+		{
+			console.log(`   ${chalk.dim('Method name matches a built-in, but may be called on a different object.')}`);
+			console.log(`   ${chalk.dim('Use // @chef-ignore to suppress if this is not a built-in call.')}`);
+		}
+
+		const names = [...stat.extensions.keys()].sort();
+		for (const name of names)
+		{
+			console.log('');
+			console.log(`   ${chalk.dim(name)}`);
+			const locations = stat.extensions.get(name) ?? [];
+			for (const loc of locations)
+			{
+				console.log(`     ${chalk.dim('at')} ${loc.file}:${loc.line}`);
+			}
+		}
+	}
+}
+
+function formatBreakdown(js: number, css: number): string
+{
+	const parts: string[] = [];
+	if (js > 0)
+	{
+		parts.push(chalk.cyan(`${js} JS`));
+	}
+
+	if (css > 0)
+	{
+		parts.push(chalk.magenta(`${css} CSS`));
+	}
+
+	return parts.join(chalk.dim(', '));
+}
+
+const baselineCommand = new Command('baseline')
+	.description('Check extensions for browser compatibility issues')
+	.addHelpText('after', '\nHow it works:\n  ' + BASELINE_HOW_IT_WORKS.join('\n  ')
+		+ '\n\nExamples:\n  $ chef diag baseline\n  $ chef diag baseline ui.bbcode.parser\n  $ chef diag baseline main.core ui.buttons\n')
+	.argument('[extensions...]', 'Extensions to check (all if omitted)')
+	.addOption(createPathOption('Scan for extensions starting from this directory'))
+	.addOption(createIncludeOption())
+	.addOption(createExcludeOption())
+	.option('--errors-only', 'Show only errors, hide warnings')
+	.action(async (extensions: string[], args) => {
+		if (extensions.length === 0)
+		{
+			await checkAllBaseline(args);
+		}
+		else
+		{
+			await checkSpecificBaseline(extensions, args);
+		}
+	});
+
+async function checkAllBaseline(args: { path: string; include?: string[]; exclude?: string[]; errorsOnly?: boolean }): Promise<void>
+{
+	const hasInclude = args.include && args.include.length > 0;
+	const excludeFilter = args.exclude?.length ? createNameFilter({ exclude: args.exclude }) : undefined;
+	const fields: Set<SnapshotField> = new Set();
+	const { snapshots, duration: collectDuration, scanned } = await collectPackages({
+		startDirectory: args.path,
+		fields,
+		title: 'Baseline compatibility scan',
+		howItWorks: BASELINE_HOW_IT_WORKS,
+		includePatterns: hasInclude ? args.include : undefined,
+		filter: excludeFilter
+			? (extension) => excludeFilter(extension.getName())
+			: undefined,
+	});
+
+	const start = performance.now();
+	const spinner = createSpinner(`Checking baseline compatibility... 0/${snapshots.length}`);
+	let checked = 0;
+
+	const featureStats = new Map<string, FeatureStat>();
+	let totalErrors = 0;
+	let totalWarnings = 0;
+	let affectedExtensions = 0;
+
+	for (const snapshot of snapshots)
+	{
+		checked++;
+		spinner.update(`Checking baseline compatibility... ${checked}/${snapshots.length}`);
+
+		const extension = PackageResolver.resolve(snapshot.name);
+		if (!extension)
+		{
+			continue;
+		}
+
+		try
+		{
+			const buildResult = await extension.generate();
+			const allIssues = [...buildResult.errors, ...buildResult.warnings]
+				.filter((e) => e.code && BASELINE_CODES.has(e.code));
+			const issues = args.errorsOnly
+				? allIssues.filter((e) => e.code === CF.BASELINE_JS_UNSUPPORTED)
+				: allIssues;
+
+			if (issues.length === 0)
+			{
+				continue;
+			}
+
+			affectedExtensions++;
+
+			for (const issue of issues)
+			{
+				const feature = extractFeatureName(issue.message);
+				if (!feature)
+				{
+					continue;
+				}
+
+				const isJs = issue.code === CF.BASELINE_JS_UNSUPPORTED || issue.code === CF.BASELINE_JS_MAYBE_UNSUPPORTED;
+				const severity = baselineSeverity(issue.code!);
+
+				if (severity === 'error')
+				{
+					totalErrors++;
+				}
+				else
+				{
+					totalWarnings++;
+				}
+
+				const stat = featureStats.get(feature) ?? {
+					count: 0,
+					extensions: new Map<string, FeatureLocation[]>(),
+					label: extractFeatureLabel(issue.message),
+					category: isJs ? 'JS' as const : 'CSS' as const,
+					severity,
+					code: issue.code!,
+					risk: (issue.risk ?? 'medium') as 'low' | 'medium' | 'high',
+					unsupportedIn: issue.unsupportedIn,
+					gapInfo: issue.gapInfo,
+					browsersStr: extractBrowsersStr(issue.message),
+				};
+				stat.count++;
+				if (!stat.extensions.has(snapshot.name))
+				{
+					stat.extensions.set(snapshot.name, []);
+				}
+				if (issue.loc)
+				{
+					stat.extensions.get(snapshot.name)!.push({ file: issue.loc.file, line: issue.loc.line });
+				}
+				featureStats.set(feature, stat);
+			}
+		}
+		catch
+		{
+			// Skip extensions that fail to build
+		}
+	}
+
+	spinner.stop();
+
+	if (affectedExtensions === 0)
+	{
+		console.log('  No baseline compatibility issues found');
+	}
+	else
+	{
+		printFeatureOverview(featureStats);
+		printFeatureDetails(featureStats);
+	}
+
+	const totalIssues = totalErrors + totalWarnings;
+
+	const totalDuration = collectDuration + (performance.now() - start);
+	const durationStr = (totalDuration / 1000).toFixed(2);
+	console.log('');
+
+	const parts: string[] = [];
+	if (totalErrors > 0)
+	{
+		parts.push(chalk.red(`${totalErrors} error${totalErrors > 1 ? 's' : ''}`));
+	}
+
+	if (totalWarnings > 0)
+	{
+		parts.push(chalk.yellow(`${totalWarnings} warning${totalWarnings > 1 ? 's' : ''}`));
+	}
+
+	const breakdownStr = parts.length > 0 ? ` (${parts.join(chalk.dim(', '))})` : '';
+	console.log(` ${chalk.dim(`Checked ${snapshots.length} extensions, found ${totalIssues} ${totalIssues === 1 ? 'issue' : 'issues'}`)}${breakdownStr}${chalk.dim(` in ${affectedExtensions} ${affectedExtensions === 1 ? 'extension' : 'extensions'} in ${durationStr}s`)}`);
+	console.log('');
+
+	if (affectedExtensions > 0)
+	{
+		process.exitCode = 1;
+	}
+}
+
+async function checkSpecificBaseline(extensions: string[], args: { errorsOnly?: boolean } = {}): Promise<void>
+{
+	const start = performance.now();
+	let hasIssues = false;
+
+	console.log('');
+	console.log(` ${chalk.bold('Baseline compatibility check')}`);
+	printHowItWorks(BASELINE_HOW_IT_WORKS);
+	console.log('');
+
+	for (let ei = 0; ei < extensions.length; ei++)
+	{
+		const name = extensions[ei];
+		const extension: BasePackage | null = PackageResolver.resolve(name);
+		if (!extension)
+		{
+			console.log(` ${chalk.red('✗')} ${name} ${chalk.dim('not found')}`);
+			continue;
+		}
+
+		const progress = extensions.length > 1 ? ` ${ei + 1}/${extensions.length}` : '';
+		const spinner = createSpinner(`Checking ${name}...${progress}`);
+
+		try
+		{
+			const buildResult = await extension.generate();
+			spinner.stop();
+			const allIssues = [...buildResult.errors, ...buildResult.warnings]
+				.filter((e) => e.code && BASELINE_CODES.has(e.code));
+			const issues = args.errorsOnly
+				? allIssues.filter((e) => e.code === CF.BASELINE_JS_UNSUPPORTED)
+				: allIssues;
+
+			if (issues.length === 0)
+			{
+				console.log(` ${chalk.green('✓')} ${name} ${chalk.dim('no issues')}`);
+			}
+			else
+			{
+				hasIssues = true;
+				const jsErrors = issues.filter((e) => e.code === CF.BASELINE_JS_UNSUPPORTED).length;
+				const jsMaybe = issues.filter((e) => e.code === CF.BASELINE_JS_MAYBE_UNSUPPORTED).length;
+				const css = issues.filter((e) => e.code === CF.BASELINE_CSS_UNSUPPORTED).length;
+				const hasErrors = jsErrors > 0;
+				const label = issues.length === 1 ? 'issue' : 'issues';
+				const icon = hasErrors ? chalk.red('✗') : chalk.yellow('⚠');
+				const countColor = hasErrors ? chalk.red : chalk.yellow;
+				console.log(` ${icon} ${name} ${countColor(`${issues.length} ${label}`)} ${chalk.dim('(')}${formatBreakdown(jsErrors + jsMaybe, css)}${chalk.dim(')')}`);
+
+				for (let i = 0; i < issues.length; i++)
+				{
+					const issue = issues[i];
+
+					if (i > 0)
+					{
+						console.log('');
+						console.log(`   ${chalk.dim('─'.repeat(40))}`);
+					}
+
+					const severity = baselineSeverity(issue.code!);
+					const featureLabel = extractFeatureLabel(issue.message);
+					const browsersStr = extractBrowsersStr(issue.message);
+					const featureName = extractFeatureName(issue.message);
+
+					console.log('');
+					console.log(`     ${formatCodeLabel(issue.code!, severity)} ${featureLabel}`);
+					console.log('');
+
+					if (issue.risk)
+					{
+						console.log(`     ${formatRiskLine(issue.risk)}`);
+					}
+
+					if (browsersStr)
+					{
+						for (const line of formatBrowserLines(browsersStr, '     '))
+						{
+							console.log(line);
+						}
+					}
+
+					if (featureName)
+					{
+						console.log(`     ${formatCaniuseLink(featureName)}`);
+					}
+
+					// Code frame
+					const errorLines = formatError({
+						code: undefined,
+						message: '',
+						loc: issue.loc ?? undefined,
+						frame: issue.loc ? undefined : issue.frame,
+					}, '   ');
+					const frameLines = errorLines.filter((line) => line.trim() !== '');
+					if (frameLines.length > 0)
+					{
+						console.log('');
+						console.log(frameLines.join('\n'));
+					}
+
+					if (issue.code === CF.BASELINE_JS_MAYBE_UNSUPPORTED)
+					{
+						console.log(`     ${chalk.dim('Method name matches a built-in, but may be called on a different object.')}`);
+						console.log(`     ${chalk.dim('Use // @chef-ignore to suppress if this is not a built-in call.')}`);
+					}
+				}
+
+				console.log('');
+			}
+		}
+		catch (error)
+		{
+			spinner.stop();
+			const message = error instanceof Error ? error.message : String(error);
+			console.log(` ${chalk.red('✗')} ${name} ${chalk.dim(`build failed: ${message}`)}`);
+		}
+	}
+
+	const duration = ((performance.now() - start) / 1000).toFixed(2);
+	console.log('');
+	console.log(` ${chalk.dim(`Checked ${extensions.length} ${extensions.length === 1 ? 'extension' : 'extensions'} in ${duration}s`)}`);
+	console.log('');
+
+	if (hasIssues)
+	{
+		process.exitCode = 1;
+	}
+}
+
+// endregion
+
 diagCommand
 	.addCommand(topUsedCommand)
 	.addCommand(topDepsCommand)
@@ -1229,6 +1681,7 @@ diagCommand
 	.addCommand(findUsagesCommand)
 	.addCommand(unusedCommand)
 	.addCommand(depsTreeCommand)
-	.addCommand(bundleSizeCommand);
+	.addCommand(bundleSizeCommand)
+	.addCommand(baselineCommand);
 
 export { diagCommand };

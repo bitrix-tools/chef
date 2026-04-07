@@ -24,6 +24,7 @@ export interface ChefConfig
 		sourceMaps?: boolean;
 		treeshake?: boolean;
 		emitDeclaration?: boolean;
+		baseline?: boolean;
 	};
 	enforce?: {
 		targets?: string | string[];
@@ -31,6 +32,7 @@ export interface ChefConfig
 		treeshake?: boolean;
 		babel?: boolean;
 		emitDeclaration?: boolean;
+		baseline?: boolean;
 	};
 }
 

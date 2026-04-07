@@ -121,6 +121,10 @@ export class PackageBuilder
 					? bundleConfig.get('emitDeclaration')
 					: (defaults?.emitDeclaration ?? true)),
 			safeNamespaces: bundleConfig.get('safeNamespaces'),
+			baseline: enforce?.baseline
+				?? (bundleConfig.has('baseline')
+					? bundleConfig.get('baseline')
+					: (defaults?.baseline ?? bundleConfig.get('baseline'))),
 		};
 	}
 

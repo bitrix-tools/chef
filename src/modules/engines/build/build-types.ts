@@ -6,6 +6,9 @@ export interface BuildDiagnostic {
 	message: string;
 	frame?: string;
 	loc?: { file: string; line: number; column: number };
+	risk?: 'low' | 'medium' | 'high';
+	unsupportedIn?: string;
+	gapInfo?: string;
 }
 
 export interface BundleFileInfo {
@@ -53,6 +56,7 @@ export type BuildOptions = {
 	production?: boolean,
 	emitDeclaration?: boolean,
 	safeNamespaces?: boolean,
+	baseline?: boolean,
 };
 
 export type BuildCodeOptions = {

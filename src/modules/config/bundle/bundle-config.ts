@@ -40,6 +40,7 @@ export interface BundleConfig {
 	rebuild?: string[];
 	emitDeclaration?: boolean;
 	safeNamespaces?: boolean;
+	baseline?: boolean;
 }
 
 /** @deprecated Use new format: `plugins: [...]` and `resolveNodeModules: true` */

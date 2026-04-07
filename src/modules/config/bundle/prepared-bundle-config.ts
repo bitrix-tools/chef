@@ -32,6 +32,7 @@ export interface PreparedBundleConfig {
 	sourceMaps: boolean;
 	emitDeclaration: boolean;
 	safeNamespaces: boolean;
+	baseline: boolean;
 	tests: {
 		localization: {
 			languageId: string;

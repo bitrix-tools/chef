@@ -305,7 +305,7 @@ function getFeatureStatus(feat: any, targetMins: Record<string, number>): Featur
 
 	const nativeSupported = coreBrowsers.every((b) => {
 		const required = babelVersions?.[b]
-			?? parseInt(support[b] ?? '0', 10);
+			?? parseFloat(support[b] ?? '0');
 		const target = targetMins[b] ?? 0;
 
 		return !required || target >= required;
@@ -752,7 +752,7 @@ function showFeatureDetails(featureId: string, feature: any, pathOption?: string
 	{
 		const label = browserLabels[browser];
 		const required = babelRequired?.[browser]
-			?? parseInt(support[browser] ?? '0', 10);
+			?? parseFloat(support[browser] ?? '0');
 		const target = targetMins[browser] ?? 0;
 
 		if (!required)

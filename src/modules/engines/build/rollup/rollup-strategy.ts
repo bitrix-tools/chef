@@ -190,11 +190,13 @@ export class RollupBuildStrategy extends BuildStrategy
 
 	protected static createOnWarningHandler(): {
 		warningsRef: BuildDiagnostic[],
+		errorsRef: BuildDiagnostic[],
 		dependenciesRef: string[],
 		onWarning: WarningHandlerWithDefault,
 	}
 	{
 		const warningsRef: Array<BuildDiagnostic> = [];
+		const errorsRef: Array<BuildDiagnostic> = [];
 		const dependenciesRef: Array<string> = [];
 		const onWarning = (warning: RollupLog): void => {
 			if (
@@ -207,6 +209,57 @@ export class RollupBuildStrategy extends BuildStrategy
 				return;
 			}
 
+			if (warning.plugin === 'baseline-check')
+			{
+				const meta = (warning as any).meta ?? {};
+				const severity = meta.severity ?? 'error';
+				const risk = meta.risk;
+				const unsupportedIn = meta.unsupportedIn;
+				const gapInfo = meta.gapInfo;
+				const isCss = /CSS (?:property|@|selector)/.test(warning.message);
+
+				let code: string;
+				if (isCss)
+				{
+					code = CF.BASELINE_CSS_UNSUPPORTED;
+				}
+				else if (severity === 'warning')
+				{
+					code = CF.BASELINE_JS_MAYBE_UNSUPPORTED;
+				}
+				else
+				{
+					code = CF.BASELINE_JS_UNSUPPORTED;
+				}
+
+				const entry = {
+					code,
+					message: warning.message,
+					frame: warning.frame,
+					loc: warning.loc?.file
+						? {
+							file: warning.loc.file,
+							line: warning.loc.line,
+							column: warning.loc.column + 1,
+						}
+						: undefined,
+					risk,
+					unsupportedIn,
+					gapInfo,
+				};
+
+				if (severity === 'error')
+				{
+					errorsRef.push(entry);
+				}
+				else
+				{
+					warningsRef.push(entry);
+				}
+
+				return;
+			}
+
 			const code = (warning.code && RollupBuildStrategy.#rollupWarningCodes[warning.code]) ?? CF.UNKNOWN_BUILD_WARNING;
 
 			warningsRef.push({
@@ -214,13 +267,18 @@ export class RollupBuildStrategy extends BuildStrategy
 				message: warning.message,
 				frame: warning.frame,
 				loc: warning.loc?.file
-					? { file: warning.loc.file, line: warning.loc.line, column: warning.loc.column }
+					? {
+						file: warning.loc.file,
+						line: warning.loc.line,
+						column: warning.loc.column,
+					}
 					: undefined,
 			});
 		};
 
 		return {
 			warningsRef,
+			errorsRef,
 			dependenciesRef,
 			onWarning,
 		};
@@ -335,7 +393,7 @@ export class RollupBuildStrategy extends BuildStrategy
 			}
 		}
 
-		const { onWarning, warningsRef, dependenciesRef } = RollupBuildStrategy.createOnWarningHandler();
+		const { onWarning, warningsRef, errorsRef, dependenciesRef } = RollupBuildStrategy.createOnWarningHandler();
 		const inputOptions: InputOptions = await this.#buildRollupInputOptions(options, onWarning, dependenciesRef);
 
 		let bundle: RollupBuild;
@@ -382,14 +440,14 @@ export class RollupBuildStrategy extends BuildStrategy
 			dependencies: sortedDependencies,
 			bundles: bundlesSize,
 			warnings: [...warningsRef],
-			errors: [],
+			errors: [...errorsRef],
 			standalone: options.standalone ?? false,
 		};
 	}
 
 	async buildCode(options: BuildCodeOptions): Promise<BuildCodeResult>
 	{
-		const { onWarning, warningsRef, dependenciesRef } = RollupBuildStrategy.createOnWarningHandler();
+		const { onWarning, warningsRef, errorsRef, dependenciesRef } = RollupBuildStrategy.createOnWarningHandler();
 		const rollupInputOptions: InputOptions = await this.#buildRollupBuildCodeInputOptions(
 			options,
 			onWarning,
@@ -427,7 +485,7 @@ export class RollupBuildStrategy extends BuildStrategy
 			map: outputEntry?.map ?? null,
 			dependencies: [...dependenciesRef],
 			warnings: [...warningsRef],
-			errors: [],
+			errors: [...errorsRef],
 		};
 	}
 
@@ -448,7 +506,7 @@ export class RollupBuildStrategy extends BuildStrategy
 			}
 		}
 
-		const { onWarning, warningsRef, dependenciesRef } = RollupBuildStrategy.createOnWarningHandler();
+		const { onWarning, warningsRef, errorsRef, dependenciesRef } = RollupBuildStrategy.createOnWarningHandler();
 		const inputOptions: InputOptions = await this.#buildRollupInputOptions(options, onWarning, dependenciesRef);
 
 		let bundle: RollupBuild;
@@ -495,7 +553,7 @@ export class RollupBuildStrategy extends BuildStrategy
 			dependencies: sortedDependencies,
 			bundles: bundlesSize,
 			warnings: [...warningsRef],
-			errors: [],
+			errors: [...errorsRef],
 			standalone: options.standalone ?? false,
 		};
 	}
@@ -683,6 +741,19 @@ export class RollupBuildStrategy extends BuildStrategy
 			plugins: [
 				RollupBuildStrategy.createEnvReplacePlugin(options.production ?? false),
 				RollupBuildStrategy.createNpmRemapPlugin(dependenciesRef),
+				...await (async () => {
+					if (options.baseline)
+					{
+						const { default: baselineCheckPlugin } = await import('./plugins/baseline-check');
+
+						return [baselineCheckPlugin({
+							targets: options.targets,
+							packageRoot: options.packageRoot,
+						})];
+					}
+
+					return [];
+				})(),
 				...(() => {
 					if (options.standalone)
 					{

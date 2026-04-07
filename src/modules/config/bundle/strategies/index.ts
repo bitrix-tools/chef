@@ -20,3 +20,4 @@ export * from './resolve-node-modules-strategy';
 export * from './babel-strategy';
 export * from './emit-declaration-strategy';
 export * from './safe-namespaces-strategy';
+export * from './baseline-strategy';
