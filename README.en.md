@@ -104,6 +104,7 @@ export default {
 | `plugins` | `Plugin[]` | Custom Rollup plugins |
 | `resolveNodeModules` | `boolean` | Resolve dependencies from node_modules |
 | `babel` | `boolean` | Enable/disable Babel (default: true) |
+| `transformClasses` | `boolean \| string[]` | Transpile classes — all (`true`) or by name |
 | `rebuild` | `string[]` | Extensions to rebuild after building the current one |
 | `emitDeclaration` | `boolean` | Generate `.d.ts` with namespace declarations (default: true) |
 | `safeNamespaces` | `boolean` | Safe access to dependency namespaces via optional chaining |

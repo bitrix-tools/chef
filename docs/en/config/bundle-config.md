@@ -33,7 +33,7 @@ export default {
 | `standalone` | `boolean` | Standalone build with inlined dependencies |
 | `protected` | `boolean` | Protect from rebuilding |
 | `rebuild` | `string[]` | Rebuild dependent extensions |
-| `transformClasses` | `boolean` | Transpile classes |
+| `transformClasses` | `boolean \| string[]` | Transpile classes — all (`true`) or by name |
 | `emitDeclaration` | `boolean` | Generate `.d.ts` with namespace declarations (default: `true`) |
 | `safeNamespaces` | `boolean` | Safe access to dependency namespaces via optional chaining |
 
@@ -132,6 +132,34 @@ export default {
 ::: warning
 Without Babel, the code won't be transpiled for target browsers. Only use this option if you're sure the input code is already compatible with the required browsers.
 :::
+
+## Class Transpilation
+
+The `transformClasses` option enables transpiling ES classes into functions via Babel. This is required for compatibility with legacy code that extends classes using `BX.merge`, `Object.assign`, or other patterns incompatible with native classes.
+
+Transpile all classes:
+
+```ts
+export default {
+  input: './src/index.ts',
+  output: './dist/my.bundle.js',
+  namespace: 'BX.My',
+  transformClasses: true,
+};
+```
+
+Transpile only specific classes:
+
+```ts
+export default {
+  input: './src/index.ts',
+  output: './dist/my.bundle.js',
+  namespace: 'BX.My',
+  transformClasses: ['EventEmitter', 'BaseEvent'],
+};
+```
+
+When an array of names is provided, all other classes remain native. This allows transpiling only the classes that actually need backward compatibility, preserving bundle size and performance.
 
 ## Type Declarations
 

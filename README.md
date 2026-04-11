@@ -104,6 +104,7 @@ export default {
 | `plugins` | `Plugin[]` | Кастомные Rollup-плагины |
 | `resolveNodeModules` | `boolean` | Резолв зависимостей из node_modules |
 | `babel` | `boolean` | Включение/отключение Babel (по умолчанию: true) |
+| `transformClasses` | `boolean \| string[]` | Транспиляция классов — все (`true`) или по именам |
 | `rebuild` | `string[]` | Расширения для пересборки после сборки текущего |
 | `emitDeclaration` | `boolean` | Генерация `.d.ts` с namespace-декларациями (по умолчанию: true) |
 | `safeNamespaces` | `boolean` | Безопасные обращения к неймспейсам зависимостей через optional chaining |
