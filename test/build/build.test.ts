@@ -10,6 +10,7 @@ import { BundleConfigManager } from '../../src/modules/config/bundle/bundle-conf
 import { PhpConfigManager } from '../../src/modules/config/php/php-config-manager';
 import { DeclarationEmitter } from '../../src/modules/engines/build/declaration-emitter';
 import { transformIifeLine } from '../../src/modules/engines/build/rollup/plugins/safe-namespaces';
+import { transformClassesStrategy } from '../../src/modules/config/bundle/strategies/transform-classes-strategy';
 
 import type { BuildOptions } from '../../src/modules/engines/build/build-types';
 
@@ -794,6 +795,104 @@ return [
 			assert.notInclude(content, '#users', 'Private fields should be transpiled for old targets');
 			assert.notInclude(content, '#emitter', 'Private fields should be transpiled for old targets');
 			assert.include(content, 'UserService', 'Class name should be preserved');
+		});
+	});
+
+	describe('transformClasses', () => {
+		const extensionPath = path.join(fixturesPath, 'ts-extension');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should transform all classes when true', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			options.typescript = true;
+			options.targets = ['chrome 117'];
+			options.transformClasses = true;
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.notInclude(content, 'class UserService', 'UserService should be transpiled');
+			assert.notInclude(content, 'class EventEmitter', 'EventEmitter should be transpiled');
+			assert.notInclude(content, 'class BaseEvent', 'BaseEvent should be transpiled');
+			assert.include(content, 'babelHelpers.classCallCheck', 'Should use babel class helpers');
+		});
+
+		it('should transform only specified classes', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			options.typescript = true;
+			options.targets = ['chrome 117'];
+			options.transformClasses = ['EventEmitter', 'BaseEvent'];
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(content, 'class UserService', 'UserService should remain native');
+			assert.notInclude(content, 'class EventEmitter', 'EventEmitter should be transpiled');
+			assert.notInclude(content, 'class BaseEvent', 'BaseEvent should be transpiled');
+			assert.include(content, 'babelHelpers.classCallCheck', 'Should use babel class helpers');
+		});
+
+		it('should not transform classes when false', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			options.typescript = true;
+			options.targets = ['chrome 117'];
+			options.transformClasses = false;
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(content, 'class UserService', 'UserService should remain native');
+			assert.include(content, 'class EventEmitter', 'EventEmitter should remain native');
+			assert.include(content, 'class BaseEvent', 'BaseEvent should remain native');
+			assert.notInclude(content, 'babelHelpers.classCallCheck', 'Should not use babel class helpers');
+		});
+
+		describe('config strategy', () => {
+			it('should accept boolean true', () => {
+				assert.isTrue(transformClassesStrategy.validate(true));
+				assert.equal(transformClassesStrategy.prepare(true), true);
+			});
+
+			it('should accept boolean false', () => {
+				assert.isTrue(transformClassesStrategy.validate(false));
+				assert.equal(transformClassesStrategy.prepare(false), false);
+			});
+
+			it('should accept array of class names', () => {
+				const value = ['EventEmitter', 'BaseEvent'];
+				assert.isTrue(transformClassesStrategy.validate(value));
+				assert.deepEqual(transformClassesStrategy.prepare(value), value);
+			});
+
+			it('should reject non-string arrays', () => {
+				assert.notEqual(transformClassesStrategy.validate([1, 2]), true);
+				assert.equal(transformClassesStrategy.prepare([1, 2]), false);
+			});
+
+			it('should reject objects', () => {
+				assert.notEqual(transformClassesStrategy.validate({ classes: ['A'] }), true);
+				assert.equal(transformClassesStrategy.prepare({ classes: ['A'] }), false);
+			});
+
+			it('should default to false', () => {
+				assert.equal(transformClassesStrategy.getDefault(), false);
+			});
 		});
 	});
 

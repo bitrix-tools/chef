@@ -28,7 +28,7 @@ export interface PreparedBundleConfig {
 	};
 	targets: string | string[] | undefined;
 	minification: boolean | MinifyOptions;
-	transformClasses: boolean;
+	transformClasses: boolean | string[];
 	sourceMaps: boolean;
 	emitDeclaration: boolean;
 	safeNamespaces: boolean;

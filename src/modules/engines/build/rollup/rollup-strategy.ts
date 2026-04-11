@@ -644,7 +644,7 @@ export class RollupBuildStrategy extends BuildStrategy
 			import('./plugins/css'),
 		]);
 
-		const babelPlugin = await this.#loadBabelPlugin(options);
+		const babelPlugins = await this.#loadBabelPlugins(options);
 
 		return {
 			nodeResolve,
@@ -652,15 +652,15 @@ export class RollupBuildStrategy extends BuildStrategy
 			jsonPlugin,
 			urlPlugin,
 			cssPlugin,
-			babelPlugin,
+			babelPlugins,
 		};
 	}
 
-	async #loadBabelPlugin(options: { babel?: boolean, typescript?: boolean, standalone?: boolean, targets: string[], transformClasses?: boolean }): Promise<Plugin | null>
+	async #loadBabelPlugins(options: { babel?: boolean, typescript?: boolean, standalone?: boolean, targets: string[], transformClasses?: boolean | string[], packageRoot: string }): Promise<Plugin[]>
 	{
 		if (options.babel === false)
 		{
-			return null;
+			return [];
 		}
 
 		const [
@@ -675,54 +675,87 @@ export class RollupBuildStrategy extends BuildStrategy
 			import('@babel/plugin-external-helpers'),
 		]);
 
-		const babelTransformPlugins = [
-			...(options.typescript && !options.standalone ? [] : [flowStripTypesPlugin]),
-			externalHelpersPlugin,
-		];
-
-		if (options.transformClasses)
-		{
-			const [
-				{ default: transformClassProperties },
-				{ default: transformPrivateMethods },
-				{ default: transformPrivatePropertyInObject },
-				{ default: transformClasses },
-			] = await Promise.all([
-				import('@babel/plugin-transform-class-properties'),
-				import('@babel/plugin-transform-private-methods'),
-				import('@babel/plugin-transform-private-property-in-object'),
-				import('@babel/plugin-transform-classes'),
-			]);
-
-			babelTransformPlugins.push(
-				transformClassProperties,
-				transformPrivateMethods,
-				transformPrivatePropertyInObject,
-				transformClasses,
-			);
-		}
-
 		const extensions = ['.js', '.jsx', '.mjs'];
 		if (options.typescript)
 		{
 			extensions.push('.ts', '.tsx');
 		}
 
-		return babelPlugin({
-			babelHelpers: 'external',
-			extensions,
-			compact: false,
-			presets: [
-				[
-					presetEnv,
-					{
-						targets: options.targets,
-						modules: false,
-					},
+		const basePlugins = [
+			...(options.typescript && !options.standalone ? [] : [flowStripTypesPlugin]),
+			externalHelpersPlugin,
+		];
+
+		if (options.transformClasses === true)
+		{
+			basePlugins.push(...await this.#loadClassTransformPlugins());
+		}
+
+		const result: Plugin[] = [
+			babelPlugin({
+				babelHelpers: 'external',
+				extensions,
+				compact: false,
+				presets: [
+					[
+						presetEnv,
+						{
+							targets: options.targets,
+							modules: false,
+						},
+					],
 				],
-			],
-			plugins: babelTransformPlugins,
-		});
+				plugins: basePlugins,
+			}),
+		];
+
+		if (Array.isArray(options.transformClasses))
+		{
+			result.push(babelPlugin({
+				babelHelpers: 'external',
+				extensions,
+				compact: false,
+				presets: [],
+				plugins: [
+					externalHelpersPlugin,
+					...await this.#loadClassTransformPlugins(options.transformClasses),
+				],
+			}));
+		}
+
+		return result;
+	}
+
+	async #loadClassTransformPlugins(classNames?: string[]): Promise<any[]>
+	{
+		const [
+			{ default: transformClassProperties },
+			{ default: transformPrivateMethods },
+			{ default: transformPrivatePropertyInObject },
+			{ default: transformClasses },
+		] = await Promise.all([
+			import('@babel/plugin-transform-class-properties'),
+			import('@babel/plugin-transform-private-methods'),
+			import('@babel/plugin-transform-private-property-in-object'),
+			import('@babel/plugin-transform-classes'),
+		]);
+
+		const plugins = [
+			transformClassProperties,
+			transformPrivateMethods,
+			transformPrivatePropertyInObject,
+			transformClasses,
+		];
+
+		if (!classNames?.length)
+		{
+			return plugins;
+		}
+
+		const { default: filterClassTransform } = await import('./plugins/filter-class-transform');
+		const nameSet = new Set(classNames);
+
+		return plugins.map((plugin) => filterClassTransform(plugin, nameSet));
 	}
 
 	async #buildRollupInputOptions(options: BuildOptions, onWarn: WarningHandlerWithDefault, dependenciesRef: string[]): Promise<InputOptions>
@@ -733,7 +766,7 @@ export class RollupBuildStrategy extends BuildStrategy
 			jsonPlugin,
 			urlPlugin,
 			cssPlugin,
-			babelPlugin,
+			babelPlugins,
 		} = await this.#loadBuildPlugins(options);
 
 		return {
@@ -805,7 +838,7 @@ export class RollupBuildStrategy extends BuildStrategy
 
 					return null;
 				})(),
-				...(babelPlugin ? [babelPlugin] : []),
+				...babelPlugins,
 				jsonPlugin(),
 				cssPlugin({
 					extract: options.output.css,
@@ -868,12 +901,12 @@ export class RollupBuildStrategy extends BuildStrategy
 			{ default: nodeResolve },
 			{ default: commonjs },
 			{ default: jsonPlugin },
-			babelPlugin,
+			babelPlugins,
 		] = await Promise.all([
 			import('@rollup/plugin-node-resolve'),
 			import('@rollup/plugin-commonjs'),
 			import('@rollup/plugin-json'),
-			this.#loadBabelPlugin(options),
+			this.#loadBabelPlugins({ ...options, packageRoot: options.packageRoot }),
 		]);
 
 		return {
@@ -924,7 +957,7 @@ export class RollupBuildStrategy extends BuildStrategy
 				nodeResolve({
 					browser: true,
 				}),
-				...(babelPlugin ? [babelPlugin] : []),
+				...babelPlugins,
 				jsonPlugin(),
 				commonjs({
 					sourceMap: false,

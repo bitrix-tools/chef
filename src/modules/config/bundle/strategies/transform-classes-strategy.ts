@@ -1,14 +1,26 @@
 import { ConfigStrategy } from '../../config-strategy';
 
+export type TransformClassesValue = boolean | string[];
+
+function isStringArray(value: any): value is string[]
+{
+	return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
 export const transformClassesStrategy = {
 	key: 'transformClasses',
 	getDefault(): any
 	{
 		return false;
 	},
-	prepare(value: any): boolean
+	prepare(value: any): TransformClassesValue
 	{
 		if (typeof value === 'boolean')
+		{
+			return value;
+		}
+
+		if (isStringArray(value))
 		{
 			return value;
 		}
@@ -22,6 +34,11 @@ export const transformClassesStrategy = {
 			return true;
 		}
 
-		return 'Invalid \'transformClasses\' value.';
+		if (isStringArray(value))
+		{
+			return true;
+		}
+
+		return 'Invalid \'transformClasses\' value. Expected boolean or array of class names.';
 	},
-} satisfies ConfigStrategy<boolean>
+} satisfies ConfigStrategy<TransformClassesValue>

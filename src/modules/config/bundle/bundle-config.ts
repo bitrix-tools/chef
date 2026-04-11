@@ -28,7 +28,7 @@ export interface BundleConfig {
 	/** @deprecated Use `targets` instead */
 	browserslist?: string | string[];
 	minification?: boolean | MinifyOptions;
-	transformClasses?: boolean;
+	transformClasses?: boolean | string[];
 	standalone?: boolean;
 	sourceMaps?: boolean;
 	tests?: {
