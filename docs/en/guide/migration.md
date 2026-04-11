@@ -36,6 +36,8 @@ After installation, the `chef` command is available globally. The old `bitrix` c
 | — | `chef diag` | **New.** Diagnostics: dependencies, sizes, cycles |
 | — | `chef lint` | **New.** Extension linting |
 | — | `chef aliases` | **New.** Path alias regeneration |
+| — | `chef typecheck` | **New.** TypeScript type checking |
+| — | `chef baseline` | **New.** Check web feature availability for browser targets |
 | — | `chef flow-to-ts` | **New.** Flow.js → TypeScript migration |
 | — | `chef test unit` | **New.** Run unit tests only |
 | — | `chef test e2e` | **New.** Run e2e tests only |

@@ -36,6 +36,8 @@ npm install -g @bitrix/chef
 | — | `chef diag` | **Новое.** Диагностика: зависимости, размеры, циклы |
 | — | `chef lint` | **Новое.** Линтинг расширений |
 | — | `chef aliases` | **Новое.** Регенерация алиасов путей |
+| — | `chef typecheck` | **Новое.** Проверка типов TypeScript |
+| — | `chef baseline` | **Новое.** Проверка доступности веб-фич для browser targets |
 | — | `chef flow-to-ts` | **Новое.** Миграция Flow.js → TypeScript |
 | — | `chef test unit` | **Новое.** Запуск только unit-тестов |
 | — | `chef test e2e` | **Новое.** Запуск только e2e-тестов |
