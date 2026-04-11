@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.6.1 <Badge type="tip" text="4/11/2026" />
+
+- Fixed selective class transpilation: static properties of other classes are no longer affected
+
 ## v1.6.0 <Badge type="tip" text="4/11/2026" />
 
 - New `chef baseline` command — check web feature availability for current browser targets
@@ -95,7 +99,7 @@ New safeNamespaces option in bundle.config — safe dependency namespace access 
 - Remove unused dependencies (@vue/compiler-sfc, @rollup/plugin-typescript)
 - Remove ora dependency from test and init reporters
 
-## v0.0.0-beta.14 <Badge type="tip" text="3/12/2026" />
+## v0.0.0-beta.14 <Badge type="tip" text="3/11/2026" />
 
 Added TypeScript type-checking during build. Errors are displayed with a code snippet, underline, and a clickable file link. If errors are found, the build stops before Rollup starts.
 
