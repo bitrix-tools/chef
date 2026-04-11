@@ -99,7 +99,7 @@ export default {
 | `concat` | `{js?: string[], css?: string[]}` | Конкатенация файлов в указанном порядке |
 | `targets` | `string \| string[]` | Целевые браузеры для транспиляции |
 | `sourceMaps` | `boolean` | Генерация source maps |
-| `minification` | `boolean \| object` | Минификация через OXC |
+| `minification` | `boolean \| object` | Минификация через Terser |
 | `treeshake` | `boolean` | Удаление неиспользуемого кода (по умолчанию: true) |
 | `plugins` | `Plugin[]` | Кастомные Rollup-плагины |
 | `resolveNodeModules` | `boolean` | Резолв зависимостей из node_modules |

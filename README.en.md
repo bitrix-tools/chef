@@ -99,7 +99,7 @@ export default {
 | `concat` | `{js?: string[], css?: string[]}` | Concatenate files in specified order |
 | `targets` | `string \| string[]` | Browser targets for transpilation |
 | `sourceMaps` | `boolean` | Generate source maps |
-| `minification` | `boolean \| object` | OXC minification options |
+| `minification` | `boolean \| object` | Terser minification options |
 | `treeshake` | `boolean` | Remove unused code (default: true) |
 | `plugins` | `Plugin[]` | Custom Rollup plugins |
 | `resolveNodeModules` | `boolean` | Resolve dependencies from node_modules |

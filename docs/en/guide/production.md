@@ -32,7 +32,7 @@ chef build ui.buttons -w       # dev + watch
 
 Optimized for deployment:
 
-- **Minification** — code is compressed via [OXC](https://oxc.rs/). Whitespace is removed, variable names are shortened, dead code is eliminated.
+- **Minification** — code is compressed via [Terser](https://terser.org/). Whitespace is removed, variable names are shortened, dead code is eliminated.
 - **No source maps** — source maps are not generated, reducing file size.
 - **No Vue `__file`** — the source path is removed from Vue components, keeping the project structure private.
 
