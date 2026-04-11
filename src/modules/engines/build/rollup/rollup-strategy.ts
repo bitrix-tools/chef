@@ -711,22 +711,17 @@ export class RollupBuildStrategy extends BuildStrategy
 
 		if (Array.isArray(options.transformClasses))
 		{
-			result.push(babelPlugin({
-				babelHelpers: 'external',
+			const { default: filterClassTransform } = await import('./plugins/filter-class-transform');
+			result.push(filterClassTransform({
+				classNames: options.transformClasses,
 				extensions,
-				compact: false,
-				presets: [],
-				plugins: [
-					externalHelpersPlugin,
-					...await this.#loadClassTransformPlugins(options.transformClasses),
-				],
 			}));
 		}
 
 		return result;
 	}
 
-	async #loadClassTransformPlugins(classNames?: string[]): Promise<any[]>
+	async #loadClassTransformPlugins(): Promise<any[]>
 	{
 		const [
 			{ default: transformClassProperties },
@@ -740,22 +735,12 @@ export class RollupBuildStrategy extends BuildStrategy
 			import('@babel/plugin-transform-classes'),
 		]);
 
-		const plugins = [
+		return [
 			transformClassProperties,
 			transformPrivateMethods,
 			transformPrivatePropertyInObject,
 			transformClasses,
 		];
-
-		if (!classNames?.length)
-		{
-			return plugins;
-		}
-
-		const { default: filterClassTransform } = await import('./plugins/filter-class-transform');
-		const nameSet = new Set(classNames);
-
-		return plugins.map((plugin) => filterClassTransform(plugin, nameSet));
 	}
 
 	async #buildRollupInputOptions(options: BuildOptions, onWarn: WarningHandlerWithDefault, dependenciesRef: string[]): Promise<InputOptions>

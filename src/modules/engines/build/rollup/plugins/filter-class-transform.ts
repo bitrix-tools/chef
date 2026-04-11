@@ -1,100 +1,142 @@
+import type { Plugin } from 'rollup';
+
 /**
- * Wraps a Babel plugin so it only processes classes whose names are in the given set.
- * Works by intercepting ClassDeclaration and ClassExpression visitors at the top level.
+ * Rollup plugin that applies Babel class transformation plugins
+ * only to files containing class declarations matching the given names.
  */
-export default function filterClassTransform(
-	innerPluginFactory: Function,
-	classNames: Set<string>,
-): Function
+export default function filterClassTransform(options: {
+	classNames: string[];
+	extensions: string[];
+}): Plugin
 {
-	return (api: any, options: any, dirname: any) => {
-		const inner = innerPluginFactory(api, options, dirname);
+	const classNameSet = new Set(options.classNames);
+	const extensionSet = new Set(options.extensions);
 
-		if (!inner.visitor)
+	const classPattern = new RegExp(
+		`(?:^|\\n)\\s*(?:export\\s+(?:default\\s+)?)?class\\s+(${
+			options.classNames.map(escapeRegExp).join('|')
+		})\\b`,
+	);
+
+	let babelTransform: ((code: string, id: string) => Promise<{ code: string; map: any } | null>) | null = null;
+
+	return {
+		name: 'filter-class-transform',
+
+		async transform(code, id)
 		{
-			return inner;
-		}
-
-		const filteredVisitor = { ...inner.visitor };
-
-		for (const nodeType of ['ClassDeclaration', 'ClassExpression'])
-		{
-			const original = filteredVisitor[nodeType];
-			if (!original)
+			const ext = '.' + id.split('.').pop();
+			if (!extensionSet.has(ext))
 			{
-				continue;
+				return null;
 			}
 
-			filteredVisitor[nodeType] = wrapClassVisitor(original, classNames);
+			if (!classPattern.test(code))
+			{
+				return null;
+			}
+
+			if (!babelTransform)
+			{
+				babelTransform = await createBabelTransform(classNameSet);
+			}
+
+			return babelTransform(code, id);
+		},
+	};
+}
+
+async function createBabelTransform(classNames: Set<string>): Promise<(code: string, id: string) => Promise<{ code: string; map: any } | null>>
+{
+	const [
+		babel,
+		{ default: externalHelpersPlugin },
+		{ default: transformClassProperties },
+		{ default: transformPrivateMethods },
+		{ default: transformPrivatePropertyInObject },
+		{ default: transformClasses },
+	] = await Promise.all([
+		import('@babel/core'),
+		import('@babel/plugin-external-helpers'),
+		import('@babel/plugin-transform-class-properties'),
+		import('@babel/plugin-transform-private-methods'),
+		import('@babel/plugin-transform-private-property-in-object'),
+		import('@babel/plugin-transform-classes'),
+	]);
+
+	return async (code: string, id: string) => {
+		const result = await babel.transformAsync(code, {
+			filename: id,
+			babelrc: false,
+			configFile: false,
+			compact: false,
+			sourceMaps: true,
+			plugins: [
+				externalHelpersPlugin,
+				createClassFilterPlugin(classNames),
+				transformClassProperties,
+				transformPrivateMethods,
+				transformPrivatePropertyInObject,
+				transformClasses,
+			],
+		});
+
+		if (!result?.code)
+		{
+			return null;
 		}
 
 		return {
-			...inner,
-			visitor: filteredVisitor,
+			code: result.code,
+			map: result.map,
 		};
 	};
 }
 
-function getClassName(nodePath: any): string | null
+/**
+ * Babel plugin that marks classes NOT in the filter set
+ * so that transform-classes skips them.
+ *
+ * Works by visiting ClassDeclaration/ClassExpression before
+ * transform-classes runs, and calling path.skip() on non-matching classes.
+ * This prevents subsequent visitors from processing these nodes.
+ */
+function createClassFilterPlugin(classNames: Set<string>): any
 {
-	// class MyClass { ... }
-	if (nodePath.node.id?.name)
+	return {
+		visitor: {
+			// eslint-disable-next-line @typescript-eslint/naming-convention
+			'ClassDeclaration|ClassExpression'(path: any)
+			{
+				const name = getClassName(path);
+				if (!name || !classNames.has(name))
+				{
+					path.skip();
+				}
+			},
+		},
+	};
+}
+
+function getClassName(path: any): string | null
+{
+	if (path.node.id?.name)
 	{
-		return nodePath.node.id.name;
+		return path.node.id.name;
 	}
 
-	// const MyClass = class { ... }
 	if (
-		nodePath.parentPath?.isVariableDeclarator()
-		&& nodePath.parentPath.node.id?.type === 'Identifier'
+		path.parentPath?.isVariableDeclarator()
+		&& path.parentPath.node.id?.type === 'Identifier'
 	)
 	{
-		return nodePath.parentPath.node.id.name;
+		return path.parentPath.node.id.name;
 	}
 
 	return null;
 }
 
-function shouldTransform(nodePath: any, classNames: Set<string>): boolean
+function escapeRegExp(str: string): string
 {
-	const name = getClassName(nodePath);
-
-	return name !== null && classNames.has(name);
-}
-
-function wrapClassVisitor(original: any, classNames: Set<string>): any
-{
-	if (typeof original === 'function')
-	{
-		return function (this: any, nodePath: any, state: any) {
-			if (shouldTransform(nodePath, classNames))
-			{
-				return original.call(this, nodePath, state);
-			}
-		};
-	}
-
-	const wrapped: Record<string, any> = {};
-
-	if (original.enter)
-	{
-		wrapped.enter = function (this: any, nodePath: any, state: any) {
-			if (shouldTransform(nodePath, classNames))
-			{
-				return original.enter.call(this, nodePath, state);
-			}
-		};
-	}
-
-	if (original.exit)
-	{
-		wrapped.exit = function (this: any, nodePath: any, state: any) {
-			if (shouldTransform(nodePath, classNames))
-			{
-				return original.exit.call(this, nodePath, state);
-			}
-		};
-	}
-
-	return wrapped;
+	return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
