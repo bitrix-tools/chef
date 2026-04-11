@@ -36,6 +36,7 @@ export default {
 | `transformClasses` | `boolean \| string[]` | Транспиляция классов — все (`true`) или по именам |
 | `emitDeclaration` | `boolean` | Генерация `.d.ts` с namespace-декларациями (по умолчанию: `true`) |
 | `safeNamespaces` | `boolean` | Безопасные обращения к неймспейсам зависимостей через optional chaining |
+| `baseline` | `boolean` | Проверка доступности веб-фич при сборке (по умолчанию: `true`) |
 
 ## Плагины
 

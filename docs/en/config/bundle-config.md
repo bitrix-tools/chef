@@ -36,6 +36,7 @@ export default {
 | `transformClasses` | `boolean \| string[]` | Transpile classes — all (`true`) or by name |
 | `emitDeclaration` | `boolean` | Generate `.d.ts` with namespace declarations (default: `true`) |
 | `safeNamespaces` | `boolean` | Safe access to dependency namespaces via optional chaining |
+| `baseline` | `boolean` | Check web feature availability during build (default: `true`) |
 
 ## Plugins
 

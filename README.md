@@ -108,6 +108,7 @@ export default {
 | `rebuild` | `string[]` | Расширения для пересборки после сборки текущего |
 | `emitDeclaration` | `boolean` | Генерация `.d.ts` с namespace-декларациями (по умолчанию: true) |
 | `safeNamespaces` | `boolean` | Безопасные обращения к неймспейсам зависимостей через optional chaining |
+| `baseline` | `boolean` | Проверка доступности веб-фич при сборке (по умолчанию: true) |
 
 > Также поддерживается JavaScript-конфигурация (`bundle.config.js`).
 
