@@ -3,7 +3,11 @@
 		"target": "ES2022",
 		"module": "ESNext",
 		"moduleResolution": "bundler",
-		"strict": true
+		"strict": true,
+		"baseUrl": "../../../../..",
+		"paths": {
+			"main.core": ["./main/install/js/main/core/src/index.js"]
+		}
 	},
 	"include": ["src"]
 }

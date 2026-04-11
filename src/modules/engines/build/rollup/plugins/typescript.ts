@@ -56,7 +56,10 @@ export async function checkTypes(options: TypeCheckOptions): Promise<TypeCheckRe
 		return { errors: [] };
 	}
 
-	const rootNames = collectSourceFiles(sourceDir, tsExtensions);
+	const rootNames = [
+		...collectSourceFiles(sourceDir, tsExtensions),
+		...collectDeclarationFiles(packageRoot),
+	];
 	if (rootNames.length === 0)
 	{
 		return { errors: [] };
@@ -76,8 +79,6 @@ export async function checkTypes(options: TypeCheckOptions): Promise<TypeCheckRe
 		skipLibCheck: true,
 		declaration: false,
 		declarationMap: false,
-		paths: undefined,
-		baseUrl: undefined,
 	};
 
 	const host = ts.createCompilerHost(typeCheckCompilerOptions, true);
@@ -102,9 +103,8 @@ export async function checkTypes(options: TypeCheckOptions): Promise<TypeCheckRe
 		);
 	}
 
-	// TS2307: Cannot find module — expected for external Bitrix dependencies
-	// TS2304: Cannot find name — can come from unresolved external types
-	const ignoredCodes = new Set([2307, 2304]);
+	// TS2304: Cannot find name — expected for global variables from external Bitrix extensions (e.g. BX)
+	const ignoredCodes = new Set([2304]);
 	const filterFiles = options.files?.map((f) => path.resolve(f));
 
 	const errors = diagnostics.filter((d) => {
@@ -244,6 +244,21 @@ function collectSourceFiles(directory: string, extensions: string[]): string[]
 		else if (extensions.some((ext) => entry.name.endsWith(ext)))
 		{
 			files.push(fullPath);
+		}
+	}
+
+	return files;
+}
+
+function collectDeclarationFiles(directory: string): string[]
+{
+	const files: string[] = [];
+
+	for (const entry of fs.readdirSync(directory, { withFileTypes: true }))
+	{
+		if (!entry.isDirectory() && entry.name.endsWith('.d.ts'))
+		{
+			files.push(path.join(directory, entry.name));
 		}
 	}
 

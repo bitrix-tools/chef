@@ -12,3 +12,10 @@ export class Core
 		return this.ready;
 	}
 }
+
+export const Tag = {
+	render(strings, ...values)
+	{
+		return document.createElement('div');
+	},
+};

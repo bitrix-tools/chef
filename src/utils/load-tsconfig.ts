@@ -20,11 +20,11 @@ export async function loadTsConfig(configPath: string, packageRoot: string): Pro
 		packageRoot,
 	);
 
-	const configDirname = path.dirname(configPath);
+	const baseDir = config.options.baseUrl ?? path.dirname(configPath);
 
 	config.options.paths = Object.entries(config.options.paths ?? {}).reduce((acc, [extensionName, paths]) => {
 		acc[extensionName] = paths.map((filePath) => {
-			return path.join(configDirname, filePath.replace('./', ''));
+			return path.join(baseDir, filePath.replace('./', ''));
 		});
 
 		return acc;
