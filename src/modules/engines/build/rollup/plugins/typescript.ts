@@ -250,15 +250,26 @@ function collectSourceFiles(directory: string, extensions: string[]): string[]
 	return files;
 }
 
+const declarationSkipDirs = new Set(['src', 'dist', 'node_modules', 'test']);
+
 function collectDeclarationFiles(directory: string): string[]
 {
 	const files: string[] = [];
 
 	for (const entry of fs.readdirSync(directory, { withFileTypes: true }))
 	{
-		if (!entry.isDirectory() && entry.name.endsWith('.d.ts'))
+		const fullPath = path.join(directory, entry.name);
+
+		if (entry.isDirectory())
 		{
-			files.push(path.join(directory, entry.name));
+			if (!declarationSkipDirs.has(entry.name))
+			{
+				files.push(...collectDeclarationFiles(fullPath));
+			}
+		}
+		else if (entry.name.endsWith('.d.ts'))
+		{
+			files.push(fullPath);
 		}
 	}
 
