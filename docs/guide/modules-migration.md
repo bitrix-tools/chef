@@ -3,8 +3,8 @@
 ## Быстрый старт
 
 ```bash
-# 1. Переключиться на ветку main/ts
-hg pull && hg update main/ts
+# 1. Обновить репозиторий
+hg pull && hg update
 
 # 2. Чистая установка зависимостей (Chef установится автоматически)
 rm -rf node_modules && npm install
@@ -24,24 +24,17 @@ chef build ui.buttons
 
 После первой сборки через Chef вы увидите diff в собранных файлах. Это нормально — достаточно один раз пересобрать и закоммитить. Chef собирает бандлы немного иначе, чем `@bitrix/cli`.
 
-::: danger @bitrix/cli перестанет работать
-После слития `main/ts` в `default` сборка через `@bitrix/cli` (`bitrix build`) перестанет работать — он не понимает новый формат `.browserslistrc`. Необходимо перейти на `@bitrix/chef`.
+::: warning @bitrix/cli больше не работает
+Сборка через `@bitrix/cli` (`bitrix build`) больше не работает — он не понимает новый формат `.browserslistrc`. Используйте `@bitrix/chef`.
 :::
 
-### Возврат на свою ветку
-
-После проверки на `main/ts` вы можете переключиться обратно на свою ветку. Так как `package.json` в вашей ветке ещё старый, нужно переустановить зависимости:
-
-```bash
-hg update my-branch
-rm -rf node_modules && npm install
-```
-
-После слития `main/ts` в `default` и мерджа `default` в вашу ветку — снова выполните `rm -rf node_modules && npm install` и `chef aliases`.
+::: tip Если у вас ветка, созданная до перехода
+После мерджа `default` в вашу ветку выполните `rm -rf node_modules && npm install` и `chef aliases`.
+:::
 
 ## Что меняется
 
-Ветка `main/ts` содержит переход на новый инструментарий. Изменения затрагивают две области:
+Изменения затрагивают две области:
 
 ### Инструменты
 
@@ -60,44 +53,17 @@ rm -rf node_modules && npm install
 
 ### npm install
 
-`npm install` автоматически поставит `@bitrix/chef` глобально и загрузит браузеры Playwright (это прописано в `postinstall`).
+`npm install` установит зависимости проекта и загрузит браузеры Playwright.
 
-::: tip Если `chef: command not found`
-Установите вручную:
+После этого установите Chef глобально:
+
 ```bash
 npm install -g @bitrix/chef
 ```
-:::
 
 ### chef aliases
 
 Генерирует `aliases.tsconfig.json` — маппинг имён расширений на пути к исходникам. Файл в `.hgignore` — его не нужно коммитить, у каждого разработчика он свой.
-
-### VCS-хуки
-
-`chef init hooks` устанавливает хуки, которые запускают `chef aliases --quiet` после `hg update` и `hg pull`. Это нужно для двух вещей:
-
-1. **Актуальные алиасы** — после pull могут появиться новые расширения, и IDE должна их видеть.
-2. **Пауза watcher при мердже** — если запущен `chef build -w` и вы делаете `hg update`/merge, watcher увидит изменения в файлах и начнёт пересобирать бандлы. Хук создаёт файл `.chef/merge.lock` на время своей работы — watcher видит этот лок и пропускает пересборку до завершения мерджа.
-
-#### Удаление хуков
-
-Если хуки мешают или что-то пошло не так:
-
-```bash
-# 1. Удалить файлы хуков
-rm -rf .chef/hooks
-
-# 2. Убрать записи из .hg/hgrc
-```
-
-Откройте `.hg/hgrc` и удалите строки `update.chef` и `changegroup.chef` из секции `[hooks]`:
-
-```ini
-[hooks]
-update.chef = .chef/hooks/update-aliases.sh    # ← удалить
-changegroup.chef = .chef/hooks/update-aliases.sh  # ← удалить
-```
 
 ## Сборка
 
