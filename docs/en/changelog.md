@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.6.0 <Badge type="tip" text="4/11/2026" />
+
+- New `chef baseline` command — check web feature availability for current browser targets
+- New `chef diag baseline` subcommand — overview of unsupported features across all extensions
+- Build now warns about usage of APIs and CSS properties not supported by target browsers
+- `chef typecheck` now resolves external dependencies via tsconfig paths and includes extension `.d.ts` files
+- `transformClasses` accepts an array of class names for selective transpilation
+
 ## v1.5.1 <Badge type="tip" text="4/1/2026" />
 
 - Fixed update check crash on Windows (EINVAL when spawning npm.cmd)
@@ -87,7 +95,7 @@ New safeNamespaces option in bundle.config — safe dependency namespace access 
 - Remove unused dependencies (@vue/compiler-sfc, @rollup/plugin-typescript)
 - Remove ora dependency from test and init reporters
 
-## v0.0.0-beta.14 <Badge type="tip" text="3/11/2026" />
+## v0.0.0-beta.14 <Badge type="tip" text="3/12/2026" />
 
 Added TypeScript type-checking during build. Errors are displayed with a code snippet, underline, and a clickable file link. If errors are found, the build stops before Rollup starts.
 
