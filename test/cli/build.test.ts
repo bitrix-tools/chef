@@ -54,6 +54,16 @@ describe('chef build', () => {
 
 	// region: basic commands
 
+	it('should build an extension by name using cook alias', async () => {
+		const extensionDist = path.join(tmpRepo, 'ui/install/js/ui/buttons/dist');
+		fs.rmSync(extensionDist, { recursive: true, force: true });
+
+		const { exitCode } = await runChef(['cook', 'ui.buttons'], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+		assert.isTrue(fs.existsSync(path.join(extensionDist, 'buttons.bundle.js')));
+	});
+
 	it('should build an extension by name', async () => {
 		const extensionDist = path.join(tmpRepo, 'ui/install/js/ui/buttons/dist');
 		fs.rmSync(extensionDist, { recursive: true, force: true });
