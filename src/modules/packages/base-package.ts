@@ -296,18 +296,39 @@ export abstract class BasePackage
 
 	getUnitTestsDirectoryPath(): string
 	{
-		const unitDir = path.join(this.getPath(), 'test', 'unit');
-		if (fs.existsSync(unitDir))
+		for (const dir of ['test', 'tests'])
 		{
-			return unitDir;
+			const unitDir = path.join(this.getPath(), dir, 'unit');
+			if (fs.existsSync(unitDir))
+			{
+				return unitDir;
+			}
 		}
 
 		// Fallback for legacy structure
+		for (const dir of ['test', 'tests'])
+		{
+			const testDir = path.join(this.getPath(), dir);
+			if (fs.existsSync(testDir))
+			{
+				return testDir;
+			}
+		}
+
 		return path.join(this.getPath(), 'test');
 	}
 
 	getEndToEndTestsDirectoryPath(): string
 	{
+		for (const dir of ['test', 'tests'])
+		{
+			const e2eDir = path.join(this.getPath(), dir, 'e2e');
+			if (fs.existsSync(e2eDir))
+			{
+				return e2eDir;
+			}
+		}
+
 		return path.join(this.getPath(), 'test', 'e2e');
 	}
 
@@ -319,7 +340,11 @@ export abstract class BasePackage
 		];
 
 		// Exclude e2e only for legacy test structure (tests in test/ root)
-		if (!fs.existsSync(path.join(this.getPath(), 'test', 'unit')))
+		const hasUnitDir = ['test', 'tests'].some(
+			(dir) => fs.existsSync(path.join(this.getPath(), dir, 'unit')),
+		);
+
+		if (!hasUnitDir)
 		{
 			patterns.push('!**/e2e');
 		}
