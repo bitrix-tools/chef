@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.6.3 <Badge type="tip" text="4/13/2026" />
+
+- Fixed removal of side-effect imports during build (e.g. handler registration files)
+- Fixed `adjustConfigPhp: false` being ignored in bundle.config
+- Tree-shaking settings aligned with Rollup defaults
+
 ## v1.6.2 <Badge type="tip" text="4/13/2026" />
 
 Added support for `tests/` directory as an alternative to `test/` for unit and e2e tests
