@@ -298,7 +298,7 @@ No E2E test files were found in the extension.
 
 **How to fix:**
 
-Create test files in the `test/e2e/` directory of the extension. Files must match the `*.test.ts` or `*.spec.ts` pattern.
+Create test files in the `tests/e2e/` directory of the extension. Files must match the `*.test.ts` or `*.spec.ts` pattern.
 
 ### CF3003 — Playwright Error {#CF3003}
 

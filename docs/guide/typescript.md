@@ -168,7 +168,7 @@ export default {
 ### Unit-тесты
 
 ```ts
-// test/unit/ui.buttons.test.ts
+// tests/unit/ui.buttons.test.ts
 import { it, describe } from 'mocha';
 import { assert } from 'chai';
 
@@ -196,7 +196,7 @@ npm install --save-dev @types/mocha @types/chai
 ### E2E-тесты
 
 ```ts
-// test/e2e/ui.buttons.spec.ts
+// tests/e2e/ui.buttons.spec.ts
 import { test, expect } from '@playwright/test';
 
 test('button renders on page', async ({ page }) => {

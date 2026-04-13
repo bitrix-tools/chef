@@ -13,7 +13,7 @@
 
 ```
 local/js/vendor/my-app/
-└── test/
+└── tests/
     └── e2e/
         ├── counter.spec.ts
         └── message-list.spec.ts

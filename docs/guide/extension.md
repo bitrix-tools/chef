@@ -27,7 +27,7 @@ local/js/ui/buttons/
 ├── config.php
 ├── src/
 │   └── ui.buttons.ts
-└── test/
+└── tests/
     ├── unit/
     │   └── ui.buttons.test.ts
     └── e2e/
@@ -49,7 +49,7 @@ local/js/ui/buttons/
 ├── dist/
 │   ├── ui.buttons.bundle.js   # Скомпилированный JS (генерируется при сборке)
 │   └── ui.buttons.bundle.css  # Скомпилированный CSS (генерируется при сборке)
-└── test/
+└── tests/
     ├── unit/              # Unit-тесты (Mocha + Chai)
     │   └── ui.buttons.test.ts
     └── e2e/               # E2E-тесты (Playwright)
@@ -168,7 +168,7 @@ npm install --save-dev @types/mocha @types/chai
 :::
 
 ```ts
-// test/unit/ui.buttons.test.ts
+// tests/unit/ui.buttons.test.ts
 import { it, describe } from 'mocha';
 import { assert } from 'chai';
 
@@ -189,7 +189,7 @@ describe('Button', () => {
 Без авторизации — для публичных страниц:
 
 ```ts
-// test/e2e/ui.buttons.spec.ts
+// tests/e2e/ui.buttons.spec.ts
 import { test, expect } from '@playwright/test';
 
 test('button is visible on page', async ({ page }) => {
@@ -201,7 +201,7 @@ test('button is visible on page', async ({ page }) => {
 С автоматической авторизацией — импортируйте из `ui.test.e2e.auth`:
 
 ```ts
-// test/e2e/ui.buttons.spec.ts
+// tests/e2e/ui.buttons.spec.ts
 import { test, expect } from 'ui.test.e2e.auth';
 
 test('button is visible on page', async ({ page }) => {

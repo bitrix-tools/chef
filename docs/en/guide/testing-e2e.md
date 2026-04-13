@@ -11,7 +11,7 @@ E2E tests use the [Playwright Test API](https://playwright.dev/docs/api/class-te
 
 ```
 local/js/vendor/my-extension/
-└── test/
+└── tests/
     └── e2e/
         ├── my-extension.spec.ts
         └── navigation.spec.ts

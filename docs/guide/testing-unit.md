@@ -6,7 +6,7 @@ Unit-тесты пишутся на Mocha + Chai и запускаются в р
 
 ```
 local/js/vendor/my-extension/
-└── test/
+└── tests/
     └── unit/
         ├── my-extension.test.ts
         └── utils.test.ts
@@ -15,7 +15,7 @@ local/js/vendor/my-extension/
 ## Базовый тест
 
 ```ts
-// test/unit/my-extension.test.ts
+// tests/unit/my-extension.test.ts
 import { describe, it, beforeEach } from 'mocha';
 import { assert } from 'chai';
 

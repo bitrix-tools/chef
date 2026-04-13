@@ -6,7 +6,7 @@ Unit tests are written with Mocha + Chai and run in a real browser. The extensio
 
 ```
 local/js/vendor/my-extension/
-└── test/
+└── tests/
     └── unit/
         ├── my-extension.test.ts
         └── utils.test.ts
@@ -15,7 +15,7 @@ local/js/vendor/my-extension/
 ## Basic Test
 
 ```ts
-// test/unit/my-extension.test.ts
+// tests/unit/my-extension.test.ts
 import { describe, it, beforeEach } from 'mocha';
 import { assert } from 'chai';
 

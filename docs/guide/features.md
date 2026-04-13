@@ -96,7 +96,7 @@ local/js/ui/buttons/
 ├── dist/
 │   ├── buttons.bundle.js  # Скомпилированный JS
 │   └── buttons.bundle.css # Скомпилированные стили
-└── test/
+└── tests/
     ├── unit/              # Unit-тесты (Mocha + Chai)
     │   └── buttons.test.ts
     └── e2e/               # E2E-тесты (Playwright)

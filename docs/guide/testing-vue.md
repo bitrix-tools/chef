@@ -20,7 +20,7 @@ local/js/vendor/my-chat/
 │       ├── message-list.ts
 │       ├── message-item.ts
 │       └── chat-input.ts
-└── test/
+└── tests/
     └── unit/
         ├── message-list.test.ts
         ├── message-item.test.ts

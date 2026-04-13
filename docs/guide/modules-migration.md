@@ -150,11 +150,11 @@ chef test main.core -w                 # Watch-режим
 
 ### Структура тестов
 
-Unit-тесты — в `test/unit/`, e2e-тесты — в `test/e2e/`:
+Unit-тесты — в `tests/unit/`, e2e-тесты — в `tests/e2e/`:
 
 ```
 my.extension/
-└── test/
+└── tests/
     ├── unit/
     │   └── example.test.ts
     └── e2e/
@@ -248,7 +248,7 @@ function process(items: string[]) { } // ок
 Если у расширения есть тесты — переименуйте и их:
 
 ```bash
-hg rename test/unit/buttons.test.js test/unit/buttons.test.ts
+hg rename tests/unit/buttons.test.js tests/unit/buttons.test.ts
 chef test ui.buttons
 ```
 

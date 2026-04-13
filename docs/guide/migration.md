@@ -216,7 +216,7 @@ my.extension/
 
 # Стало (@bitrix/chef)
 my.extension/
-└── test/
+└── tests/
     ├── unit/
     │   └── example.test.ts
     └── e2e/
@@ -287,7 +287,7 @@ import { Button } from 'ui.buttons';
    chef init tests
    npx playwright install
    ```
-   Перенести тесты в `test/unit/`.
+   Перенести тесты в `tests/unit/`.
 
 6. **Обновить CI/CD**
    - Заменить `bitrix build` → `chef build`

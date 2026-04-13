@@ -216,7 +216,7 @@ my.extension/
 
 # After (@bitrix/chef)
 my.extension/
-└── test/
+└── tests/
     ├── unit/
     │   └── example.test.ts
     └── e2e/
@@ -287,7 +287,7 @@ See [TypeScript](/en/guide/typescript) for details.
    chef init tests
    npx playwright install
    ```
-   Move tests to `test/unit/`.
+   Move tests to `tests/unit/`.
 
 6. **Update CI/CD**
    - Replace `bitrix build` → `chef build`

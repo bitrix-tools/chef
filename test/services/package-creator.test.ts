@@ -63,7 +63,7 @@ describe('PackageCreator', () => {
 			const hasSrcFile = fileNames.some((f) => f.startsWith('src/'));
 			assert.isTrue(hasSrcFile, 'Should create source file');
 
-			const hasTestFile = fileNames.some((f) => f.startsWith('test/'));
+			const hasTestFile = fileNames.some((f) => f.startsWith('tests/'));
 			assert.isTrue(hasTestFile, 'Should create test files');
 
 			// Verify files actually exist on disk

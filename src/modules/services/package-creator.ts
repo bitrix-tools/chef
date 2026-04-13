@@ -162,8 +162,8 @@ export class PackageCreator
 			{ relativePath: `bundle.config.${extension}`, content: bundleConfigContent },
 			{ relativePath: 'config.php', content: configPhpContent },
 			{ relativePath: `src/${inputFileName}`, content: inputFileContent },
-			{ relativePath: `test/unit/${createInputFileName(extensionName, useTypeScript ? 'test.ts' : 'test.js')}`, content: unitTestContent },
-			{ relativePath: `test/e2e/${createInputFileName(extensionName, useTypeScript ? 'spec.ts' : 'spec.js')}`, content: endToEndTestContent },
+			{ relativePath: `tests/unit/${createInputFileName(extensionName, useTypeScript ? 'test.ts' : 'test.js')}`, content: unitTestContent },
+			{ relativePath: `tests/e2e/${createInputFileName(extensionName, useTypeScript ? 'spec.ts' : 'spec.js')}`, content: endToEndTestContent },
 		];
 	}
 

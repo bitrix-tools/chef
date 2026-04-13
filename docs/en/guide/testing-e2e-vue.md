@@ -13,7 +13,7 @@ A guide to e2e testing extensions that use Vue 3 (`ui.vue3`). Tests run via Play
 
 ```
 local/js/vendor/my-app/
-└── test/
+└── tests/
     └── e2e/
         ├── counter.spec.ts
         └── message-list.spec.ts
