@@ -266,4 +266,84 @@ describe('PackageBuilder', () => {
 			assert.isEmpty(result.errors);
 		});
 	});
+
+	describe('adjustConfigPhp', () => {
+		const extensionPath = path.join(fixturesPath, 'basic-extension');
+
+		afterEach(() => {
+			const distPath = path.join(extensionPath, 'dist');
+			if (fs.existsSync(distPath))
+			{
+				fs.rmSync(distPath, { recursive: true });
+			}
+		});
+
+		it('should not save config.php when adjustConfigPhp is false', async () => {
+			const bundleConfig = new BundleConfigManager();
+			bundleConfig.loadFromFile(path.join(extensionPath, 'bundle.config.js'));
+
+			const phpConfig = {
+				get: (key: string) => null,
+				set: sinon.stub(),
+				save: sinon.stub().resolves(),
+			};
+
+			const mockPackage = {
+				getName: () => 'test.basic',
+				getPath: () => extensionPath,
+				getPublicPath: () => '/test/',
+				getTargets: () => 'defaults',
+				getInputPath: () => path.join(extensionPath, bundleConfig.get('input')),
+				getOutputJsPath: () => path.join(extensionPath, bundleConfig.get('output').js),
+				getOutputCssPath: () => path.join(extensionPath, bundleConfig.get('output').css),
+				isTypeScriptMode: () => false,
+				getBundleConfig: () => bundleConfig,
+				getPhpConfig: () => phpConfig,
+				getPhpConfigFilePath: () => path.join(extensionPath, 'config.php'),
+				shouldUpdatePhpConfig: () => false,
+			} as any;
+
+			const builder = new PackageBuilder(mockPackage);
+			const result = await builder.build();
+
+			assert.isEmpty(result.errors);
+			assert.isTrue(phpConfig.set.calledWith('rel', sinon.match.array), 'Should still set rel on phpConfig');
+			assert.isFalse(phpConfig.save.called, 'Should NOT save config.php');
+		});
+
+		it('should save config.php when adjustConfigPhp is true', async () => {
+			const bundleConfig = new BundleConfigManager();
+			bundleConfig.loadFromFile(path.join(extensionPath, 'bundle.config.js'));
+
+			const phpConfigData: Record<string, any> = { rel: [] };
+			const phpConfig = {
+				get: (key: string) => phpConfigData[key] ?? null,
+				set: sinon.stub().callsFake((key: string, value: any) => {
+					phpConfigData[key] = value;
+				}),
+				save: sinon.stub().resolves(),
+			};
+
+			const mockPackage = {
+				getName: () => 'test.basic',
+				getPath: () => extensionPath,
+				getPublicPath: () => '/test/',
+				getTargets: () => 'defaults',
+				getInputPath: () => path.join(extensionPath, bundleConfig.get('input')),
+				getOutputJsPath: () => path.join(extensionPath, bundleConfig.get('output').js),
+				getOutputCssPath: () => path.join(extensionPath, bundleConfig.get('output').css),
+				isTypeScriptMode: () => false,
+				getBundleConfig: () => bundleConfig,
+				getPhpConfig: () => phpConfig,
+				getPhpConfigFilePath: () => path.join(extensionPath, 'config.php'),
+				shouldUpdatePhpConfig: () => true,
+			} as any;
+
+			const builder = new PackageBuilder(mockPackage);
+			const result = await builder.build();
+
+			assert.isEmpty(result.errors);
+			assert.isTrue(phpConfig.save.calledOnce, 'Should save config.php');
+		});
+	});
 });

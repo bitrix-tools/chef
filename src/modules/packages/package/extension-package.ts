@@ -15,7 +15,7 @@ export class ExtensionPackage extends BasePackage
 
 	shouldUpdatePhpConfig(): boolean
 	{
-		return true;
+		return this.getBundleConfig().get('adjustConfigPhp') !== false;
 	}
 
 	getPublicPath(): string
