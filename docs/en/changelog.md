@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.6.2 <Badge type="tip" text="4/13/2026" />
+
+Added support for `tests/` directory as an alternative to `test/` for unit and e2e tests
+
 ## v1.6.1 <Badge type="tip" text="4/11/2026" />
 
 - Fixed selective class transpilation: static properties of other classes are no longer affected
