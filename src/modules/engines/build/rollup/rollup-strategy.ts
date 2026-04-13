@@ -340,7 +340,7 @@ export class RollupBuildStrategy extends BuildStrategy
 		if (typeof value === 'object')
 		{
 			return {
-				moduleSideEffects: false,
+				moduleSideEffects: true,
 				propertyReadSideEffects: false,
 				tryCatchDeoptimization: false,
 				...value,
@@ -348,7 +348,7 @@ export class RollupBuildStrategy extends BuildStrategy
 		}
 
 		return {
-			moduleSideEffects: false,
+			moduleSideEffects: true,
 			propertyReadSideEffects: false,
 			tryCatchDeoptimization: false,
 		};

@@ -2078,4 +2078,31 @@ export class SimpleComponent {
 			}
 		});
 	});
+
+	describe('side-effect imports', () => {
+		const extensionPath = path.join(fixturesPath, 'side-effects');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should preserve side-effect-only imports in bundle', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+
+			const jsOutput = path.join(extensionPath, 'dist', 'app.bundle.js');
+			assert.isTrue(fs.existsSync(jsOutput), 'JS bundle should exist');
+
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(content, 'GreetingHandler', 'Side-effect import should be preserved');
+			assert.include(content, 'registerHandler', 'Registration call should be preserved');
+		});
+	});
 });
