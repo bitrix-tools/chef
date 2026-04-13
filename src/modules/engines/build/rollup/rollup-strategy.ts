@@ -339,19 +339,10 @@ export class RollupBuildStrategy extends BuildStrategy
 
 		if (typeof value === 'object')
 		{
-			return {
-				moduleSideEffects: true,
-				propertyReadSideEffects: false,
-				tryCatchDeoptimization: false,
-				...value,
-			};
+			return value;
 		}
 
-		return {
-			moduleSideEffects: true,
-			propertyReadSideEffects: false,
-			tryCatchDeoptimization: false,
-		};
+		return true;
 	}
 
 	protected static createTerserPlugin(options: import('terser').MinifyOptions): Plugin
