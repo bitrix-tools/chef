@@ -128,17 +128,18 @@ describe('standalone build', () => {
 		beforeEach(() => cleanDist(dir));
 		afterEach(() => cleanDist(dir));
 
-		it('should treat type-only extension as external', async () => {
+		it('should inline protected extension that re-exports real code', async () => {
 			const bundleConfig = loadBundleConfig(dir);
 			const options = getBuildOptions(dir, bundleConfig);
 			const result = await buildService.build(options);
 
 			assert.isEmpty(result.errors, 'Should have no errors');
-			assert.include(result.dependencies, 'ui.type-only-dep', 'Type-only extension should be listed as external dependency');
+			assert.notInclude(result.dependencies, 'ui.type-only-dep', 'Protected extension should be inlined, not external');
 
 			const jsOutput = path.join(dir, 'dist', 'bundle.js');
 			const content = fs.readFileSync(jsOutput, 'utf-8');
 			assert.include(content, 'Widget', 'Bundle should contain own class');
+			assert.include(content, 'Form', 'Bundle should contain code re-exported through protected extension');
 		});
 	});
 

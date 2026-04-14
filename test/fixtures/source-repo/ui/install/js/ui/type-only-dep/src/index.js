@@ -1,1 +1,1 @@
-export * from './index.d.ts';
+export { Form } from '../../forms/src/index.js';

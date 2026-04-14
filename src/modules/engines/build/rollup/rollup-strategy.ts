@@ -38,7 +38,6 @@ import type {
 	BuildCodeResult,
 } from '../build-types';
 import type { RemapTarget } from '../../../config/bundle/strategies/standalone-strategy';
-import type { BasePackage } from '../../../packages/base-package';
 
 export class RollupBuildStrategy extends BuildStrategy
 {
@@ -342,13 +341,6 @@ export class RollupBuildStrategy extends BuildStrategy
 					return null;
 				}
 
-				if (RollupBuildStrategy.#isTypeOnlyExtension(extension))
-				{
-					dependenciesRef?.push(extensionName);
-
-					return { id: extensionName, external: true };
-				}
-
 				return extension.getInputPath();
 			},
 
@@ -440,13 +432,6 @@ export class RollupBuildStrategy extends BuildStrategy
 		{
 			return null;
 		}
-	}
-
-	static #isTypeOnlyExtension(extension: BasePackage): boolean
-	{
-		const bundleConfig = extension.getBundleConfig();
-
-		return !bundleConfig.has('output') && bundleConfig.get('protected') === true;
 	}
 
 	static #resolveTreeshake(

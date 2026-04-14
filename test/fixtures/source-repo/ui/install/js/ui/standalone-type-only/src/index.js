@@ -1,10 +1,14 @@
-import { typeOnlyHelper } from 'ui.type-only-dep';
+import { Form } from 'ui.type-only-dep';
 
 export class Widget
 {
-	activate()
+	constructor()
 	{
-		typeOnlyHelper();
-		return true;
+		this.form = new Form();
+	}
+
+	render()
+	{
+		return this.form.render();
 	}
 }

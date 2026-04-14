@@ -311,10 +311,10 @@ describe('chef build', () => {
 		assert.notInclude(content, ': Options', 'Flow types should be stripped');
 	});
 
-	it('should keep type-only dependency as external in standalone build', async () => {
+	it('should inline type-only dependency in standalone build', async () => {
 		const { dest, extPath } = buildFixture(tmpRepo, 'standalone-type-only');
 
-		const { exitCode, output } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
 
 		assert.equal(exitCode, 0);
 
