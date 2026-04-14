@@ -254,6 +254,100 @@ describe('chef build', () => {
 
 	// endregion
 
+	// region: standalone
+
+	it('should build standalone JS extension with JS dependency inlined', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'standalone-basic');
+
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+
+		const content = fs.readFileSync(path.join(dest, 'dist', 'bundle.js'), 'utf-8');
+		assert.include(content, 'StandaloneApp', 'Bundle should contain own class');
+		assert.include(content, 'isReady', 'Bundle should contain inlined JS dependency code');
+	});
+
+	it('should build standalone JS extension with JS + TS dependencies inlined', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'standalone-js-mixed');
+
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+
+		const content = fs.readFileSync(path.join(dest, 'dist', 'bundle.js'), 'utf-8');
+		assert.include(content, 'MixedApp', 'Bundle should contain own class');
+		assert.include(content, 'isReady', 'Bundle should contain inlined JS dependency code');
+		assert.include(content, 'TsLib', 'Bundle should contain inlined TS class');
+		assert.include(content, 'getName', 'Bundle should contain inlined TS methods');
+		assert.notInclude(content, ': LibConfig', 'TS types should be stripped');
+	});
+
+	it('should build standalone TS extension with JS + TS dependencies inlined', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'standalone-ts-mixed');
+
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+
+		const content = fs.readFileSync(path.join(dest, 'dist', 'bundle.js'), 'utf-8');
+		assert.include(content, 'MixedTsApp', 'Bundle should contain own TS class');
+		assert.include(content, 'isReady', 'Bundle should contain inlined JS dependency code');
+		assert.include(content, 'TsLib', 'Bundle should contain inlined TS class');
+		assert.notInclude(content, ': LibConfig', 'TS types from dependency should be stripped');
+		assert.notInclude(content, ': boolean', 'TS types from own code should be stripped');
+	});
+
+	it('should build standalone TS extension with Flow dependency inlined', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'standalone-flow-dep');
+
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+
+		const content = fs.readFileSync(path.join(dest, 'dist', 'bundle.js'), 'utf-8');
+		assert.include(content, 'Wrapper', 'Bundle should contain own TS class');
+		assert.include(content, 'FlowComponent', 'Bundle should contain inlined Flow class');
+		assert.notInclude(content, ': Options', 'Flow types should be stripped');
+	});
+
+	it('should keep type-only dependency as external in standalone build', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'standalone-type-only');
+
+		const { exitCode, output } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+
+		const content = fs.readFileSync(path.join(dest, 'dist', 'bundle.js'), 'utf-8');
+		assert.include(content, 'Widget', 'Bundle should contain own class');
+	});
+
+	it('should build standalone with remap to real extension', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'standalone-remap');
+
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+
+		const content = fs.readFileSync(path.join(dest, 'dist', 'bundle.js'), 'utf-8');
+		assert.include(content, 'RemapApp', 'Bundle should contain own class');
+		assert.include(content, 'Form', 'Bundle should contain inlined remapped class');
+	});
+
+	it('should build standalone with remap to npm package', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'standalone-remap-npm');
+
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+
+		const content = fs.readFileSync(path.join(dest, 'dist', 'bundle.js'), 'utf-8');
+		assert.include(content, 'Greeter', 'Bundle should contain own class');
+		assert.include(content, 'Hello', 'Bundle should contain inlined npm package code');
+	});
+
+	// endregion
+
 	// region: error cases
 
 	it('should report JS syntax error', async () => {

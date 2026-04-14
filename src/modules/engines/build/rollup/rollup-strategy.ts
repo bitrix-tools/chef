@@ -1,5 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 
 import {
 	rollup,
@@ -36,6 +37,8 @@ import type {
 	BuildCodeOptions,
 	BuildCodeResult,
 } from '../build-types';
+import type { RemapTarget } from '../../../config/bundle/strategies/standalone-strategy';
+import type { BasePackage } from '../../../packages/base-package';
 
 export class RollupBuildStrategy extends BuildStrategy
 {
@@ -307,20 +310,143 @@ export class RollupBuildStrategy extends BuildStrategy
 		}
 	}
 
-	protected static createStandalonePlugin(): Plugin
+	protected static createStandalonePlugin(options: {
+		currentPackageName?: string;
+		dependenciesRef?: string[];
+		remap?: Record<string, RemapTarget>;
+	}): Plugin
 	{
+		const { currentPackageName, dependenciesRef, remap = {} } = options;
+
 		return {
 			name: 'standalone-plugin',
-			resolveId(id) {
-				const extension = PackageResolver.resolve(id);
-				if (extension)
+
+			resolveId(id)
+			{
+				if (id === currentPackageName)
 				{
-					return extension.getInputPath();
+					return null;
+				}
+
+				const remapResult = RollupBuildStrategy.#resolveRemap(remap, id);
+
+				if (remapResult.npm)
+				{
+					return RollupBuildStrategy.#resolveNpmPackage(remapResult.npm, remapResult.from);
+				}
+
+				const extensionName = remapResult.extension ?? id;
+				const extension = PackageResolver.resolve(extensionName);
+				if (!extension)
+				{
+					return null;
+				}
+
+				if (RollupBuildStrategy.#isTypeOnlyExtension(extension))
+				{
+					dependenciesRef?.push(extensionName);
+
+					return { id: extensionName, external: true };
+				}
+
+				return extension.getInputPath();
+			},
+
+			load(id)
+			{
+				if (/\.d\.[cm]?ts$/.test(id))
+				{
+					return { code: '', map: null };
 				}
 
 				return null;
 			},
+		};
+	}
+
+	static #resolveRemap(
+		remap: Record<string, RemapTarget>,
+		id: string,
+	): { extension?: string; npm?: string; from?: string }
+	{
+		const entry = RollupBuildStrategy.#findRemapEntry(remap, id);
+		if (!entry)
+		{
+			return {};
 		}
+
+		if (typeof entry === 'string')
+		{
+			return { extension: entry };
+		}
+
+		return { npm: entry.npm, from: entry.from };
+	}
+
+	static #findRemapEntry(
+		remap: Record<string, RemapTarget>,
+		id: string,
+	): RemapTarget | null
+	{
+		if (id in remap)
+		{
+			return remap[id];
+		}
+
+		for (const [pattern, target] of Object.entries(remap))
+		{
+			if (!pattern.includes('*'))
+			{
+				continue;
+			}
+
+			const prefix = pattern.slice(0, pattern.indexOf('*'));
+			if (!id.startsWith(prefix))
+			{
+				continue;
+			}
+
+			const matched = id.slice(prefix.length);
+
+			if (typeof target === 'string')
+			{
+				return target.includes('*') ? target.replace('*', matched) : target;
+			}
+
+			return {
+				npm: target.npm.includes('*') ? target.npm.replace('*', matched) : target.npm,
+				from: target.from,
+			};
+		}
+
+		return null;
+	}
+
+	static #resolveNpmPackage(npmPackage: string, extensionName: string): string | null
+	{
+		const extension = PackageResolver.resolve(extensionName);
+		if (!extension)
+		{
+			return null;
+		}
+
+		try
+		{
+			const require_ = createRequire(path.join(extension.getPath(), 'src', '_resolve.js'));
+
+			return require_.resolve(npmPackage);
+		}
+		catch
+		{
+			return null;
+		}
+	}
+
+	static #isTypeOnlyExtension(extension: BasePackage): boolean
+	{
+		const bundleConfig = extension.getBundleConfig();
+
+		return !bundleConfig.has('output') && bundleConfig.get('protected') === true;
 	}
 
 	static #resolveTreeshake(
@@ -607,6 +733,9 @@ export class RollupBuildStrategy extends BuildStrategy
 				options.output.js,
 				options.output.css,
 			],
+			// TS2307: Cannot find module — expected in standalone mode where Bitrix extensions
+			// are resolved by Rollup, not TypeScript
+			...(options.standalone ? { ignoreCodes: [2307] } : {}),
 		});
 	}
 
@@ -667,7 +796,7 @@ export class RollupBuildStrategy extends BuildStrategy
 		]);
 
 		const extensions = ['.js', '.jsx', '.mjs'];
-		if (options.typescript)
+		if (options.typescript || options.standalone)
 		{
 			extensions.push('.ts', '.tsx');
 		}
@@ -766,13 +895,19 @@ export class RollupBuildStrategy extends BuildStrategy
 				...(() => {
 					if (options.standalone)
 					{
-						return [RollupBuildStrategy.createStandalonePlugin()];
+						return [
+							RollupBuildStrategy.createStandalonePlugin({
+								currentPackageName: options.packageName,
+								dependenciesRef,
+								remap: options.standaloneRemap,
+							}),
+						];
 					}
 
 					return [];
 				})(),
 				await (async () => {
-					if (options.vue)
+					if (options.vue || options.standalone)
 					{
 						return this.#createVuePlugin(options);
 					}
@@ -780,12 +915,13 @@ export class RollupBuildStrategy extends BuildStrategy
 					return null;
 				})(),
 				await (async () => {
-					if (options.typescript)
+					if (options.typescript || options.standalone)
 					{
+						const rootDir = Environment.getRoot() ?? undefined;
 						const tsConfigPath = FileFinder.findUpFile({
 							fileName: 'tsconfig.json',
 							fromDir: path.dirname(options.input),
-							rootDir: Environment.getRoot() ?? undefined,
+							rootDir,
 						});
 
 						if (typeof tsConfigPath === 'string' && tsConfigPath.length > 0)
@@ -797,7 +933,7 @@ export class RollupBuildStrategy extends BuildStrategy
 
 							return await this.#createTypeScriptPlugin(
 								tsConfig,
-								options.packageRoot,
+								rootDir ?? options.packageRoot,
 							);
 						}
 					}
@@ -893,7 +1029,12 @@ export class RollupBuildStrategy extends BuildStrategy
 				}),
 				RollupBuildStrategy.createNpmRemapPlugin(dependenciesRef),
 				RollupBuildStrategy.createEnvReplacePlugin(false),
-				...(options.standalone ? [RollupBuildStrategy.createStandalonePlugin()] : []),
+				...(options.standalone
+					? [RollupBuildStrategy.createStandalonePlugin({
+						currentPackageName: options.packageName,
+						dependenciesRef,
+					})]
+					: []),
 				await (async () => {
 					const rootDir = Environment.getRoot();
 					if (rootDir)

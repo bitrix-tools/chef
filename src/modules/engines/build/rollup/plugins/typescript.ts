@@ -24,6 +24,7 @@ export interface TypeCheckOptions
 	compilerOptions?: CompilerOptions;
 	files?: string[];
 	exclude?: string[];
+	ignoreCodes?: number[];
 }
 
 export interface TypeCheckResult
@@ -104,7 +105,7 @@ export async function checkTypes(options: TypeCheckOptions): Promise<TypeCheckRe
 	}
 
 	// TS2304: Cannot find name — expected for global variables from external Bitrix extensions (e.g. BX)
-	const ignoredCodes = new Set([2304]);
+	const ignoredCodes = new Set([2304, ...(options.ignoreCodes ?? [])]);
 	const filterFiles = options.files?.map((f) => path.resolve(f));
 
 	const errors = diagnostics.filter((d) => {
@@ -211,7 +212,7 @@ export default async function typescriptPlugin(options: TypeScriptPluginOptions)
 				return null;
 			}
 
-			if (!/\.[cm]?tsx?$/.test(normalizedId))
+			if (!/\.[cm]?tsx?$/.test(normalizedId) || /\.d\.[cm]?ts$/.test(normalizedId))
 			{
 				return null;
 			}

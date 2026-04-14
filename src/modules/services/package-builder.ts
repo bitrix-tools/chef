@@ -97,6 +97,7 @@ export class PackageBuilder
 			publicPath: this.#package.getPublicPath(),
 			targets: [enforce?.targets ?? this.#package.getTargets() ?? defaults?.targets].flat(),
 			namespace: bundleConfig.get('namespace'),
+			packageName: this.#package.getName(),
 			typescript: this.#package.isTypeScriptMode(),
 			vue: this.#hasVueFiles(),
 			concat: bundleConfig.get('concat'),
@@ -109,7 +110,8 @@ export class PackageBuilder
 				?? (bundleConfig.has('sourceMaps')
 					? bundleConfig.get('sourceMaps')
 					: (defaults?.sourceMaps ?? !production)),
-			standalone: bundleConfig.get('standalone'),
+			standalone: bundleConfig.get('standalone').enabled,
+			standaloneRemap: bundleConfig.get('standalone').remap,
 			resolve: bundleConfig.get('resolveNodeModules'),
 			babel: enforce?.babel ?? bundleConfig.get('babel'),
 			transformClasses: bundleConfig.get('transformClasses'),

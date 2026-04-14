@@ -1,5 +1,6 @@
 import type { Plugin, TreeshakingOptions, TreeshakingPreset } from 'rollup';
 import type { MinifyOptions } from 'terser';
+import type { RemapTarget } from '../../config/bundle/strategies/standalone-strategy';
 
 export interface BuildDiagnostic {
 	code?: string;
@@ -31,8 +32,10 @@ export type BuildOptions = {
 	publicPath: string,
 	targets: string[];
 	namespace: string;
+	packageName?: string;
 	typescript?: boolean;
 	standalone?: boolean;
+	standaloneRemap?: Record<string, RemapTarget>;
 	concat?: {
 		js?: Array<string>;
 		css?: Array<string>;
@@ -65,6 +68,7 @@ export type BuildCodeOptions = {
 	publicPath: string,
 	targets: string[];
 	namespace: string;
+	packageName?: string;
 	typescript?: boolean;
 	resolve?: boolean,
 	standalone?: boolean;
