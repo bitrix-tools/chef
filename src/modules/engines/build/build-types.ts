@@ -36,6 +36,7 @@ export type BuildOptions = {
 	typescript?: boolean;
 	standalone?: boolean;
 	standaloneRemap?: Record<string, RemapTarget>;
+	standaloneExposeNamespaces?: boolean;
 	concat?: {
 		js?: Array<string>;
 		css?: Array<string>;

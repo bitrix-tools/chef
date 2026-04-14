@@ -54,6 +54,7 @@ function getBuildOptions(dir: string, bundleConfig: BundleConfigManager): BuildO
 		typescript: bundleConfig.get('input').endsWith('.ts'),
 		standalone: standalone.enabled,
 		standaloneRemap: standalone.remap,
+		standaloneExposeNamespaces: standalone.exposeNamespaces,
 		concat: bundleConfig.get('concat'),
 	};
 }
@@ -351,6 +352,95 @@ describe('standalone build', () => {
 		});
 	});
 
+	describe('exposeNamespaces', () => {
+		const dir = extensionPath('standalone-expose');
+
+		beforeEach(() => cleanDist(dir));
+		afterEach(() => cleanDist(dir));
+
+		it('should expose inlined dependency exports to global namespace', async () => {
+			const bundleConfig = loadBundleConfig(dir);
+			const options = getBuildOptions(dir, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+
+			const jsOutput = path.join(dir, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(content, 'ExposeApp', 'Bundle should contain own class');
+			assert.include(content, 'Helper', 'Bundle should contain inlined dependency class');
+			assert.include(content, 'globalThis.BX.UI.NsLib', 'Bundle should expose dependency namespace');
+			assert.include(content, 'Object.assign(globalThis.BX.UI.NsLib', 'Bundle should assign exports to namespace');
+		});
+
+		it('should not expose namespaces when exposeNamespaces is not set', async () => {
+			const bundleConfig = loadBundleConfig(dir);
+			const options = getBuildOptions(dir, bundleConfig);
+			options.standaloneExposeNamespaces = false;
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+
+			const jsOutput = path.join(dir, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(content, 'ExposeApp', 'Bundle should contain own class');
+			assert.notInclude(content, 'globalThis.BX.UI.NsLib', 'Bundle should not expose namespace');
+		});
+
+		it('should not expose dependency with namespace "window"', async () => {
+			const bundleConfig = loadBundleConfig(dir);
+			const options = getBuildOptions(dir, bundleConfig);
+
+			// main.core has no namespace (defaults to 'window') — should not be exposed
+			const result = await buildService.build(options);
+			assert.isEmpty(result.errors, 'Should have no errors');
+
+			const jsOutput = path.join(dir, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.notInclude(content, 'globalThis.window', 'Should not expose "window" namespace');
+		});
+
+		it('should not expose dependency without namespace', async () => {
+			const bundleConfig = loadBundleConfig(dir);
+			const options = getBuildOptions(dir, bundleConfig);
+			const result = await buildService.build(options);
+			assert.isEmpty(result.errors, 'Should have no errors');
+
+			const jsOutput = path.join(dir, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+
+			// Count expose proxy blocks — should only be for ui.ns-lib (BX.UI.NsLib)
+			const exposeCount = (content.match(/Object\.assign\(globalThis\./g) || []).length;
+			assert.equal(exposeCount, 1, 'Should expose only one dependency (ui.ns-lib)');
+		});
+	});
+
+	describe('exports restoration', () => {
+		const dir = extensionPath('standalone-basic');
+
+		beforeEach(() => cleanDist(dir));
+		afterEach(() => cleanDist(dir));
+
+		it('should restore exports reference before IIFE assignments', async () => {
+			const bundleConfig = loadBundleConfig(dir);
+			const options = getBuildOptions(dir, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+
+			const jsOutput = path.join(dir, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(content, '__originalExports__', 'Should save original exports reference');
+
+			// Restoration should appear before the first exports.X assignment
+			const restoreIndex = content.indexOf('exports = __originalExports__');
+			const firstExport = content.indexOf('exports.StandaloneApp');
+			assert.isAbove(restoreIndex, -1, 'Should restore exports');
+			assert.isAbove(firstExport, -1, 'Should have export assignments');
+			assert.isBelow(restoreIndex, firstExport, 'Restore should come before export assignments');
+		});
+	});
+
 	describe('standalone config validation', () => {
 		it('should accept boolean true', () => {
 			assert.isTrue(standaloneStrategy.validate(true));
@@ -409,6 +499,20 @@ describe('standalone build', () => {
 			assert.isString(result);
 		});
 
+		it('should accept object with exposeNamespaces', () => {
+			assert.isTrue(standaloneStrategy.validate({
+				exposeNamespaces: true,
+			}));
+		});
+
+		it('should reject non-boolean exposeNamespaces', () => {
+			const result = standaloneStrategy.validate({
+				exposeNamespaces: 'invalid',
+			});
+			assert.isString(result);
+			assert.include(result as string, 'exposeNamespaces');
+		});
+
 		it('should reject invalid standalone value', () => {
 			const result = standaloneStrategy.validate('invalid');
 			assert.isString(result);
@@ -418,6 +522,7 @@ describe('standalone build', () => {
 			const config = standaloneStrategy.prepare(true);
 			assert.isTrue(config.enabled);
 			assert.deepEqual(config.remap, {});
+			assert.isFalse(config.exposeNamespaces);
 		});
 
 		it('should prepare object with remap', () => {
@@ -430,6 +535,14 @@ describe('standalone build', () => {
 			assert.isTrue(config.enabled);
 			assert.deepEqual(config.remap['ui.a'], 'ui.b');
 			assert.deepEqual(config.remap['ui.c'], { npm: '@scope/pkg', from: 'ui.d' });
+		});
+
+		it('should prepare object with exposeNamespaces', () => {
+			const config = standaloneStrategy.prepare({
+				exposeNamespaces: true,
+			});
+			assert.isTrue(config.enabled);
+			assert.isTrue(config.exposeNamespaces);
 		});
 	});
 

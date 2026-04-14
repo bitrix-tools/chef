@@ -10,6 +10,7 @@ export type RemapTarget = string | NpmRemap;
 export interface StandaloneConfig {
 	enabled: boolean;
 	remap: Record<string, RemapTarget>;
+	exposeNamespaces: boolean;
 }
 
 function validateRemapEntry(key: string, value: unknown): true | string
@@ -41,13 +42,13 @@ export const standaloneStrategy = {
 	key: 'standalone',
 	getDefault(): StandaloneConfig
 	{
-		return { enabled: false, remap: {} };
+		return { enabled: false, remap: {}, exposeNamespaces: false };
 	},
 	prepare(value: any): StandaloneConfig
 	{
 		if (value === true)
 		{
-			return { enabled: true, remap: {} };
+			return { enabled: true, remap: {}, exposeNamespaces: false };
 		}
 
 		if (typeof value === 'object' && value !== null)
@@ -55,10 +56,11 @@ export const standaloneStrategy = {
 			return {
 				enabled: true,
 				remap: value.remap ?? {},
+				exposeNamespaces: value.exposeNamespaces === true,
 			};
 		}
 
-		return { enabled: false, remap: {} };
+		return { enabled: false, remap: {}, exposeNamespaces: false };
 	},
 	validate(value: any): true | string
 	{
@@ -84,6 +86,11 @@ export const standaloneStrategy = {
 						return result;
 					}
 				}
+			}
+
+			if (value.exposeNamespaces !== undefined && typeof value.exposeNamespaces !== 'boolean')
+			{
+				return 'Invalid \'standalone.exposeNamespaces\' value: expected a boolean';
 			}
 
 			return true;

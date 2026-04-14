@@ -313,9 +313,11 @@ export class RollupBuildStrategy extends BuildStrategy
 		currentPackageName?: string;
 		dependenciesRef?: string[];
 		remap?: Record<string, RemapTarget>;
+		exposeNamespaces?: boolean;
 	}): Plugin
 	{
 		const { currentPackageName, dependenciesRef, remap = {} } = options;
+		const exposeProxies = new Map<string, string>();
 
 		return {
 			name: 'standalone-plugin',
@@ -325,6 +327,11 @@ export class RollupBuildStrategy extends BuildStrategy
 				if (id === currentPackageName)
 				{
 					return null;
+				}
+
+				if (exposeProxies.has(id))
+				{
+					return id;
 				}
 
 				const remapResult = RollupBuildStrategy.#resolveRemap(remap, id);
@@ -341,11 +348,33 @@ export class RollupBuildStrategy extends BuildStrategy
 					return null;
 				}
 
-				return extension.getInputPath();
+				const inputPath = extension.getInputPath();
+
+				if (options.exposeNamespaces)
+				{
+					const namespace = extension.getBundleConfig().get('namespace');
+					if (namespace && namespace !== 'window')
+					{
+						const proxyId = `\0expose:${extensionName}`;
+						if (!exposeProxies.has(proxyId))
+						{
+							exposeProxies.set(proxyId, RollupBuildStrategy.#buildExposeProxy(inputPath, namespace));
+						}
+
+						return proxyId;
+					}
+				}
+
+				return inputPath;
 			},
 
 			load(id)
 			{
+				if (exposeProxies.has(id))
+				{
+					return exposeProxies.get(id)!;
+				}
+
 				if (/\.d\.[cm]?ts$/.test(id))
 				{
 					return { code: '', map: null };
@@ -353,7 +382,56 @@ export class RollupBuildStrategy extends BuildStrategy
 
 				return null;
 			},
+
+			renderChunk(code)
+			{
+				// Inlined dependencies may reassign `exports` (e.g. main.core does
+				// `exports = window.BX`). This breaks Rollup's own `exports.X = X`
+				// assignments at the end of the IIFE. Restore original exports reference.
+				const lines = code.split('\n');
+
+				let firstExportAssignment = -1;
+				for (let i = lines.length - 1; i >= 0; i--)
+				{
+					if (/^\texports\./.test(lines[i]))
+					{
+						firstExportAssignment = i;
+					}
+					else if (firstExportAssignment !== -1)
+					{
+						break;
+					}
+				}
+
+				if (firstExportAssignment === -1)
+				{
+					return null;
+				}
+
+				lines.splice(firstExportAssignment, 0, '\texports = __originalExports__;');
+
+				return { code: lines.join('\n'), map: null };
+			},
 		};
+	}
+
+	static #buildExposeProxy(inputPath: string, namespace: string): string
+	{
+		const normalizedPath = inputPath.replaceAll('\\', '/');
+		const parts = namespace.split('.');
+		const nsInit = parts
+			.map((_, i) => {
+				const ns = parts.slice(0, i + 1).join('.');
+				return `globalThis.${ns} = globalThis.${ns} || {};`;
+			})
+			.join('\n');
+
+		return [
+			`export * from '${normalizedPath}';`,
+			`import * as __ns__ from '${normalizedPath}';`,
+			nsInit,
+			`Object.assign(globalThis.${namespace}, __ns__);`,
+		].join('\n');
 	}
 
 	static #resolveRemap(
@@ -885,6 +963,7 @@ export class RollupBuildStrategy extends BuildStrategy
 								currentPackageName: options.packageName,
 								dependenciesRef,
 								remap: options.standaloneRemap,
+								exposeNamespaces: options.standaloneExposeNamespaces,
 							}),
 						];
 					}
@@ -989,6 +1068,9 @@ export class RollupBuildStrategy extends BuildStrategy
 			banner: '/* eslint-disable */',
 			extend: true,
 			sourcemap: options?.sourceMaps ?? true,
+			...(options.standalone ? {
+				intro: 'var __originalExports__ = exports;',
+			} : {}),
 		};
 	}
 

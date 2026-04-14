@@ -112,6 +112,7 @@ export class PackageBuilder
 					: (defaults?.sourceMaps ?? !production)),
 			standalone: bundleConfig.get('standalone').enabled,
 			standaloneRemap: bundleConfig.get('standalone').remap,
+			standaloneExposeNamespaces: bundleConfig.get('standalone').exposeNamespaces,
 			resolve: bundleConfig.get('resolveNodeModules'),
 			babel: enforce?.babel ?? bundleConfig.get('babel'),
 			transformClasses: bundleConfig.get('transformClasses'),

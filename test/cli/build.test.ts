@@ -346,6 +346,29 @@ describe('chef build', () => {
 		assert.include(content, 'Hello', 'Bundle should contain inlined npm package code');
 	});
 
+	it('should expose inlined dependency namespaces in standalone build', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'standalone-expose');
+
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+
+		const content = fs.readFileSync(path.join(dest, 'dist', 'bundle.js'), 'utf-8');
+		assert.include(content, 'ExposeApp', 'Bundle should contain own class');
+		assert.include(content, 'Object.assign(globalThis.BX.UI.NsLib', 'Bundle should expose dependency exports to namespace');
+	});
+
+	it('should restore exports reference in standalone build', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'standalone-basic');
+
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+
+		const content = fs.readFileSync(path.join(dest, 'dist', 'bundle.js'), 'utf-8');
+		assert.include(content, '__originalExports__', 'Should save and restore exports reference');
+	});
+
 	// endregion
 
 	// region: error cases
