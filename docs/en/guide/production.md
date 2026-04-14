@@ -126,6 +126,37 @@ export default {
 };
 ```
 
+#### Dependency Remap
+
+Sometimes a Bitrix extension is a type wrapper over an npm package. For example, `ui.lexical` provides types for `lexical`. In a standalone build you need the actual npm code, not the wrapper. Use `remap` for this:
+
+```ts
+export default {
+  input: 'src/index.ts',
+  output: 'dist/text-editor.bundle.js',
+  standalone: {
+    remap: {
+      // Bitrix extension → another Bitrix extension
+      'ui.type-only-dep': 'ui.forms',
+
+      // Bitrix extension → npm package (from node_modules of the specified extension)
+      'ui.lexical.core': { npm: 'lexical', from: 'ui.lexical' },
+
+      // Glob pattern → npm packages
+      'ui.lexical.*': { npm: '@lexical/*', from: 'ui.lexical' },
+    },
+  },
+};
+```
+
+**Remap entry formats:**
+
+| Format | Example | Description |
+|--------|---------|-------------|
+| `string` | `'ui.forms'` | Replace with another Bitrix extension |
+| `{ npm, from }` | `{ npm: 'lexical', from: 'ui.lexical' }` | Use npm package from `node_modules` of the specified extension |
+| Glob `*` | `'ui.lexical.*': { npm: '@lexical/*', ... }` | Wildcard pattern — `*` is replaced with the matched part |
+
 ### What Happens During Build
 
 **Normal mode (default):**
@@ -222,3 +253,4 @@ In this case the standalone bundle will also be minified.
 - **Bundle size** — in standalone mode all dependencies end up in one file. If the extension depends on large libraries (main.core, ui.vue3), the bundle size can grow significantly.
 - **Duplication** — if both a standalone bundle and regular extensions with shared dependencies are loaded on the same page, the dependency code will be loaded twice.
 - **npm packages** — in normal mode npm packages are only resolved with `resolveNodeModules: true`, while Bitrix dependencies remain external. In standalone mode both npm packages and Bitrix dependencies are inlined automatically.
+- **remap** — if a dependency is a type wrapper over an npm package, use `remap` to substitute it with the actual code. Both exact names and glob patterns are supported.

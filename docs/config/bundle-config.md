@@ -30,7 +30,7 @@ export default {
 | `plugins` | `Plugin[]` | Кастомные Rollup-плагины |
 | `resolveNodeModules` | `boolean` | Резолв зависимостей из node_modules |
 | `babel` | `boolean` | Включение/отключение Babel-транспиляции (по умолчанию: `true`) |
-| `standalone` | `boolean` | Автономная сборка с инлайном зависимостей |
+| `standalone` | `boolean \| object` | Автономная сборка с инлайном зависимостей |
 | `protected` | `boolean` | Защита от пересборки |
 | `rebuild` | `string[]` | Пересборка зависимых расширений |
 | `transformClasses` | `boolean \| string[]` | Транспиляция классов — все (`true`) или по именам |
@@ -116,6 +116,48 @@ export default {
 ::: tip
 Если нужна полная автономность от Bitrix-зависимостей, используйте [standalone](/guide/production#standalone-сборка) режим.
 :::
+
+## Standalone
+
+Автономная сборка, при которой все Bitrix-зависимости и npm-пакеты инлайнятся в один бандл. Подробнее о режиме — в разделе [Standalone-сборка](/guide/production#standalone-сборка).
+
+Простая форма:
+
+```ts
+export default {
+  input: './src/index.ts',
+  output: './dist/my.bundle.js',
+  standalone: true,
+};
+```
+
+С переопределением зависимостей через `remap`:
+
+```ts
+export default {
+  input: './src/index.ts',
+  output: './dist/my.bundle.js',
+  standalone: {
+    remap: {
+      // Битрикс-расширение → другое Битрикс-расширение
+      'ui.type-only-dep': 'ui.forms',
+
+      // Битрикс-расширение → npm-пакет
+      'ui.lexical.core': { npm: 'lexical', from: 'ui.lexical' },
+
+      // Глоб-паттерн
+      'ui.lexical.*': { npm: '@lexical/*', from: 'ui.lexical' },
+    },
+  },
+};
+```
+
+Ключ — имя Bitrix-расширения (или глоб-паттерн), значение:
+
+- **`string`** — имя другого Bitrix-расширения, код которого нужно подставить
+- **`{ npm, from }`** — npm-пакет (`npm`) из `node_modules` указанного расширения (`from`)
+
+В глоб-паттернах `*` заменяется на совпавшую часть имени. Например, `'ui.lexical.*': { npm: '@lexical/*', from: 'ui.lexical' }` превращает `ui.lexical.rich-text` в `@lexical/rich-text`.
 
 ## Отключение Babel
 

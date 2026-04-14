@@ -30,7 +30,7 @@ export default {
 | `plugins` | `Plugin[]` | Custom Rollup plugins |
 | `resolveNodeModules` | `boolean` | Resolve dependencies from node_modules |
 | `babel` | `boolean` | Enable/disable Babel transpilation (default: `true`) |
-| `standalone` | `boolean` | Standalone build with inlined dependencies |
+| `standalone` | `boolean \| object` | Standalone build with inlined dependencies |
 | `protected` | `boolean` | Protect from rebuilding |
 | `rebuild` | `string[]` | Rebuild dependent extensions |
 | `transformClasses` | `boolean \| string[]` | Transpile classes — all (`true`) or by name |
@@ -116,6 +116,48 @@ When enabled:
 ::: tip
 If you need full independence from Bitrix dependencies as well, use [standalone](/en/guide/production#standalone-build) mode.
 :::
+
+## Standalone
+
+A standalone build inlines all Bitrix dependencies and npm packages into a single bundle. See [Standalone Build](/en/guide/production#standalone-build) for details.
+
+Simple form:
+
+```ts
+export default {
+  input: './src/index.ts',
+  output: './dist/my.bundle.js',
+  standalone: true,
+};
+```
+
+With dependency remapping via `remap`:
+
+```ts
+export default {
+  input: './src/index.ts',
+  output: './dist/my.bundle.js',
+  standalone: {
+    remap: {
+      // Bitrix extension → another Bitrix extension
+      'ui.type-only-dep': 'ui.forms',
+
+      // Bitrix extension → npm package
+      'ui.lexical.core': { npm: 'lexical', from: 'ui.lexical' },
+
+      // Glob pattern
+      'ui.lexical.*': { npm: '@lexical/*', from: 'ui.lexical' },
+    },
+  },
+};
+```
+
+The key is a Bitrix extension name (or glob pattern), the value is:
+
+- **`string`** — name of another Bitrix extension whose code should be used instead
+- **`{ npm, from }`** — npm package (`npm`) from `node_modules` of the specified extension (`from`)
+
+In glob patterns `*` is replaced with the matched part of the name. For example, `'ui.lexical.*': { npm: '@lexical/*', from: 'ui.lexical' }` turns `ui.lexical.rich-text` into `@lexical/rich-text`.
 
 ## Disabling Babel
 
