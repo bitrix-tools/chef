@@ -1665,26 +1665,42 @@ export class SimpleComponent {
 				'Own namespace should stay unchanged — it is already safe from bundle init');
 		});
 
-		it('should apply optional chaining to dependency globals', () => {
+		it('should apply optional chaining to single dependency', () => {
 			const line = '})(this.BX.Test.Namespace = this.BX.Test.Namespace || {}, BX.Main.Core);';
 			const result = transformIifeLine(line);
 
-			assert.isNotNull(result);
-			assert.include(result!, 'this.BX.Test.Namespace = this.BX.Test.Namespace || {}',
-				'Own namespace should stay unchanged');
-			assert.include(result!, 'BX?.Main?.Core??{}',
-				'Dependency globals should use optional chaining');
+			assert.strictEqual(result,
+				'})(this.BX.Test.Namespace = this.BX.Test.Namespace || {}, BX?.Main?.Core??{});');
 		});
 
-		it('should apply optional chaining to multiple dependency globals', () => {
+		it('should apply optional chaining to multiple dependencies', () => {
 			const line = '})(this.BX.Messenger.v2.List = this.BX.Messenger.v2.List || {}, BX.Main.Core, BX.UI.Buttons);';
 			const result = transformIifeLine(line);
 
-			assert.isNotNull(result);
-			assert.include(result!, 'this.BX.Messenger.v2.List = this.BX.Messenger.v2.List || {}',
-				'Own namespace should stay unchanged');
-			assert.include(result!, 'BX?.Main?.Core??{}');
-			assert.include(result!, 'BX?.UI?.Buttons??{}');
+			assert.strictEqual(result,
+				'})(this.BX.Messenger.v2.List = this.BX.Messenger.v2.List || {}, BX?.Main?.Core??{}, BX?.UI?.Buttons??{});');
+		});
+
+		it('should not add extra closing paren for no-dependency bundle', () => {
+			const line = '})(this.BX.Test.Namespace = this.BX.Test.Namespace || {});';
+			const result = transformIifeLine(line);
+
+			assert.strictEqual(result,
+				'})(this.BX.Test.Namespace = this.BX.Test.Namespace || {});');
+		});
+
+		it('should handle deeply nested namespace with single dependency', () => {
+			const line = '})(this.BX.Messenger.v2.Const = this.BX.Messenger.v2.Const || {}, BX.OpenLines.v2.Const);';
+			const result = transformIifeLine(line);
+
+			assert.strictEqual(result,
+				'})(this.BX.Messenger.v2.Const = this.BX.Messenger.v2.Const || {}, BX?.OpenLines?.v2?.Const??{});');
+		});
+
+		it('should return null for non-IIFE lines', () => {
+			assert.isNull(transformIifeLine('const x = 1;'));
+			assert.isNull(transformIifeLine(''));
+			assert.isNull(transformIifeLine('})(window);'));
 		});
 
 		it('should not use optional chaining when disabled', async () => {
