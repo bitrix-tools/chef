@@ -8,8 +8,6 @@ import { DeclarationEmitter } from '../engines/build/declaration-emitter';
 import { Environment } from '../../environment/environment';
 import { FileFinder } from '../../utils/file-finder';
 import { loadTsConfig } from '../../utils/load-tsconfig';
-import { PackageResolver } from '../packages/package-resolver';
-
 import type { BasePackage } from '../packages/base-package';
 import type { BuildEngine } from '../engines/build/build-engine';
 import type { BuildOptions, BuildResult } from '../engines/build/build-types';
@@ -187,17 +185,6 @@ export class PackageBuilder
 			namespace: options.namespace,
 			outputPath,
 			compilerOptions,
-			resolveDtsPath: (moduleName: string): string | null => {
-				const extension = PackageResolver.resolve(moduleName);
-				if (!extension)
-				{
-					return null;
-				}
-
-				const jsPath = extension.getOutputJsPath();
-
-				return jsPath.replace(/\.js$/, '.d.ts');
-			},
 		});
 	}
 

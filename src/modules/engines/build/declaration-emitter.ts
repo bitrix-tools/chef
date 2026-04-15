@@ -8,20 +8,15 @@ export interface DeclarationEmitOptions
 	namespace: string;
 	outputPath: string;
 	compilerOptions?: import('typescript').CompilerOptions;
-	resolveDtsPath?: (moduleName: string) => string | null;
 }
 
 export class DeclarationEmitter
 {
 	#paths: Record<string, string[]> = {};
-	#resolveDtsPath: ((moduleName: string) => string | null) | null = null;
-	#outputPath = '';
 
 	async emit(options: DeclarationEmitOptions): Promise<void>
 	{
 		this.#paths = options.compilerOptions?.paths as Record<string, string[]> ?? {};
-		this.#resolveDtsPath = options.resolveDtsPath ?? null;
-		this.#outputPath = options.outputPath;
 		const { packageRoot, input, namespace, outputPath } = options;
 
 		if (!namespace || namespace === 'window')
@@ -121,10 +116,9 @@ export class DeclarationEmitter
 
 	#buildAmbientDeclaration(namespace: string, entryPath: string, declarations: Map<string, string>): string
 	{
-		const externalModules: string[] = [];
-		const members = this.#collectEntryExports(entryPath, declarations, externalModules);
+		const members = this.#collectEntryExports(entryPath, declarations);
 
-		if (members.length === 0 && externalModules.length === 0)
+		if (members.length === 0)
 		{
 			return '';
 		}
@@ -172,13 +166,7 @@ export class DeclarationEmitter
 			}
 		}
 
-		const references = this.#buildReferencePaths(externalModules);
 		const parts: string[] = [];
-
-		if (references.length > 0)
-		{
-			parts.push(references.join('\n'));
-		}
 
 		if (topLevelTypes.length > 0)
 		{
@@ -196,29 +184,6 @@ export class DeclarationEmitter
 		}
 
 		return '/* eslint-disable */\n' + parts.join('\n\n') + '\n';
-	}
-
-	#buildReferencePaths(externalModules: string[]): string[]
-	{
-		if (!this.#resolveDtsPath || externalModules.length === 0)
-		{
-			return [];
-		}
-
-		const outputDir = path.dirname(this.#outputPath);
-		const references: string[] = [];
-
-		for (const moduleName of externalModules)
-		{
-			const dtsPath = this.#resolveDtsPath(moduleName);
-			if (dtsPath)
-			{
-				const relativePath = path.relative(outputDir, dtsPath);
-				references.push(`/// <reference path="${relativePath}" />`);
-			}
-		}
-
-		return references;
 	}
 
 	#resolveUnknownTypes(members: string[], declarations: Map<string, string>): void
@@ -457,7 +422,7 @@ export class DeclarationEmitter
 		return collectedLines.join('\n');
 	}
 
-	#collectEntryExports(entryPath: string, declarations: Map<string, string>, externalModules?: string[]): string[]
+	#collectEntryExports(entryPath: string, declarations: Map<string, string>): string[]
 	{
 		const content = declarations.get(entryPath);
 		if (!content)
@@ -517,15 +482,7 @@ export class DeclarationEmitter
 			if (starReExport)
 			{
 				const specifier = starReExport[1];
-				if (!specifier.startsWith('.') && externalModules)
-				{
-					// External package — use /// <reference> instead of inlining
-					if (!externalModules.includes(specifier))
-					{
-						externalModules.push(specifier);
-					}
-				}
-				else
+				if (specifier.startsWith('.'))
 				{
 					const resolvedPath = this.#resolveSpecifier(entryPath, specifier, declarations);
 					if (resolvedPath)
@@ -534,6 +491,7 @@ export class DeclarationEmitter
 					}
 				}
 
+				// Non-relative specifiers are external packages — their types come from their own d.ts
 				continue;
 			}
 
@@ -542,28 +500,22 @@ export class DeclarationEmitter
 			if (namedReExport)
 			{
 				const specifier = namedReExport[2];
-				if (!specifier.startsWith('.') && externalModules)
+				if (specifier.startsWith('.'))
 				{
-					if (!externalModules.includes(specifier))
-					{
-						externalModules.push(specifier);
-					}
-				}
-				else
-				{
-					const reExportNames = namedReExport[1].split(',').map((n) => {
-						const parts = n.trim().split(/\s+as\s+/);
-
-						return { original: parts[0].trim(), alias: (parts[1] || parts[0]).trim() };
-					}).filter((n) => n.original);
-
 					const resolvedPath = this.#resolveSpecifier(entryPath, specifier, declarations);
 					if (resolvedPath)
 					{
+						const reExportNames = namedReExport[1].split(',').map((n) => {
+							const parts = n.trim().split(/\s+as\s+/);
+
+							return { original: parts[0].trim(), alias: (parts[1] || parts[0]).trim() };
+						}).filter((n) => n.original);
+
 						this.#extractNamedReExports(resolvedPath, declarations, reExportNames, members, seen);
 					}
 				}
 
+				// Non-relative specifiers are external packages — their types come from their own d.ts
 				continue;
 			}
 
