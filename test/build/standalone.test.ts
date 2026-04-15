@@ -57,6 +57,7 @@ function getBuildOptions(dir: string, bundleConfig: BundleConfigManager, package
 		standaloneRemap: standalone.remap,
 		standaloneExposeNamespaces: standalone.exposeNamespaces,
 		concat: bundleConfig.get('concat'),
+		cssImages: bundleConfig.get('cssImages'),
 	};
 }
 
@@ -570,6 +571,114 @@ describe('standalone build', () => {
 			});
 			assert.isTrue(config.enabled);
 			assert.isTrue(config.exposeNamespaces);
+		});
+	});
+
+	describe('direct CSS-only extension import', () => {
+		const dir = extensionPath('standalone-css-import');
+
+		beforeEach(() => cleanDist(dir));
+		afterEach(() => cleanDist(dir));
+
+		it('should include CSS from directly imported CSS-only extensions', async () => {
+			const bundleConfig = loadBundleConfig(dir);
+			const options = getBuildOptions(dir, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+
+			const jsOutput = path.join(dir, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(content, 'CssImportApp', 'JS bundle should contain own class');
+
+			const cssOutput = path.join(dir, 'dist', 'bundle.css');
+			assert.isTrue(fs.existsSync(cssOutput), 'CSS bundle should exist');
+
+			const cssContent = fs.readFileSync(cssOutput, 'utf-8');
+			assert.include(cssContent, '.css-import-app', 'CSS should contain own styles');
+			assert.include(cssContent, '.css-only-test', 'CSS should contain styles from CSS-only extension with bundle.config');
+			assert.include(cssContent, '.css-no-bundleconfig-tokens', 'CSS should contain styles from CSS-only extension without bundle.config');
+			assert.include(cssContent, '.css-absolute-path-component', 'CSS should contain styles from CSS-only extension with absolute path in config.php');
+		});
+	});
+
+	describe('recursive CSS-only dependencies in rel', () => {
+		const dir = extensionPath('standalone-css-recursive');
+
+		beforeEach(() => cleanDist(dir));
+		afterEach(() => cleanDist(dir));
+
+		it('should collect CSS from nested CSS-only dependency chain', async () => {
+			const bundleConfig = loadBundleConfig(dir);
+			const options = getBuildOptions(dir, bundleConfig, 'ui.standalone-css-recursive');
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+
+			const cssOutput = path.join(dir, 'dist', 'bundle.css');
+			assert.isTrue(fs.existsSync(cssOutput), 'CSS bundle should exist');
+
+			const cssContent = fs.readFileSync(cssOutput, 'utf-8');
+			assert.include(cssContent, '.recursive-css-app', 'CSS should contain own styles');
+			assert.include(cssContent, '.css-with-rel-icons', 'CSS should contain styles from direct CSS-only dependency');
+			assert.include(cssContent, '.css-no-bundleconfig-tokens', 'CSS should contain styles from transitive CSS-only dependency');
+		});
+	});
+
+	describe('exposeNamespaces with CSS-only dependencies', () => {
+		const dir = extensionPath('standalone-expose-css');
+
+		beforeEach(() => cleanDist(dir));
+		afterEach(() => cleanDist(dir));
+
+		it('should inject CSS deps into expose proxy and expose namespace', async () => {
+			const bundleConfig = loadBundleConfig(dir);
+			const options = getBuildOptions(dir, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+
+			const jsOutput = path.join(dir, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(content, 'ExposeCssApp', 'JS bundle should contain own class');
+			assert.include(content, 'JsWithCssRelLib', 'JS bundle should contain inlined dependency');
+			assert.include(content, 'globalThis.BX.UI.JsWithCssRel', 'Bundle should expose dependency namespace');
+
+			const cssOutput = path.join(dir, 'dist', 'bundle.css');
+			assert.isTrue(fs.existsSync(cssOutput), 'CSS bundle should exist');
+
+			const cssContent = fs.readFileSync(cssOutput, 'utf-8');
+			assert.include(cssContent, '.expose-css-app', 'CSS should contain own styles');
+			assert.include(cssContent, '.css-no-bundleconfig-tokens', 'CSS should contain styles from dependency\'s CSS-only rel');
+		});
+	});
+
+	describe('CSS images from external dependency', () => {
+		const dir = extensionPath('standalone-css-images');
+
+		beforeEach(() => cleanDist(dir));
+		afterEach(() => cleanDist(dir));
+
+		it('should place external dependency images in subdirectory by extension name', async () => {
+			const bundleConfig = loadBundleConfig(dir);
+			const options = getBuildOptions(dir, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+
+			const cssOutput = path.join(dir, 'dist', 'bundle.css');
+			assert.isTrue(fs.existsSync(cssOutput), 'CSS bundle should exist');
+
+			const cssContent = fs.readFileSync(cssOutput, 'utf-8');
+			assert.include(cssContent, '.standalone-css-images', 'CSS should contain own styles');
+			assert.include(cssContent, '.css-images-dep', 'CSS should contain dependency styles');
+
+			// External images should be placed in subdirectory by extension name
+			assert.include(cssContent, 'images/ui.css-images-dep/', 'CSS URLs should reference extension subdirectory');
+
+			// Image file should be copied to subdirectory
+			const imagePath = path.join(dir, 'dist', 'images', 'ui.css-images-dep', 'icon.svg');
+			assert.isTrue(fs.existsSync(imagePath), 'Image should be copied to extension subdirectory');
 		});
 	});
 
