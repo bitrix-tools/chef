@@ -444,16 +444,16 @@ export abstract class BasePackage
 
 	// region Actions (delegate to services)
 
-	async build(options: { production?: boolean } = {}): Promise<BuildResult>
+	async build(): Promise<BuildResult>
 	{
 		const { PackageBuilder } = await import('../services/package-builder');
-		return new PackageBuilder(this).build(options);
+		return new PackageBuilder(this).build();
 	}
 
-	async generate(options: { production?: boolean } = {}): Promise<BuildResult>
+	async generate(): Promise<BuildResult>
 	{
 		const { PackageBuilder } = await import('../services/package-builder');
-		return new PackageBuilder(this).generate(options);
+		return new PackageBuilder(this).generate();
 	}
 
 	async lint(options: { fix?: boolean; files?: string[]; cache?: boolean; exclude?: string[] } = {}): Promise<LintResult>

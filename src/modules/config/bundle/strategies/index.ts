@@ -21,3 +21,4 @@ export * from './babel-strategy';
 export * from './emit-declaration-strategy';
 export * from './safe-namespaces-strategy';
 export * from './baseline-strategy';
+export * from './production-strategy';

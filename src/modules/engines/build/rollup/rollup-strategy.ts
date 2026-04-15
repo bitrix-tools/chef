@@ -564,13 +564,23 @@ export class RollupBuildStrategy extends BuildStrategy
 			return null;
 		}
 
-		const fullCssPath = path.join(extensionDir, cssPath);
-		if (!fs.existsSync(fullCssPath))
+		// Try relative to extension directory first
+		const relativeCssPath = path.join(extensionDir, cssPath);
+		if (fs.existsSync(relativeCssPath))
 		{
-			return null;
+			return relativeCssPath;
 		}
 
-		return fullCssPath;
+		// Handle absolute Bitrix paths like "/bitrix/js/ui/forms/ui.forms.css"
+		// by extracting just the filename and looking in extension directory
+		const baseName = path.basename(cssPath);
+		const fallbackPath = path.join(extensionDir, baseName);
+		if (fs.existsSync(fallbackPath))
+		{
+			return fallbackPath;
+		}
+
+		return null;
 	}
 
 	static #collectCssOnlyDependencies(extensionName: string, visited: Set<string>): string[]
@@ -1243,6 +1253,7 @@ export class RollupBuildStrategy extends BuildStrategy
 					{
 						return nodeResolve({
 							browser: true,
+							exportConditions: options.production ? ['production'] : ['development'],
 						});
 					}
 

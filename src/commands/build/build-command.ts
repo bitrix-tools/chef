@@ -8,7 +8,7 @@ import { watchOption } from './options/watch-option';
 import { createPathOption } from '../../shared/options/path-option';
 import { verboseOption } from './options/verbose-option';
 import { forceOption } from './options/force-option';
-import { productionOption } from './options/production-option';
+import { productionOption, developmentOption } from './options/production-option';
 import { PackageFactoryProvider } from '../../modules/packages/providers/package-factory-provider';
 import { PackageResolver } from '../../modules/packages/package-resolver';
 import { findPackages } from '../../utils/package/find-packages';
@@ -32,7 +32,17 @@ buildCommand
 	.addOption(verboseOption)
 	.addOption(forceOption)
 	.addOption(productionOption)
+	.addOption(developmentOption)
 	.action(async (extensions: string[], args) => {
+		if (args.production)
+		{
+			process.env.NODE_ENV = 'production';
+		}
+		else if (args.development)
+		{
+			process.env.NODE_ENV = 'development';
+		}
+
 		const queue = new SequentialQueue();
 
 		const extensionsStream: NodeJS.ReadableStream = (() => {

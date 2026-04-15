@@ -22,7 +22,7 @@ export function plainBuild(extension: BasePackage, args: Record<string, any>): P
 	const plainBuildTask: Task = {
 		title: `Building ${name}...`,
 		run: async (): Promise<TaskResult> => {
-			const result = await extension.build({ production: args.production });
+			const result = await extension.build();
 
 			const root = extension.getPath();
 			const relativeRoot = path.relative(process.cwd(), root);

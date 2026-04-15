@@ -19,10 +19,10 @@ export class PackageBuilder
 		this.#package = extensionPackage;
 	}
 
-	async build(options: { production?: boolean } = {}): Promise<BuildResult>
+	async build(): Promise<BuildResult>
 	{
 		const buildEngine = await PackageBuilder.getBuildEngine();
-		const buildOptions = this.#getBuildOptions(options);
+		const buildOptions = this.#getBuildOptions();
 
 		const validation = await this.#validateBuildOptions(buildOptions);
 		if (validation && 'denied' in validation)
@@ -58,10 +58,10 @@ export class PackageBuilder
 		return buildResult;
 	}
 
-	async generate(options: { production?: boolean } = {}): Promise<BuildResult>
+	async generate(): Promise<BuildResult>
 	{
 		const buildEngine = await PackageBuilder.getBuildEngine();
-		const buildOptions = this.#getBuildOptions(options);
+		const buildOptions = this.#getBuildOptions();
 
 		const validation = await this.#validateBuildOptions(buildOptions);
 		if (validation && 'denied' in validation)
@@ -79,13 +79,14 @@ export class PackageBuilder
 		return buildResult;
 	}
 
-	#getBuildOptions(options: { production?: boolean } = {}): BuildOptions
+	#getBuildOptions(): BuildOptions
 	{
-		const production = options.production ?? false;
 		const bundleConfig = this.#package.getBundleConfig();
 		const chefConfig = ChefConfigManager.getInstance().getConfig();
 		const defaults = chefConfig.defaults;
 		const enforce = chefConfig.enforce;
+
+		const production = bundleConfig.get('production');
 
 		return {
 			input: this.#package.getInputPath(),
@@ -103,13 +104,11 @@ export class PackageBuilder
 			concat: bundleConfig.get('concat'),
 			cssImages: bundleConfig.get('cssImages'),
 			resolveFiles: bundleConfig.get('resolveFilesImport'),
-			minify: bundleConfig.has('minification')
-				? bundleConfig.get('minification')
-				: production,
+			minify: bundleConfig.get('minification'),
 			sourceMaps: enforce?.sourceMaps
 				?? (bundleConfig.has('sourceMaps')
 					? bundleConfig.get('sourceMaps')
-					: (defaults?.sourceMaps ?? !production)),
+					: (defaults?.sourceMaps ?? true)),
 			standalone: bundleConfig.get('standalone').enabled,
 			standaloneRemap: bundleConfig.get('standalone').remap,
 			standaloneExposeNamespaces: bundleConfig.get('standalone').exposeNamespaces,

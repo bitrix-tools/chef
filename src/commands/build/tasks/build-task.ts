@@ -41,7 +41,7 @@ export function buildTask(extension: BasePackage, args: Record<string, any>): Ta
 	return {
 		title: 'Building code...',
 		run: async (onUpdate): Promise<TaskResult> => {
-			const result = await extension.build({ production: args.production });
+			const result = await extension.build();
 
 			const root = extension.getPath();
 			const relativeRoot = path.relative(process.cwd(), root);
