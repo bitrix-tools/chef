@@ -93,8 +93,8 @@ export default {
 
 | Параметр | Тип | Описание |
 |----------|-----|----------|
-| `input` | `string` | Точка входа |
-| `output` | `string \| {js, css}` | Путь к выходному бандлу |
+| `input` | `string` | Точка входа (`.ts`, `.js` или `.css`) |
+| `output` | `string \| {js?, css?}` | Путь к выходному бандлу |
 | `namespace` | `string` | Глобальный неймспейс для экспортов |
 | `concat` | `{js?: string[], css?: string[]}` | Конкатенация файлов в указанном порядке |
 | `targets` | `string \| string[]` | Целевые браузеры для транспиляции |
@@ -109,6 +109,7 @@ export default {
 | `emitDeclaration` | `boolean` | Генерация `.d.ts` с namespace-декларациями (по умолчанию: true) |
 | `safeNamespaces` | `boolean` | Безопасные обращения к неймспейсам зависимостей через optional chaining |
 | `standalone` | `boolean \| object` | Автономная сборка с инлайном зависимостей |
+| `cssImages` | `object` | Обработка изображений в CSS (`type`, `maxSize`, `absolutePaths`) |
 | `baseline` | `boolean` | Проверка доступности веб-фич при сборке (по умолчанию: true) |
 
 > Также поддерживается JavaScript-конфигурация (`bundle.config.js`).

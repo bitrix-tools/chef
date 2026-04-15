@@ -19,8 +19,8 @@ export default {
 
 | Параметр | Тип | Описание |
 |----------|-----|----------|
-| `input` | `string` | Файл точки входа |
-| `output` | `string \| {js, css}` | Путь к выходным бандлам |
+| `input` | `string` | Файл точки входа (`.ts`, `.js` или `.css`) |
+| `output` | `string \| {js?, css?}` | Путь к выходным бандлам |
 | `namespace` | `string` | Глобальное пространство имён для экспортов |
 | `concat` | `{js?: string[], css?: string[]}` | Конкатенация файлов в указанном порядке |
 | `targets` | `string \| string[]` | Целевые браузеры для транспиляции |
@@ -36,7 +36,77 @@ export default {
 | `transformClasses` | `boolean \| string[]` | Транспиляция классов — все (`true`) или по именам |
 | `emitDeclaration` | `boolean` | Генерация `.d.ts` с namespace-декларациями (по умолчанию: `true`) |
 | `safeNamespaces` | `boolean` | Безопасные обращения к неймспейсам зависимостей через optional chaining |
+| `cssImages` | `object` | Обработка изображений в CSS |
 | `baseline` | `boolean` | Проверка доступности веб-фич при сборке (по умолчанию: `true`) |
+
+## CSS-only расширения
+
+Если расширение содержит только стили без JavaScript-логики, можно указать CSS-файл как точку входа:
+
+```ts
+export default {
+  input: './src/style.css',
+  output: {
+    css: './dist/my.extension.bundle.css',
+  },
+};
+```
+
+При CSS-only сборке:
+- JS-бандл не создаётся
+- В `output` достаточно указать только `css`
+- Не нужен файл-обёртка `index.ts` с импортом стилей
+
+## Обработка изображений в CSS
+
+Параметр `cssImages` управляет обработкой изображений, используемых в CSS через `url()`.
+
+По умолчанию изображения до 14 КБ инлайнятся в CSS как base64 (SVG оптимизируются через SVGO). Изображения большего размера копируются в выходную директорию с относительными путями.
+
+```ts
+export default {
+  input: './src/index.ts',
+  output: './dist/my.bundle.js',
+  cssImages: {
+    type: 'copy',
+  },
+};
+```
+
+### Параметры cssImages
+
+| Параметр | Тип | По умолчанию | Описание |
+|----------|-----|-------------|----------|
+| `type` | `'inline' \| 'copy'` | `'inline'` | `inline` — инлайн мелких файлов (base64/SVG), `copy` — копирование всех файлов |
+| `maxSize` | `number` | `14` | Порог в КБ для инлайна (только при `type: 'inline'`) |
+| `output` | `string` | — | Директория для скопированных файлов |
+| `absolutePaths` | `boolean` | `false` | Абсолютные пути к изображениям вместо относительных |
+
+### Абсолютные пути
+
+При `absolutePaths: true` chef автоматически вычисляет публичный путь расширения и подставляет абсолютные URL в CSS:
+
+```ts
+export default {
+  input: './src/index.ts',
+  output: './dist/my.bundle.js',
+  cssImages: {
+    absolutePaths: true,
+  },
+};
+```
+
+Результат в CSS:
+
+```css
+/* Вместо */
+.icon { background: url(./images/icon.png); }
+
+/* Будет */
+.icon { background: url(/bitrix/js/ui/buttons/dist/images/icon.png); }
+```
+
+Публичный путь определяется автоматически на основе расположения расширения (`/bitrix/js/...` для исходников, `/local/js/...` для проектов).
 
 ## Плагины
 

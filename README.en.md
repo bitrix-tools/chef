@@ -93,8 +93,8 @@ export default {
 
 | Option | Type | Description |
 |--------|------|-------------|
-| `input` | `string` | Entry point file |
-| `output` | `string \| {js, css}` | Output bundle path(s) |
+| `input` | `string` | Entry point file (`.ts`, `.js` or `.css`) |
+| `output` | `string \| {js?, css?}` | Output bundle path(s) |
 | `namespace` | `string` | Global namespace for exports |
 | `concat` | `{js?: string[], css?: string[]}` | Concatenate files in specified order |
 | `targets` | `string \| string[]` | Browser targets for transpilation |
@@ -109,6 +109,7 @@ export default {
 | `emitDeclaration` | `boolean` | Generate `.d.ts` with namespace declarations (default: true) |
 | `safeNamespaces` | `boolean` | Safe access to dependency namespaces via optional chaining |
 | `standalone` | `boolean \| object` | Standalone build with inlined dependencies |
+| `cssImages` | `object` | CSS image processing (`type`, `maxSize`, `absolutePaths`) |
 | `baseline` | `boolean` | Check web feature availability during build (default: true) |
 
 > JavaScript configuration (`bundle.config.js`) is also supported.

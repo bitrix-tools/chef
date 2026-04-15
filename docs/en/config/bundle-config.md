@@ -19,8 +19,8 @@ export default {
 
 | Option | Type | Description |
 |--------|------|-------------|
-| `input` | `string` | Entry point file |
-| `output` | `string \| {js, css}` | Output bundle path(s) |
+| `input` | `string` | Entry point file (`.ts`, `.js` or `.css`) |
+| `output` | `string \| {js?, css?}` | Output bundle path(s) |
 | `namespace` | `string` | Global namespace for exports |
 | `concat` | `{js?: string[], css?: string[]}` | Concatenate files in specified order |
 | `targets` | `string \| string[]` | Browser targets for transpilation |
@@ -36,7 +36,77 @@ export default {
 | `transformClasses` | `boolean \| string[]` | Transpile classes — all (`true`) or by name |
 | `emitDeclaration` | `boolean` | Generate `.d.ts` with namespace declarations (default: `true`) |
 | `safeNamespaces` | `boolean` | Safe access to dependency namespaces via optional chaining |
+| `cssImages` | `object` | CSS image processing options |
 | `baseline` | `boolean` | Check web feature availability during build (default: `true`) |
+
+## CSS-only Extensions
+
+If an extension contains only styles without JavaScript logic, you can use a CSS file as the entry point:
+
+```ts
+export default {
+  input: './src/style.css',
+  output: {
+    css: './dist/my.extension.bundle.css',
+  },
+};
+```
+
+With CSS-only builds:
+- No JS bundle is created
+- Only `css` needs to be specified in `output`
+- No wrapper `index.ts` file with style imports is needed
+
+## CSS Image Processing
+
+The `cssImages` option controls how images referenced via `url()` in CSS are processed.
+
+By default, images under 14 KB are inlined as base64 (SVGs are optimized via SVGO). Larger images are copied to the output directory with relative paths.
+
+```ts
+export default {
+  input: './src/index.ts',
+  output: './dist/my.bundle.js',
+  cssImages: {
+    type: 'copy',
+  },
+};
+```
+
+### cssImages Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `type` | `'inline' \| 'copy'` | `'inline'` | `inline` — inline small files (base64/SVG), `copy` — copy all files |
+| `maxSize` | `number` | `14` | Size threshold in KB for inlining (only with `type: 'inline'`) |
+| `output` | `string` | — | Output directory for copied files |
+| `absolutePaths` | `boolean` | `false` | Use absolute paths for images instead of relative |
+
+### Absolute Paths
+
+With `absolutePaths: true`, chef automatically computes the extension's public path and generates absolute URLs in CSS:
+
+```ts
+export default {
+  input: './src/index.ts',
+  output: './dist/my.bundle.js',
+  cssImages: {
+    absolutePaths: true,
+  },
+};
+```
+
+Result in CSS:
+
+```css
+/* Instead of */
+.icon { background: url(./images/icon.png); }
+
+/* Becomes */
+.icon { background: url(/bitrix/js/ui/buttons/dist/images/icon.png); }
+```
+
+The public path is determined automatically based on the extension's location (`/bitrix/js/...` for sources, `/local/js/...` for projects).
 
 ## Plugins
 
