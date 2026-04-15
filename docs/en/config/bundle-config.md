@@ -335,7 +335,7 @@ The extension's own namespace is not transformed — it is already safely initia
 
 ## Environment Variables
 
-Chef automatically replaces environment variables during build, similar to [Vite](https://vite.dev/guide/env-and-mode):
+Chef automatically replaces environment variables during build:
 
 | Variable | Production | Development |
 |---|---|---|

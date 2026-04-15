@@ -58,7 +58,7 @@ Production build:
 
 ## Environment Variables
 
-Chef automatically replaces environment variables during build, similar to [Vite](https://vite.dev/guide/env-and-mode):
+Chef automatically replaces environment variables during build:
 
 | Variable | Production | Development |
 |---|---|---|
@@ -75,6 +75,15 @@ if (process.env.NODE_ENV !== 'production') {
   console.warn('Debug info');
 }
 ```
+
+## Export Conditions
+
+When importing npm packages, Chef respects [export conditions](https://nodejs.org/api/packages.html#conditional-exports) from `package.json`. The appropriate module variant is selected based on the build mode:
+
+- **Dev** — conditions `development`, `browser`, `import`, `default`
+- **Production** — conditions `production`, `browser`, `import`, `default`
+
+This allows npm packages to provide different builds for development and production. For example, many libraries include additional checks and warnings in their development build that are absent from production.
 
 ## Config Priority
 
@@ -223,6 +232,7 @@ The bundle size in standalone is noticeably larger — it includes all Bitrix de
 |---|---|---|
 | Bitrix extensions | external (`rel`) | inlined |
 | npm packages | inlined with `resolveNodeModules: true` | inlined automatically |
+| Dependency CSS | loaded separately | merged into one file |
 | Bundle size | minimal | maximal |
 | Dependencies in `config.php` | populated automatically | empty |
 | Code duplication | none | possible |
@@ -247,6 +257,12 @@ chef build vendor.my-app --production
 ```
 
 In this case the standalone bundle will also be minified.
+
+### Dependency CSS
+
+In standalone mode Chef automatically collects CSS from all dependencies, including CSS-only extensions (without JS). Dependency CSS is merged with the extension's own CSS into a single file.
+
+If dependencies contain assets (images, fonts), they are copied into subdirectories `images/{extension-name}/` to avoid filename collisions between extensions.
 
 ### Important
 
