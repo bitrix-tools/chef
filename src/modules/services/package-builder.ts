@@ -19,12 +19,12 @@ export class PackageBuilder
 		this.#package = extensionPackage;
 	}
 
-	async build(): Promise<BuildResult>
+	async build(options: { force?: boolean } = {}): Promise<BuildResult>
 	{
 		const buildEngine = await PackageBuilder.getBuildEngine();
 		const buildOptions = this.#getBuildOptions();
 
-		const validation = await this.#validateBuildOptions(buildOptions);
+		const validation = options.force ? null : await this.#validateBuildOptions(buildOptions);
 		if (validation && 'denied' in validation)
 		{
 			return validation.denied;

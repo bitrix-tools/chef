@@ -444,10 +444,10 @@ export abstract class BasePackage
 
 	// region Actions (delegate to services)
 
-	async build(): Promise<BuildResult>
+	async build(options: { force?: boolean } = {}): Promise<BuildResult>
 	{
 		const { PackageBuilder } = await import('../services/package-builder');
-		return new PackageBuilder(this).build();
+		return new PackageBuilder(this).build(options);
 	}
 
 	async generate(): Promise<BuildResult>

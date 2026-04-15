@@ -34,7 +34,7 @@ export function rebuildTask(extension: BasePackage, args: Record<string, any>): 
 
 				try
 				{
-					const result = await target.build();
+					const result = await target.build({ force: args.force });
 					if (result.errors.length > 0)
 					{
 						results.push({ name: target.getName(), status: 'fail' });
