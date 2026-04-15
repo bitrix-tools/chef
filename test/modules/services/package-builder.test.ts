@@ -12,12 +12,19 @@ import { PackageResolver } from '../../../src/modules/packages/package-resolver'
 
 import { sourceRepo, extensionPath } from '../../fixtures/index';
 
-function cleanDist(dir: string): void
+function cleanBuildArtifacts(dir: string): void
 {
 	const distPath = path.join(dir, 'dist');
 	if (fs.existsSync(distPath))
 	{
 		fs.rmSync(distPath, { recursive: true });
+	}
+
+	// PackageBuilder.build() creates config.php via PhpConfigManager.save()
+	const configPhp = path.join(dir, 'config.php');
+	if (fs.existsSync(configPhp) && fs.readFileSync(configPhp, 'utf-8').trim() === '')
+	{
+		fs.rmSync(configPhp);
 	}
 }
 
@@ -39,8 +46,8 @@ describe('PackageBuilder', () => {
 	describe('force option', () => {
 		const dir = extensionPath('basic-extension');
 
-		beforeEach(() => cleanDist(dir));
-		afterEach(() => cleanDist(dir));
+		beforeEach(() => cleanBuildArtifacts(dir));
+		afterEach(() => cleanBuildArtifacts(dir));
 
 		it('should skip validation when force is true', async () => {
 			const chefConfigStub = sandbox.stub(ChefConfigManager, 'getInstance').returns({
