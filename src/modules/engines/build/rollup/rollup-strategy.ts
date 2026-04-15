@@ -56,6 +56,46 @@ export class RollupBuildStrategy extends BuildStrategy
 		});
 	}
 
+	static #removeEmptyChunks(output: RollupOutput['output'], jsOutputPath: string): void
+	{
+		for (let i = output.length - 1; i >= 0; i--)
+		{
+			const chunk = output[i];
+			if (chunk.type !== 'chunk')
+			{
+				continue;
+			}
+
+			const code = chunk.code
+				.replace(/\/\*[\s\S]*?\*\//g, '')
+				.replace(/\/\/# sourceMappingURL=.*/g, '')
+				.replace(/['"]use strict['"];?/g, '')
+				.replace(/\(function\s*\([^)]*\)\s*\{/g, '')
+				.replace(/\}\)\([^)]*\);?/g, '')
+				.replace(/\s/g, '');
+
+			if (code.length > 0)
+			{
+				continue;
+			}
+
+			output.splice(i, 1);
+
+			// Remove written files
+			const jsFile = path.resolve(path.dirname(jsOutputPath), chunk.fileName);
+			fs.rmSync(jsFile, { force: true });
+			fs.rmSync(`${jsFile}.map`, { force: true });
+
+			// Remove sourcemap asset from output
+			const mapFileName = `${chunk.fileName}.map`;
+			const mapIndex = output.findIndex(o => o.fileName === mapFileName);
+			if (mapIndex !== -1)
+			{
+				output.splice(mapIndex, 1);
+			}
+		}
+	}
+
 	protected static makeGlobals(dependencies: string[]): Record<string, string>
 	{
 		return dependencies.reduce((acc, dependency: string) => {
@@ -201,6 +241,11 @@ export class RollupBuildStrategy extends BuildStrategy
 		const errorsRef: Array<BuildDiagnostic> = [];
 		const dependenciesRef: Array<string> = [];
 		const onWarning = (warning: RollupLog): void => {
+			if (warning.code === 'EMPTY_BUNDLE')
+			{
+				return;
+			}
+
 			if (
 				warning.code === 'UNRESOLVED_IMPORT'
 				&& isExternalDependencyName(warning.exporter)
@@ -613,6 +658,8 @@ export class RollupBuildStrategy extends BuildStrategy
 
 		await bundle.close();
 
+		RollupBuildStrategy.#removeEmptyChunks(result.output, options.output.js);
+
 		const bundlesSize = RollupBuildStrategy.calculateBundlesSize(result.output);
 		const sortedDependencies = RollupBuildStrategy.sortDependencies(dependenciesRef)
 
@@ -725,6 +772,8 @@ export class RollupBuildStrategy extends BuildStrategy
 		}
 
 		await bundle.close();
+
+		RollupBuildStrategy.#removeEmptyChunks(result.output, options.output.js);
 
 		const bundlesSize = RollupBuildStrategy.calculateBundlesSize(result.output);
 		const sortedDependencies = RollupBuildStrategy.sortDependencies(dependenciesRef)
@@ -937,9 +986,15 @@ export class RollupBuildStrategy extends BuildStrategy
 			babelPlugins,
 		} = await this.#loadBuildPlugins(options);
 
+		const isCssOnly = options.input.endsWith('.css');
+		const inputId = isCssOnly ? '\0css-entry' : options.input;
+
 		return {
-			input: options.input,
+			input: inputId,
 			plugins: [
+				...(isCssOnly ? [RollupBuildStrategy.createVirtualEntryPlugin({
+					'\0css-entry': `import '${options.input.replaceAll('\\', '/')}';`,
+				})] : []),
 				RollupBuildStrategy.createEnvReplacePlugin(options.production ?? false),
 				RollupBuildStrategy.createNpmRemapPlugin(dependenciesRef),
 				...await (async () => {
@@ -1021,6 +1076,7 @@ export class RollupBuildStrategy extends BuildStrategy
 					targets: options.targets,
 					cssImages: options.cssImages,
 					packageRoot: options.packageRoot,
+					publicPath: options.publicPath,
 				}),
 				commonjs({
 					sourceMap: false,

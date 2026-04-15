@@ -203,6 +203,16 @@ describe('chef build', () => {
 		assertBundleMatchesExpected(dest, 'css-autoprefixer', 'extension.bundle.css');
 	});
 
+	it('should build CSS-only extension with CSS input', async () => {
+		const { dest, extPath } = buildFixture(tmpRepo, 'css-only');
+
+		const { exitCode } = await runChef(['build', '--path', extPath], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 0);
+		assertBundleMatchesExpected(dest, 'css-only', 'bundle.css');
+		assert.isFalse(fs.existsSync(path.join(dest, 'dist', 'bundle.js')), 'Should not create empty JS bundle');
+	});
+
 	// endregion
 
 	// region: images

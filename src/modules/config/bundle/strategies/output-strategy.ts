@@ -31,6 +31,13 @@ export const outputStrategy = {
 			return prepareValue(value.js);
 		}
 
+		if (!value.js && value.css)
+		{
+			const cssBasename = value.css.replace(/\.css$/, '');
+
+			return { js: `${cssBasename}.js`, css: value.css };
+		}
+
 		if (value.js && value.css)
 		{
 			return value;
@@ -38,7 +45,7 @@ export const outputStrategy = {
 	},
 	validate(value: any): true | string
 	{
-		if (typeof value === 'string' || value.js)
+		if (typeof value === 'string' || value.js || value.css)
 		{
 			return true;
 		}
