@@ -5,6 +5,9 @@ import fg from 'fast-glob';
 import { ChefConfigManager } from '../config/project/chef-config-manager';
 import { validateBuildOptions } from '../config/project/chef-config-validator';
 import { DeclarationEmitter } from '../engines/build/declaration-emitter';
+import { Environment } from '../../environment/environment';
+import { FileFinder } from '../../utils/file-finder';
+import { loadTsConfig } from '../../utils/load-tsconfig';
 
 import type { BasePackage } from '../packages/base-package';
 import type { BuildEngine } from '../engines/build/build-engine';
@@ -164,11 +167,25 @@ export class PackageBuilder
 		const outputPath = options.output.js.replace(/\.js$/, '.d.ts');
 		const emitter = new DeclarationEmitter();
 
+		const tsConfigPath = FileFinder.findUpFile({
+			fileName: 'tsconfig.json',
+			fromDir: path.dirname(options.input),
+			rootDir: Environment.getRoot() ?? undefined,
+		});
+
+		let compilerOptions: import('typescript').CompilerOptions | undefined;
+		if (typeof tsConfigPath === 'string' && tsConfigPath.length > 0)
+		{
+			const tsConfig = await loadTsConfig(tsConfigPath, options.packageRoot);
+			compilerOptions = tsConfig.options;
+		}
+
 		await emitter.emit({
 			packageRoot: options.packageRoot,
 			input: options.input,
 			namespace: options.namespace,
 			outputPath,
+			compilerOptions,
 		});
 	}
 

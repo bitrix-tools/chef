@@ -977,6 +977,81 @@ describe('DeclarationEmitter', () => {
 			assert.include(content, 'type Size');
 			assert.include(content, 'type Variant');
 		});
+
+		it('should follow named re-export chains across multiple files', async () => {
+			const content = await emitAndRead({
+				'index.ts': `
+					export { Actions } from './sets/index';
+					export { Icon } from './icon';
+				`,
+				'sets/index.ts': `
+					export { Actions } from './actions';
+				`,
+				'sets/actions.ts': `
+					export const Actions = Object.freeze({
+						SAVE: 'save',
+						DELETE: 'delete',
+					} as const);
+				`,
+				'icon.ts': `
+					export class Icon {
+						name: string = '';
+						render(): HTMLElement { return document.createElement('div'); }
+					}
+				`,
+			});
+
+			assert.include(content, 'Actions');
+			assert.include(content, 'SAVE');
+			assert.include(content, 'DELETE');
+			assert.include(content, 'class Icon');
+		});
+
+		it('should export local declarations referenced by export { X }', async () => {
+			const content = await emitAndRead({
+				'index.ts': `
+					const BIcon = {
+						props: {
+							name: { type: String as unknown as StringConstructor, required: true as const },
+						},
+						template: '<div></div>',
+					};
+					export { BIcon };
+				`,
+			});
+
+			assert.include(content, 'BIcon');
+			assert.include(content, 'props');
+		});
+
+		it('should follow star re-export through named re-export chain', async () => {
+			const content = await emitAndRead({
+				'index.ts': `
+					export * from './sets/index';
+				`,
+				'sets/index.ts': `
+					export { Main } from './main';
+					export { Social } from './social';
+				`,
+				'sets/main.ts': `
+					export const Main = Object.freeze({
+						HOME: 'home',
+						SEARCH: 'search',
+					} as const);
+				`,
+				'sets/social.ts': `
+					export const Social = Object.freeze({
+						LIKE: 'like',
+						SHARE: 'share',
+					} as const);
+				`,
+			});
+
+			assert.include(content, 'Main');
+			assert.include(content, 'HOME');
+			assert.include(content, 'Social');
+			assert.include(content, 'LIKE');
+		});
 	});
 
 	// ─── Source formatting variations ───

@@ -7,12 +7,16 @@ export interface DeclarationEmitOptions
 	input: string;
 	namespace: string;
 	outputPath: string;
+	compilerOptions?: import('typescript').CompilerOptions;
 }
 
 export class DeclarationEmitter
 {
+	#paths: Record<string, string[]> = {};
+
 	async emit(options: DeclarationEmitOptions): Promise<void>
 	{
+		this.#paths = options.compilerOptions?.paths as Record<string, string[]> ?? {};
 		const { packageRoot, input, namespace, outputPath } = options;
 
 		if (!namespace || namespace === 'window')
@@ -26,7 +30,7 @@ export class DeclarationEmitter
 			return;
 		}
 
-		const declarations = await this.#generateDeclarations(packageRoot, sourceDir);
+		const declarations = await this.#generateDeclarations(packageRoot, sourceDir, options.compilerOptions);
 		if (declarations.size === 0)
 		{
 			return;
@@ -69,7 +73,7 @@ export class DeclarationEmitter
 		return null;
 	}
 
-	async #generateDeclarations(packageRoot: string, sourceDir: string): Promise<Map<string, string>>
+	async #generateDeclarations(packageRoot: string, sourceDir: string, externalOptions?: import('typescript').CompilerOptions): Promise<Map<string, string>>
 	{
 		const { default: ts } = await import('typescript');
 
@@ -82,6 +86,7 @@ export class DeclarationEmitter
 		}
 
 		const compilerOptions: import('typescript').CompilerOptions = {
+			...externalOptions,
 			target: ts.ScriptTarget.ESNext,
 			module: ts.ModuleKind.ESNext,
 			moduleResolution: ts.ModuleResolutionKind.Bundler,
@@ -451,7 +456,9 @@ export class DeclarationEmitter
 						continue;
 					}
 
-					const declaration = imports.get(original);
+					const declaration = imports.get(original)
+						?? this.#findLocalDeclaration(lines, original);
+
 					if (declaration)
 					{
 						seen.add(alias);
@@ -799,6 +806,51 @@ export class DeclarationEmitter
 					return text;
 				}
 			}
+
+			// Follow re-exports: export { Foo } from './module' or export { Bar as Foo } from './module'
+			const reExportMatch = line.match(/^export\s+(?:type\s+)?\{([^}]+)\}\s+from\s+['"](.+)['"]\s*;?\s*$/);
+			if (reExportMatch)
+			{
+				const reExportNames = reExportMatch[1].split(',').map((n) => {
+					const parts = n.trim().split(/\s+as\s+/);
+
+					return { original: parts[0].trim(), alias: (parts[1] || parts[0]).trim() };
+				});
+
+				const matched = reExportNames.find((n) => n.alias === name);
+				if (matched)
+				{
+					const resolvedPath = this.#resolveSpecifier(filePath, reExportMatch[2], declarations);
+					if (resolvedPath)
+					{
+						const declaration = matched.original === 'default'
+							? this.#extractDefaultExport(resolvedPath, declarations, name)
+							: this.#extractNamedExport(resolvedPath, declarations, matched.original);
+
+						if (declaration && matched.original !== matched.alias)
+						{
+							return this.#renameDeclaration(declaration, matched.original, matched.alias);
+						}
+
+						return declaration;
+					}
+				}
+			}
+
+			// Follow star re-exports: export * from './module'
+			const starReExport = line.match(/^export\s+(?:type\s+)?\*\s+from\s+['"](.+)['"]\s*;?\s*$/);
+			if (starReExport)
+			{
+				const resolvedPath = this.#resolveSpecifier(filePath, starReExport[1], declarations);
+				if (resolvedPath)
+				{
+					const declaration = this.#extractNamedExport(resolvedPath, declarations, name);
+					if (declaration)
+					{
+						return declaration;
+					}
+				}
+			}
 		}
 
 		return null;
@@ -958,14 +1010,64 @@ export class DeclarationEmitter
 
 	#resolveSpecifier(fromFile: string, specifier: string, declarations: Map<string, string>): string | null
 	{
-		const dir = path.dirname(fromFile);
-		const resolved = path.resolve(dir, specifier);
-
-		for (const candidate of [resolved + '.d.ts', resolved + '/index.d.ts'])
+		if (specifier.startsWith('.'))
 		{
-			if (declarations.has(candidate))
+			const dir = path.dirname(fromFile);
+			const resolved = path.resolve(dir, specifier);
+
+			for (const candidate of [resolved + '.d.ts', resolved + '/index.d.ts'])
 			{
-				return candidate;
+				if (declarations.has(candidate))
+				{
+					return candidate;
+				}
+			}
+
+			return null;
+		}
+
+		// Non-relative specifier — resolve through tsconfig paths
+		const pathEntries = this.#paths[specifier];
+		if (pathEntries)
+		{
+			for (const mappedPath of pathEntries)
+			{
+				const dtsPath = mappedPath.replace(/\.[jt]sx?$/, '.d.ts');
+
+				if (declarations.has(dtsPath))
+				{
+					return dtsPath;
+				}
+
+				// Try index.d.ts in directory
+				const dirPath = mappedPath.replace(/\/[^/]+$/, '');
+				const indexDts = path.join(dirPath, 'index.d.ts');
+				if (declarations.has(indexDts))
+				{
+					return indexDts;
+				}
+			}
+		}
+
+		return null;
+	}
+
+	#findLocalDeclaration(lines: string[], name: string): string | null
+	{
+		for (let i = 0; i < lines.length; i++)
+		{
+			const line = lines[i];
+			const declPattern = new RegExp(
+				`^(?:declare\\s+)?(?:class|interface|type|enum|function|const|let|var)\\s+${name}\\b`,
+			);
+
+			if (declPattern.test(line))
+			{
+				const jsdoc = this.#extractLeadingJsdoc(lines, i);
+				const block = this.#extractDeclarationBlock(lines, i);
+				const text = jsdoc ? `${jsdoc}\n${block.text}` : block.text;
+
+				return text.replace(/^declare\s+/, '');
 			}
 		}
 
