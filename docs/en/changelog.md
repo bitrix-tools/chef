@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.7.0 <Badge type="tip" text="4/15/2026" />
+
+- Standalone builds: inline all dependencies into a single bundle with `remap` support for dependency overrides
+- CSS-only extensions: use CSS file as entry point without JS wrapper
+- `cssImages.absolutePaths` option for absolute image URLs in CSS
+- `exposeNamespaces` option for standalone builds
+- Fixed protected extension inlining in standalone mode
+- E2E tests: proper Playwright config lookup and graceful handling of empty test suites
+
 ## v1.6.3 <Badge type="tip" text="4/13/2026" />
 
 - Fixed removal of side-effect imports during build (e.g. handler registration files)
@@ -109,7 +118,7 @@ New safeNamespaces option in bundle.config — safe dependency namespace access 
 - Remove unused dependencies (@vue/compiler-sfc, @rollup/plugin-typescript)
 - Remove ora dependency from test and init reporters
 
-## v0.0.0-beta.14 <Badge type="tip" text="3/11/2026" />
+## v0.0.0-beta.14 <Badge type="tip" text="3/12/2026" />
 
 Added TypeScript type-checking during build. Errors are displayed with a code snippet, underline, and a clickable file link. If errors are found, the build stops before Rollup starts.
 
