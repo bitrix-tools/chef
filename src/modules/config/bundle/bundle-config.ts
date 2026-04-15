@@ -18,6 +18,7 @@ export interface BundleConfig {
 		type?: 'inline' | 'copy';
 		output?: string;
 		maxSize?: number;
+		absolutePaths?: boolean;
 	};
 	resolveFilesImport?: {
 		output?: string;

@@ -9,8 +9,10 @@ interface CssPluginOptions {
 	cssImages?: {
 		type?: 'inline' | 'copy';
 		maxSize?: number;
+		absolutePaths?: boolean;
 	};
 	packageRoot: string;
+	publicPath?: string;
 }
 
 interface AssetToCopy {
@@ -193,6 +195,7 @@ function processUrls(
 	optimizeSvg: ((svg: string) => string) | null,
 	packageRoot: string,
 	outputCssPath: string,
+	publicPath?: string,
 ): { css: string; assets: AssetToCopy[] }
 {
 	const cssFileDir = path.dirname(cssFilePath);
@@ -212,6 +215,14 @@ function processUrls(
 		}
 
 		assets.push(result.asset);
+
+		if (publicPath)
+		{
+			const outputRelative = path.relative(packageRoot, path.dirname(outputCssPath));
+			const absoluteUrl = path.join(publicPath, outputRelative, result.asset.fileName).replaceAll('\\', '/');
+
+			return `url("${absoluteUrl}${result.suffix}")`;
+		}
 
 		// Rewrite url() to point to the copied file relative to output CSS
 		const assetOutputPath = path.join(path.dirname(outputCssPath), result.asset.fileName);
@@ -255,21 +266,20 @@ export default function cssPlugin(options: CssPluginOptions): Plugin
 				return null;
 			}
 
-			const maxSizeBytes = (options.cssImages?.maxSize ?? 14) * 1024;
-			const shouldInline = options.cssImages?.type !== 'copy';
-			const optimizeSvg = shouldInline ? await loadSvgo() : null;
+			const shouldCopyAll = options.cssImages?.type === 'copy';
+			const maxSizeBytes = shouldCopyAll ? 0 : (options.cssImages?.maxSize ?? 14) * 1024;
+			const absolutePaths = options.cssImages?.absolutePaths === true;
+			const optimizeSvg = !shouldCopyAll ? await loadSvgo() : null;
 
 			let css = code;
 
-			if (shouldInline)
-			{
-				const result = processUrls(css, id, maxSizeBytes, optimizeSvg, options.packageRoot, options.extract);
-				css = result.css;
+			const effectivePublicPath = absolutePaths ? options.publicPath : undefined;
+			const result = processUrls(css, id, maxSizeBytes, optimizeSvg, options.packageRoot, options.extract, effectivePublicPath);
+			css = result.css;
 
-				for (const asset of result.assets)
-				{
-					assetsToCopy.set(asset.filePath, asset);
-				}
+			for (const asset of result.assets)
+			{
+				assetsToCopy.set(asset.filePath, asset);
 			}
 
 			if (options.targets.length > 0)

@@ -45,6 +45,7 @@ export type BuildOptions = {
 	cssImages?: {
 		type: 'inline' | 'copy',
 		maxSize: number,
+		absolutePaths?: boolean,
 	},
 	resolveFiles?: {
 		include?: string[];
