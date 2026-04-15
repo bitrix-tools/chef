@@ -1,3 +1,4 @@
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
@@ -15,10 +16,10 @@ import type {
 	ConsoleLog,
 } from '../../test-types';
 
-const STREAMING_REPORTER_PATH = path.resolve(
-	path.dirname(fileURLToPath(import.meta.url)),
-	'streaming-reporter.ts',
-);
+const STREAMING_REPORTER_DIR = path.dirname(fileURLToPath(import.meta.url));
+const STREAMING_REPORTER_PATH = fs.existsSync(path.resolve(STREAMING_REPORTER_DIR, 'streaming-reporter.ts'))
+	? path.resolve(STREAMING_REPORTER_DIR, 'streaming-reporter.ts')
+	: path.resolve(STREAMING_REPORTER_DIR, 'streaming-reporter.js');
 
 export class PlaywrightE2EStrategy extends E2ETestStrategy
 {
@@ -39,7 +40,14 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 		const onBegin = options.onBegin ?? (() => {});
 		const args = ['playwright', 'test', `--reporter=${STREAMING_REPORTER_PATH}`];
 
-		const playwrightConfig = await findPlaywrightConfig(options.projectRoot, options.projectRoot);
+		const playwrightConfig = await findPlaywrightConfig(options.testsDirectory, options.projectRoot)
+			?? await findPlaywrightConfig(options.projectRoot, options.projectRoot);
+
+		if (!playwrightConfig)
+		{
+			args.push(options.testsDirectory);
+		}
+
 		if (!playwrightConfig?.outputDir)
 		{
 			args.push(`--output=${path.join(options.testsDirectory, 'test-results')}`);
@@ -89,6 +97,7 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 		const consoleLogs: ConsoleLog[] = [];
 		const errors: Error[] = [];
 		let stdoutBuffer = '';
+		let totalTests = -1;
 
 		childProcess.stdout.on('data', (data: Buffer) => {
 			stdoutBuffer += data.toString();
@@ -100,6 +109,7 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 			{
 				if (event.type === 'begin')
 				{
+					totalTests = event.totalTests;
 					onBegin({ totalTests: event.totalTests, browserCount: event.browserCount });
 					onStatus(`Running ${event.totalTests} tests...`);
 				}
@@ -125,7 +135,7 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 
 		return new Promise((resolve) => {
 			childProcess.on('close', (code) => {
-				if (report.length === 0 && code !== 0)
+				if (report.length === 0 && code !== 0 && totalTests !== 0)
 				{
 					const stderrText = consoleLogs.map((l) => l.text).join('\n').trim();
 					errors.push(new ChefError(CF.PLAYWRIGHT_ERROR, stderrText || 'Playwright exited with errors'));
