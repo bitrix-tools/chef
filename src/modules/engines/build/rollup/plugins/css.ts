@@ -115,6 +115,35 @@ function splitUrlSuffix(urlValue: string): { filePath: string; suffix: string }
 	};
 }
 
+function extractExtensionPrefix(filePath: string): string | null
+{
+	// Source repo: .../module/install/js/module/ext-name/.../file
+	// Project repo: .../local/js/ext/name/.../file or .../bitrix/js/ext/name/.../file
+	const normalized = filePath.replaceAll('\\', '/');
+
+	const jsIndex = normalized.lastIndexOf('/js/');
+	if (jsIndex === -1)
+	{
+		return null;
+	}
+
+	const afterJs = normalized.slice(jsIndex + 4); // e.g. "ui/icon-set/outline/src/images/copy.svg"
+
+	const srcIndex = afterJs.indexOf('/src/');
+	const distIndex = afterJs.indexOf('/dist/');
+	const cutIndex = srcIndex !== -1 && (distIndex === -1 || srcIndex < distIndex)
+		? srcIndex
+		: distIndex;
+
+	if (cutIndex === -1)
+	{
+		return null;
+	}
+
+	// e.g. "ui/icon-set/outline" → "ui.icon-set.outline"
+	return afterJs.slice(0, cutIndex).replaceAll('/', '.');
+}
+
 function processUrl(
 	cssFileDir: string,
 	urlValue: string,
@@ -145,10 +174,15 @@ function processUrl(
 	{
 		let relativeToPkg = path.relative(packageRoot, filePath);
 
-		// If file is outside packageRoot, fall back to just the filename
+		// If file is outside packageRoot, use extension name as subdirectory to avoid name collisions
 		if (relativeToPkg.startsWith('..'))
 		{
-			relativeToPkg = path.basename(filePath);
+			const extensionPrefix = extractExtensionPrefix(filePath);
+			const baseName = path.basename(filePath);
+
+			relativeToPkg = extensionPrefix
+				? path.join(extensionPrefix, baseName)
+				: baseName;
 		}
 
 		// Strip everything up to and including "src/" segment

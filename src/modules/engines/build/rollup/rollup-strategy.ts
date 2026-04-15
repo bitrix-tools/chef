@@ -17,7 +17,8 @@ import {
 } from 'rollup';
 
 import { Environment } from '../../../../environment/environment';
-import { PackageResolver } from '../../../packages/package-resolver';
+import { PackageResolver, findExtensionPath } from '../../../packages/package-resolver';
+import { PhpConfigManager } from '../../../config/php/php-config-manager';
 import { isExternalDependencyName } from '../../../../utils/is-external-dependency-name';
 import { BuildStrategy } from '../build-strategy';
 import { CF } from '../../../../diagnostics/diagnostic-codes';
@@ -359,10 +360,18 @@ export class RollupBuildStrategy extends BuildStrategy
 		dependenciesRef?: string[];
 		remap?: Record<string, RemapTarget>;
 		exposeNamespaces?: boolean;
+		entryCssDeps?: string[];
 	}): Plugin
 	{
 		const { currentPackageName, dependenciesRef, remap = {} } = options;
-		const exposeProxies = new Map<string, string>();
+		const proxyModules = new Map<string, string>();
+		const cssVisited = new Set<string>();
+
+		// Pre-populate visited set with current package to avoid processing it in dependency walk
+		if (currentPackageName)
+		{
+			cssVisited.add(currentPackageName);
+		}
 
 		return {
 			name: 'standalone-plugin',
@@ -374,7 +383,7 @@ export class RollupBuildStrategy extends BuildStrategy
 					return null;
 				}
 
-				if (exposeProxies.has(id))
+				if (proxyModules.has(id))
 				{
 					return id;
 				}
@@ -390,10 +399,20 @@ export class RollupBuildStrategy extends BuildStrategy
 				const extension = PackageResolver.resolve(extensionName);
 				if (!extension)
 				{
+					// Extension not found by PackageResolver — check if it's CSS-only without bundle.config
+					const cssPath = RollupBuildStrategy.#getExtensionCssPath(extensionName);
+					if (cssPath)
+					{
+						return cssPath;
+					}
+
 					return null;
 				}
 
 				const inputPath = extension.getInputPath();
+
+				// Collect CSS-only dependencies from this extension's rel
+				const cssDeps = RollupBuildStrategy.#collectCssOnlyDependencies(extensionName, cssVisited);
 
 				if (options.exposeNamespaces)
 				{
@@ -401,13 +420,24 @@ export class RollupBuildStrategy extends BuildStrategy
 					if (namespace && namespace !== 'window')
 					{
 						const proxyId = `\0expose:${extensionName}`;
-						if (!exposeProxies.has(proxyId))
+						if (!proxyModules.has(proxyId))
 						{
-							exposeProxies.set(proxyId, RollupBuildStrategy.#buildExposeProxy(inputPath, namespace));
+							proxyModules.set(proxyId, RollupBuildStrategy.#buildExposeProxy(inputPath, namespace, cssDeps));
 						}
 
 						return proxyId;
 					}
+				}
+
+				if (cssDeps.length > 0)
+				{
+					const proxyId = `\0css-inject:${extensionName}`;
+					if (!proxyModules.has(proxyId))
+					{
+						proxyModules.set(proxyId, RollupBuildStrategy.#buildCssInjectProxy(inputPath, cssDeps));
+					}
+
+					return proxyId;
 				}
 
 				return inputPath;
@@ -415,9 +445,9 @@ export class RollupBuildStrategy extends BuildStrategy
 
 			load(id)
 			{
-				if (exposeProxies.has(id))
+				if (proxyModules.has(id))
 				{
-					return exposeProxies.get(id)!;
+					return proxyModules.get(id)!;
 				}
 
 				if (/\.d\.[cm]?ts$/.test(id))
@@ -460,7 +490,20 @@ export class RollupBuildStrategy extends BuildStrategy
 		};
 	}
 
-	static #buildExposeProxy(inputPath: string, namespace: string): string
+	static #buildCssInjectProxy(inputPath: string, cssDeps: string[]): string
+	{
+		const normalizedPath = inputPath.replaceAll('\\', '/');
+		const cssImports = cssDeps
+			.map((cssPath) => `import '${cssPath.replaceAll('\\', '/')}';`)
+			.join('\n');
+
+		return [
+			cssImports,
+			`export * from '${normalizedPath}';`,
+		].join('\n');
+	}
+
+	static #buildExposeProxy(inputPath: string, namespace: string, cssDeps: string[] = []): string
 	{
 		const normalizedPath = inputPath.replaceAll('\\', '/');
 		const parts = namespace.split('.');
@@ -471,12 +514,114 @@ export class RollupBuildStrategy extends BuildStrategy
 			})
 			.join('\n');
 
+		const cssImports = cssDeps
+			.map((cssPath) => `import '${cssPath.replaceAll('\\', '/')}';`)
+			.join('\n');
+
 		return [
+			...(cssImports ? [cssImports] : []),
 			`export * from '${normalizedPath}';`,
 			`import * as __ns__ from '${normalizedPath}';`,
 			nsInit,
 			`Object.assign(globalThis.${namespace}, __ns__);`,
 		].join('\n');
+	}
+
+	static #getExtensionCssPath(extensionName: string): string | null
+	{
+		// First try: extension with bundle.config (has source CSS input)
+		const extension = PackageResolver.resolve(extensionName);
+		if (extension)
+		{
+			const inputPath = extension.getInputPath();
+			if (inputPath.endsWith('.css'))
+			{
+				return inputPath;
+			}
+
+			return null;
+		}
+
+		// Second try: extension without bundle.config (only config.php with dist CSS)
+		const extensionDir = findExtensionPath(extensionName);
+		if (!extensionDir)
+		{
+			return null;
+		}
+
+		const configPhpPath = path.join(extensionDir, 'config.php');
+		if (!fs.existsSync(configPhpPath))
+		{
+			return null;
+		}
+
+		const phpConfig = new PhpConfigManager();
+		phpConfig.loadFromFile(configPhpPath);
+
+		const cssPath = phpConfig.get('css');
+		if (typeof cssPath !== 'string')
+		{
+			return null;
+		}
+
+		const fullCssPath = path.join(extensionDir, cssPath);
+		if (!fs.existsSync(fullCssPath))
+		{
+			return null;
+		}
+
+		return fullCssPath;
+	}
+
+	static #collectCssOnlyDependencies(extensionName: string, visited: Set<string>): string[]
+	{
+		if (visited.has(extensionName))
+		{
+			return [];
+		}
+
+		visited.add(extensionName);
+
+		const extensionDir = (() => {
+			const extension = PackageResolver.resolve(extensionName);
+			if (extension)
+			{
+				return extension.getPath();
+			}
+
+			return findExtensionPath(extensionName);
+		})();
+
+		if (!extensionDir)
+		{
+			return [];
+		}
+
+		const configPhpPath = path.join(extensionDir, 'config.php');
+		if (!fs.existsSync(configPhpPath))
+		{
+			return [];
+		}
+
+		const phpConfig = new PhpConfigManager();
+		phpConfig.loadFromFile(configPhpPath);
+
+		const rel: string[] = phpConfig.get('rel') ?? [];
+		const cssPaths: string[] = [];
+
+		for (const depName of rel)
+		{
+			const cssPath = RollupBuildStrategy.#getExtensionCssPath(depName);
+			if (cssPath)
+			{
+				cssPaths.push(cssPath);
+			}
+
+			// Recurse into CSS-only dependency's own deps
+			cssPaths.push(...RollupBuildStrategy.#collectCssOnlyDependencies(depName, visited));
+		}
+
+		return cssPaths;
 	}
 
 	static #resolveRemap(
@@ -987,12 +1132,46 @@ export class RollupBuildStrategy extends BuildStrategy
 		} = await this.#loadBuildPlugins(options);
 
 		const isCssOnly = options.input.endsWith('.css');
-		const inputId = isCssOnly ? '\0css-entry' : options.input;
+
+		// Collect CSS-only dependencies for the entry package in standalone mode
+		const entryCssDeps = (() => {
+			if (!options.standalone || !options.packageName)
+			{
+				return [];
+			}
+
+			const visited = new Set<string>();
+
+			return RollupBuildStrategy.#collectCssOnlyDependencies(options.packageName, visited);
+		})();
+
+		const hasEntryCssDeps = entryCssDeps.length > 0;
+		const inputId = (() => {
+			if (hasEntryCssDeps)
+			{
+				return '\0standalone-entry';
+			}
+
+			if (isCssOnly)
+			{
+				return '\0css-entry';
+			}
+
+			return options.input;
+		})();
 
 		return {
 			input: inputId,
 			plugins: [
-				...(isCssOnly ? [RollupBuildStrategy.createVirtualEntryPlugin({
+				...(hasEntryCssDeps ? [RollupBuildStrategy.createVirtualEntryPlugin({
+					'\0standalone-entry': [
+						...entryCssDeps.map((cssPath) => `import '${cssPath.replaceAll('\\', '/')}';`),
+						isCssOnly
+							? `import '${options.input.replaceAll('\\', '/')}';`
+							: `export * from '${options.input.replaceAll('\\', '/')}';`,
+					].join('\n'),
+				})] : []),
+				...(isCssOnly && !hasEntryCssDeps ? [RollupBuildStrategy.createVirtualEntryPlugin({
 					'\0css-entry': `import '${options.input.replaceAll('\\', '/')}';`,
 				})] : []),
 				RollupBuildStrategy.createEnvReplacePlugin(options.production ?? false),

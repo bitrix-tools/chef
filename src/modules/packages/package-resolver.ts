@@ -29,7 +29,7 @@ const hasExtensionConfig = (extensionPath: string): boolean => {
 	);
 };
 
-function findExtensionPath(name: string): string | null
+export function findExtensionPath(name: string): string | null
 {
 	const segments = name.split('.');
 	const root = Environment.getRoot();

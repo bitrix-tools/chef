@@ -37,7 +37,7 @@ function loadBundleConfig(dir: string): BundleConfigManager
 	return config;
 }
 
-function getBuildOptions(dir: string, bundleConfig: BundleConfigManager): BuildOptions
+function getBuildOptions(dir: string, bundleConfig: BundleConfigManager, packageName?: string): BuildOptions
 {
 	const standalone = bundleConfig.get('standalone');
 
@@ -51,6 +51,7 @@ function getBuildOptions(dir: string, bundleConfig: BundleConfigManager): BuildO
 		publicPath: '/test/',
 		targets: [],
 		namespace: bundleConfig.get('namespace'),
+		packageName,
 		typescript: bundleConfig.get('input').endsWith('.ts'),
 		standalone: standalone.enabled,
 		standaloneRemap: standalone.remap,
@@ -284,6 +285,32 @@ describe('standalone build', () => {
 			const cssContent = fs.readFileSync(cssOutput, 'utf-8');
 			assert.include(cssContent, '.styled-app', 'CSS should contain own styles');
 			assert.include(cssContent, '.core-root', 'CSS should contain styles from inlined dependency');
+		});
+	});
+
+	describe('CSS from CSS-only dependency in rel', () => {
+		const dir = extensionPath('standalone-css-only-dep');
+
+		beforeEach(() => cleanDist(dir));
+		afterEach(() => cleanDist(dir));
+
+		it('should include CSS from CSS-only dependency listed in config.php rel', async () => {
+			const bundleConfig = loadBundleConfig(dir);
+			const options = getBuildOptions(dir, bundleConfig, 'ui.standalone-css-only-dep');
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+
+			const jsOutput = path.join(dir, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(content, 'CssOnlyDepApp', 'JS bundle should contain own class');
+
+			const cssOutput = path.join(dir, 'dist', 'bundle.css');
+			assert.isTrue(fs.existsSync(cssOutput), 'CSS bundle should exist');
+
+			const cssContent = fs.readFileSync(cssOutput, 'utf-8');
+			assert.include(cssContent, '.css-only-dep-app', 'CSS should contain own styles');
+			assert.include(cssContent, '.css-only-test', 'CSS should contain styles from CSS-only dependency');
 		});
 	});
 
