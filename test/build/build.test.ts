@@ -541,6 +541,45 @@ describe('build', () => {
 			assert.isBelow(componentIndex, lastIndex, 'ConcatComponent should come before LegacyLast');
 		});
 
+		it('should produce sourcemap with only relative paths', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const mapOutput = path.join(extensionPath, 'dist', 'extension.bundle.js.map');
+			assert.isTrue(fs.existsSync(mapOutput), 'Sourcemap should exist');
+
+			const map = JSON.parse(fs.readFileSync(mapOutput, 'utf-8'));
+			assert.isArray(map.sources, 'Sourcemap should have sources array');
+			assert.isAbove(map.sources.length, 0, 'Sourcemap should have at least one source');
+
+			for (const source of map.sources)
+			{
+				assert.isFalse(
+					path.isAbsolute(source),
+					`Sourcemap source should be relative, got absolute: ${source}`,
+				);
+			}
+		});
+
+		it('should resolve legacy sourcemap sources relative to output dir', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			const mapOutput = path.join(extensionPath, 'dist', 'extension.bundle.js.map');
+			const map = JSON.parse(fs.readFileSync(mapOutput, 'utf-8'));
+
+			// first.js has a .map file with source "./first.original.js"
+			// It should be remapped relative to dist/ output dir
+			const hasOriginalSource = map.sources.some((s: string) => s.includes('first.original.js'));
+			assert.isTrue(hasOriginalSource, 'Should include remapped source from legacy sourcemap');
+		});
+
 		it('should concatenate CSS files in correct order', async () => {
 			const bundleConfig = loadBundleConfig(extensionPath);
 			const options = getBuildOptions(extensionPath, bundleConfig);

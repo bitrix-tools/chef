@@ -92,12 +92,17 @@ export default function concatPlugin(options: { jsFiles?: Array<string>; cssFile
 							let fileContent = readFileSync(filePath, 'utf8');
 							let sourceMapContent = null;
 							const mapPath = `${filePath}.map`;
+							const outputDir = outputJsFilePath ? path.dirname(outputJsFilePath) : process.cwd();
 
 							try
 							{
 								const mapRaw = readFileSync(mapPath, 'utf8');
 								const mapObj = JSON.parse(mapRaw);
-								mapObj.sources = mapObj.sources.map(src => path.resolve(path.dirname(mapPath), src));
+								const mapDir = path.dirname(mapPath);
+								mapObj.sources = mapObj.sources.map(src => {
+									const absolute = path.resolve(mapDir, src);
+									return path.relative(outputDir, absolute);
+								});
 								sourceMapContent = JSON.stringify(mapObj);
 							}
 							catch (e)
@@ -109,7 +114,8 @@ export default function concatPlugin(options: { jsFiles?: Array<string>; cssFile
 								.replace(/\/\*(\s+)?eslint-disable(\s+)?\*\/\n/g, '')
 								.replace(/\/\/# sourceMappingURL=(.*)\.map/g, '');
 
-							concatenator.add(filePath, fileContent, sourceMapContent);
+							const relativeFilePath = path.relative(outputDir, filePath);
+							concatenator.add(relativeFilePath, fileContent, sourceMapContent);
 						}
 						catch (error)
 						{
