@@ -398,7 +398,7 @@ describe('standalone build', () => {
 			assert.include(content, 'ExposeApp', 'Bundle should contain own class');
 			assert.include(content, 'Helper', 'Bundle should contain inlined dependency class');
 			assert.include(content, 'globalThis.BX.UI.NsLib', 'Bundle should expose dependency namespace');
-			assert.include(content, 'Object.assign(globalThis.BX.UI.NsLib', 'Bundle should assign exports to namespace');
+			assert.include(content, 'Object.defineProperty(target, k, d)', 'Bundle should assign exports to namespace via defineProperty');
 		});
 
 		it('should not expose namespaces when exposeNamespaces is not set', async () => {
@@ -438,7 +438,7 @@ describe('standalone build', () => {
 			const content = fs.readFileSync(jsOutput, 'utf-8');
 
 			// Count expose proxy blocks — should only be for ui.ns-lib (BX.UI.NsLib)
-			const exposeCount = (content.match(/Object\.assign\(globalThis\./g) || []).length;
+			const exposeCount = (content.match(/const target = globalThis\./g) || []).length;
 			assert.equal(exposeCount, 1, 'Should expose only one dependency (ui.ns-lib)');
 		});
 	});

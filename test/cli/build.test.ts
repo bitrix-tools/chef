@@ -365,7 +365,7 @@ describe('chef build', () => {
 
 		const content = fs.readFileSync(path.join(dest, 'dist', 'bundle.js'), 'utf-8');
 		assert.include(content, 'ExposeApp', 'Bundle should contain own class');
-		assert.include(content, 'Object.assign(globalThis.BX.UI.NsLib', 'Bundle should expose dependency exports to namespace');
+		assert.include(content, 'const target = globalThis.BX.UI.NsLib', 'Bundle should expose dependency exports to namespace');
 	});
 
 	it('should restore exports reference in standalone build', async () => {

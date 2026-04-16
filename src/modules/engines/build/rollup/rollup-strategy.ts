@@ -450,6 +450,7 @@ export class RollupBuildStrategy extends BuildStrategy
 
 	protected static createStandalonePlugin(options: {
 		currentPackageName?: string;
+		currentNamespace?: string;
 		dependenciesRef?: string[];
 		remap?: Record<string, RemapTarget>;
 		exposeNamespaces?: boolean;
@@ -510,7 +511,7 @@ export class RollupBuildStrategy extends BuildStrategy
 				if (options.exposeNamespaces)
 				{
 					const namespace = extension.getBundleConfig().get('namespace');
-					if (namespace && namespace !== 'window')
+					if (namespace && namespace !== 'window' && namespace !== options.currentNamespace)
 					{
 						const proxyId = `\0expose:${extensionName}`;
 						if (!proxyModules.has(proxyId))
@@ -603,7 +604,7 @@ export class RollupBuildStrategy extends BuildStrategy
 		const nsInit = parts
 			.map((_, i) => {
 				const ns = parts.slice(0, i + 1).join('.');
-				return `globalThis.${ns} = globalThis.${ns} || {};`;
+				return `try { globalThis.${ns} = globalThis.${ns} || {}; } catch {}`;
 			})
 			.join('\n');
 
@@ -611,12 +612,18 @@ export class RollupBuildStrategy extends BuildStrategy
 			.map((cssPath) => `import '${cssPath.replaceAll('\\', '/')}';`)
 			.join('\n');
 
+		const expose = [
+			'for (const [k, d] of Object.entries(Object.getOwnPropertyDescriptors(__ns__))) {',
+			'	try { Object.defineProperty(target, k, d); } catch {}',
+			'}',
+		].join(' ');
+
 		return [
 			...(cssImports ? [cssImports] : []),
 			`export * from '${normalizedPath}';`,
 			`import * as __ns__ from '${normalizedPath}';`,
 			nsInit,
-			`Object.assign(globalThis.${namespace}, __ns__);`,
+			`{ const target = globalThis.${namespace}; ${expose} }`,
 		].join('\n');
 	}
 
@@ -1298,6 +1305,7 @@ export class RollupBuildStrategy extends BuildStrategy
 						return [
 							RollupBuildStrategy.createStandalonePlugin({
 								currentPackageName: options.packageName,
+								currentNamespace: options.namespace,
 								dependenciesRef,
 								remap: options.standaloneRemap,
 								exposeNamespaces: options.standaloneExposeNamespaces,
