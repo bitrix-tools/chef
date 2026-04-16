@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.8.2 <Badge type="tip" text="4/16/2026" />
+
+Fixed runtime errors in standalone builds with `exposeNamespaces: true`: TDZ errors with circular dependencies, crashes on read-only properties of frozen objects, and conflicts when a dependency namespace matches the current extension namespace.
+
 ## v1.8.1 <Badge type="tip" text="4/16/2026" />
 
 - Unused import warnings now show exact names and files with code frames
