@@ -231,6 +231,55 @@ export class RollupBuildStrategy extends BuildStrategy
 		PLUGIN_WARNING: CF.PLUGIN_WARNING,
 	};
 
+	static #findImportedNames(filePath: string, exporter: string, unusedNames: Set<string>): string[]
+	{
+		try
+		{
+			const content = fs.readFileSync(filePath, 'utf-8');
+			const importPattern = new RegExp(
+				`import\\s*\\{([^}]+)\\}\\s*from\\s*['"]${exporter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]`,
+			);
+			const match = content.match(importPattern);
+			if (!match)
+			{
+				return [];
+			}
+
+			const imported = match[1].split(',').map(n => n.trim().split(/\s+as\s+/)[0].trim()).filter(Boolean);
+
+			return imported.filter(name => unusedNames.has(name));
+		}
+		catch
+		{
+			return [];
+		}
+	}
+
+	static #findImportLine(filePath: string, exporter: string): { line: number; column: number } | null
+	{
+		try
+		{
+			const content = fs.readFileSync(filePath, 'utf-8');
+			const lines = content.split('\n');
+			const escaped = exporter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+			const pattern = new RegExp(`import\\s*\\{[^}]+\\}\\s*from\\s*['"]${escaped}['"]`);
+
+			for (let i = 0; i < lines.length; i++)
+			{
+				if (pattern.test(lines[i]))
+				{
+					return { line: i + 1, column: 0 };
+				}
+			}
+		}
+		catch
+		{
+			// File read error — skip
+		}
+
+		return null;
+	}
+
 	protected static createOnWarningHandler(): {
 		warningsRef: BuildDiagnostic[],
 		errorsRef: BuildDiagnostic[],
@@ -303,6 +352,50 @@ export class RollupBuildStrategy extends BuildStrategy
 				else
 				{
 					warningsRef.push(entry);
+				}
+
+				return;
+			}
+
+			if (warning.code === 'UNUSED_EXTERNAL_IMPORT')
+			{
+				const names = new Set((warning as any).names as string[] ?? []);
+				const importers = (warning as any).ids as string[] | undefined;
+				const exporter = warning.exporter ?? '';
+
+				if (names.size > 0 && importers && importers.length > 0)
+				{
+					for (const importer of importers)
+					{
+						const relative = importer.includes('/src/')
+							? importer.slice(importer.indexOf('/src/') + 1)
+							: path.basename(importer);
+
+						// Read the file to find exact unused imports and import line
+						const perFileNames = RollupBuildStrategy.#findImportedNames(importer, exporter, names);
+						if (perFileNames.length === 0)
+						{
+							continue;
+						}
+
+						const nameList = perFileNames.map(n => `"${n}"`).join(', ');
+						const importLine = RollupBuildStrategy.#findImportLine(importer, exporter);
+
+						warningsRef.push({
+							code: CF.UNUSED_EXTERNAL_IMPORT,
+							message: `${nameList} imported from "${exporter}" but never used`,
+							loc: importLine
+								? { file: importer, line: importLine.line, column: importLine.column }
+								: undefined,
+						});
+					}
+				}
+				else
+				{
+					warningsRef.push({
+						code: CF.UNUSED_EXTERNAL_IMPORT,
+						message: warning.message,
+					});
 				}
 
 				return;
