@@ -57,6 +57,7 @@ jobs:
 
   changelog:
     needs: publish
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
