@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.8.1 <Badge type="tip" text="4/16/2026" />
+
+- Unused import warnings now show exact names and files with code frames
+
 ## v1.8.0 <Badge type="tip" text="4/15/2026" />
 
 - Added production build mode and package.json export conditions support
