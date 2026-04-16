@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.8.0 <Badge type="tip" text="4/15/2026" />
+
+- Added production build mode and package.json export conditions support
+- Standalone builds now include CSS and assets from dependencies
+- Fixed d.ts generation: correct handling of re-exports through barrel files and tsconfig path resolution
+- Fixed absolute paths in sourcemaps when concatenating files
+- Fixed safeNamespaces for Rollup 4 IIFE format
+- Fixed CSS-only dependency resolution in config.php
+- Added --force flag to skip project config validation
+
 ## v1.7.0 <Badge type="tip" text="4/15/2026" />
 
 - Standalone builds: inline all dependencies into a single bundle with `remap` support for dependency overrides
@@ -118,7 +128,7 @@ New safeNamespaces option in bundle.config — safe dependency namespace access 
 - Remove unused dependencies (@vue/compiler-sfc, @rollup/plugin-typescript)
 - Remove ora dependency from test and init reporters
 
-## v0.0.0-beta.14 <Badge type="tip" text="3/12/2026" />
+## v0.0.0-beta.14 <Badge type="tip" text="3/11/2026" />
 
 Added TypeScript type-checking during build. Errors are displayed with a code snippet, underline, and a clickable file link. If errors are found, the build stops before Rollup starts.
 
