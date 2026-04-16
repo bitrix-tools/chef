@@ -50,6 +50,10 @@ function runTestsTeamcity({ extensions, args, type }: RunTestsOptions): void
 	const reporter = new TeamcityReporter();
 
 	extensionsStream
+		.on('not-found', ({ message }: { message: string }) => {
+			console.log('');
+			console.log(message);
+		})
 		.on('data', async ({ extension }: { extension: BasePackage }) => {
 			await queue.add(async () => {
 				if (type !== 'e2e')
@@ -136,6 +140,10 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 	const watchers: Array<FSWatcher> = [];
 
 	extensionsStream
+		.on('not-found', ({ message }: { message: string }) => {
+			console.log('');
+			console.log(message);
+		})
 		.on('data', async ({ extension }: { extension: BasePackage }) => {
 			const tasks = createTestTasks(extension, args, type);
 

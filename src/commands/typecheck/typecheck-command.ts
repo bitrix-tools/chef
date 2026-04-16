@@ -157,6 +157,10 @@ typecheckCommand
 		})();
 
 		extensionsStream
+			.on('not-found', ({ message }: { message: string }) => {
+				console.log('');
+				console.log(message);
+			})
 			.on('data', ({ extension }: { extension: BasePackage }) => {
 				queue.add(async () => {
 					const result = await TaskRunner.run({

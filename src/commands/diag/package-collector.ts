@@ -57,6 +57,10 @@ export async function collectPackages(
 		const queue: Promise<void>[] = [];
 
 		stream
+			.on('not-found', ({ message }: { message: string }) => {
+				console.log('');
+				console.log(message);
+			})
 			.on('data', ({ extension }: { extension: BasePackage }) => {
 				scanned++;
 				spinner.update(`Scanning extensions... ${scanned}`);

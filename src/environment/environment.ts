@@ -9,6 +9,11 @@ export class Environment
 {
 	static #context: EnvContext;
 
+	static setContext(cwd: string): void
+	{
+		this.#context = getContext(cwd);
+	}
+
 	static getContext(): EnvContext
 	{
 		if (!this.#context)

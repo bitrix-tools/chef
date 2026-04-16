@@ -40,6 +40,10 @@ flowToTsCommand
 		})();
 
 		extensionsStream
+			.on('not-found', ({ message }: { message: string }) => {
+				console.log('');
+				console.log(message);
+			})
 			.on('data', async ({ extension }: { extension: BasePackage }) => {
 				void queue.add(async () => {
 					const sourceFiles = extension.getActualSourceFiles();

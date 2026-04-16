@@ -66,6 +66,10 @@ buildCommand
 		const mergeLock = new MergeLock(Environment.getRoot());
 
 		extensionsStream
+			.on('not-found', ({ message }: { message: string }) => {
+				console.log('');
+				console.log(message);
+			})
 			.on('data', async ({ extension }: { extension: BasePackage }) => {
 				const extensionId = extension.getName();
 

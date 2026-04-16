@@ -224,8 +224,7 @@ export class PackageResolver
 				}
 				else
 				{
-					console.log('');
-					console.log(formatNotFoundError(name));
+					output.emit('not-found', { name, message: formatNotFoundError(name) });
 				}
 			}
 
