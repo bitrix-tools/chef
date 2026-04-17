@@ -779,5 +779,75 @@ describe('standalone build', () => {
 			assert.isNotNull(result.map, 'Should return sourcemap');
 			assert.isString(result.map?.mappings, 'Sourcemap should have mappings');
 		});
+
+		it('should strip Flow types from currentPackage source', async () => {
+			const code = `
+				import { FlowComponent } from 'ui.flow-extension';
+				export const instance = new FlowComponent({ name: 'x', value: 1 });
+			`;
+
+			const result = await buildService.buildCode({
+				code,
+				packageName: 'ui.flow-extension',
+				packageRoot: extensionPath('flow-extension'),
+				publicPath: '/test/',
+				targets: [],
+				namespace: 'BX.Test.BuildCode',
+			});
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+			assert.include(result.code, 'FlowComponent', 'Flow source should be inlined');
+			assert.notInclude(result.code, 'type Options', 'Flow type aliases should be stripped');
+			assert.notMatch(result.code, /:\s*Options\b/, 'Flow type annotations should be stripped');
+		});
+
+		it('should strip TypeScript types from currentPackage source', async () => {
+			const code = `
+				import { TsLib } from 'main.ts-lib';
+				export const instance = new TsLib({ name: 'x', version: 1 });
+			`;
+
+			const result = await buildService.buildCode({
+				code,
+				packageName: 'main.ts-lib',
+				packageRoot: path.join(sourceRepo, 'main/install/js/main/ts-lib'),
+				publicPath: '/test/',
+				targets: [],
+				namespace: 'BX.Test.BuildCode',
+			});
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+			assert.include(result.code, 'TsLib', 'TS source should be inlined');
+			assert.notInclude(result.code, 'interface LibConfig', 'TS interfaces should be stripped');
+			assert.notMatch(result.code, /:\s*LibConfig\b/, 'TS type annotations should be stripped');
+		});
+
+		it('should keep resolvable bitrix extensions external without inlining their graph', async () => {
+			// Regression: with the old standalone-in-buildCode pipeline, a tested
+			// package's dependency (like main.core) was resolved and inlined via
+			// PackageResolver together with its rel chain. This caused
+			// INVALID_EXTERNAL_ID when a nested dependency (e.g. rest.client)
+			// had no src/ to resolve. Now all non-current extensions fall through
+			// to UNRESOLVED_IMPORT and become external — no inlining, no conflict.
+			const code = `
+				import { Type } from 'main.core';
+				import { BBCode } from 'ui.bbcode.model';
+				export const refs = { Type, BBCode };
+			`;
+
+			const result = await buildService.buildCode({
+				code,
+				packageName: 'ui.js-extension',
+				packageRoot: extensionPath('js-extension'),
+				publicPath: '/test/',
+				targets: [],
+				namespace: 'BX.Test.BuildCode',
+			});
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+			assert.include(result.dependencies, 'main.core', 'main.core should stay external');
+			assert.include(result.dependencies, 'ui.bbcode.model', 'ui.bbcode.model should stay external');
+			assert.notInclude(result.code, 'class Type', 'Should not inline main.core internals');
+		});
 	});
 });
