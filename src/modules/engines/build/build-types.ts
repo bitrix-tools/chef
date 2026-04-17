@@ -73,7 +73,6 @@ export type BuildCodeOptions = {
 	packageName?: string;
 	typescript?: boolean;
 	resolve?: boolean,
-	standalone?: boolean;
 	sourcemap?: boolean;
 };
 

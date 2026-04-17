@@ -447,6 +447,32 @@ export class RollupBuildStrategy extends BuildStrategy
 		}
 	}
 
+	// Resolves imports of `currentPackageName` to its source input path so that
+	// test bundles pick up fresh source instead of the already-loaded BX.* globals.
+	// All other extension imports fall through and are treated as external via
+	// Rollup's UNRESOLVED_IMPORT warning handler.
+	protected static createCurrentPackageResolver(currentPackageName?: string): Plugin
+	{
+		return {
+			name: 'current-package-resolver',
+			resolveId(id)
+			{
+				if (!currentPackageName || id !== currentPackageName)
+				{
+					return null;
+				}
+
+				const extension = PackageResolver.resolve(currentPackageName);
+				if (!extension)
+				{
+					return null;
+				}
+
+				return extension.getInputPath();
+			},
+		};
+	}
+
 	protected static createStandalonePlugin(options: {
 		currentPackageName?: string;
 		currentNamespace?: string;
@@ -1113,7 +1139,13 @@ export class RollupBuildStrategy extends BuildStrategy
 			import('./plugins/css'),
 		]);
 
-		const babelPlugins = await this.#loadBabelPlugins(options);
+		const babelPlugins = await this.#loadBabelPlugins({
+			...options,
+			// Standalone builds inline dependencies, which may be TS or Flow
+			// regardless of the entry package language.
+			includeTypescriptSource: (options.typescript ?? false) || (options.standalone ?? false),
+			includeFlowSource: !options.typescript || (options.standalone ?? false),
+		});
 
 		return {
 			nodeResolve,
@@ -1125,7 +1157,14 @@ export class RollupBuildStrategy extends BuildStrategy
 		};
 	}
 
-	async #loadBabelPlugins(options: { babel?: boolean, typescript?: boolean, standalone?: boolean, targets: string[], transformClasses?: boolean | string[], packageRoot: string }): Promise<Plugin[]>
+	async #loadBabelPlugins(options: {
+		babel?: boolean,
+		includeTypescriptSource: boolean,
+		includeFlowSource: boolean,
+		targets: string[],
+		transformClasses?: boolean | string[],
+		packageRoot: string,
+	}): Promise<Plugin[]>
 	{
 		if (options.babel === false)
 		{
@@ -1145,13 +1184,13 @@ export class RollupBuildStrategy extends BuildStrategy
 		]);
 
 		const extensions = ['.js', '.jsx', '.mjs'];
-		if (options.typescript || options.standalone)
+		if (options.includeTypescriptSource)
 		{
 			extensions.push('.ts', '.tsx');
 		}
 
 		const basePlugins = [
-			...(options.typescript && !options.standalone ? [] : [flowStripTypesPlugin]),
+			...(options.includeFlowSource ? [flowStripTypesPlugin] : []),
 			externalHelpersPlugin,
 		];
 
@@ -1414,7 +1453,13 @@ export class RollupBuildStrategy extends BuildStrategy
 			import('@rollup/plugin-node-resolve'),
 			import('@rollup/plugin-commonjs'),
 			import('@rollup/plugin-json'),
-			this.#loadBabelPlugins({ ...options, packageRoot: options.packageRoot }),
+			this.#loadBabelPlugins({
+				...options,
+				packageRoot: options.packageRoot,
+				// Test bundles may contain TS and Flow source from currentPackage
+				includeTypescriptSource: true,
+				includeFlowSource: true,
+			}),
 		]);
 
 		return {
@@ -1425,12 +1470,7 @@ export class RollupBuildStrategy extends BuildStrategy
 				}),
 				RollupBuildStrategy.createNpmRemapPlugin(dependenciesRef),
 				RollupBuildStrategy.createEnvReplacePlugin(false),
-				...(options.standalone
-					? [RollupBuildStrategy.createStandalonePlugin({
-						currentPackageName: options.packageName,
-						dependenciesRef,
-					})]
-					: []),
+				RollupBuildStrategy.createCurrentPackageResolver(options.packageName),
 				await (async () => {
 					const rootDir = Environment.getRoot();
 					if (rootDir)
@@ -1495,7 +1535,7 @@ export class RollupBuildStrategy extends BuildStrategy
 			format: 'iife',
 			banner: '/* eslint-disable */',
 			extend: true,
-			intro: options.standalone ? 'var global = globalThis; var exports = {}; var module = { exports: exports };' : undefined,
+			intro: 'var global = globalThis; var exports = {}; var module = { exports: exports };',
 			sourcemap: options.sourcemap ?? false,
 		};
 	}

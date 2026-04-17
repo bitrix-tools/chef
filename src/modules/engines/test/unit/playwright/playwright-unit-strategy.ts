@@ -47,12 +47,12 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 		const buildEngine = await PackageBuilder.getBuildEngine();
 		const buildResult = await buildEngine.buildCode({
 			code: sourceTestsCode,
+			packageName: options.packageName,
 			targets: options.targets,
 			packageRoot: options.packageRoot,
 			publicPath: options.publicPath,
 			typescript: options.typescript,
 			namespace: 'BX.TestsBundle',
-			standalone: true,
 			sourcemap: true,
 		});
 

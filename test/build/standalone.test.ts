@@ -682,8 +682,8 @@ describe('standalone build', () => {
 		});
 	});
 
-	describe('buildCode standalone', () => {
-		it('should bundle code with standalone mode', async () => {
+	describe('buildCode', () => {
+		it('should bundle in-memory code', async () => {
 			const code = `
 				export class Component {
 					render() { return '<div>test</div>'; }
@@ -695,8 +695,7 @@ describe('standalone build', () => {
 				packageRoot: extensionPath('standalone-basic'),
 				publicPath: '/test/',
 				targets: [],
-				namespace: 'BX.Test.Standalone',
-				standalone: true,
+				namespace: 'BX.Test.BuildCode',
 			});
 
 			assert.isEmpty(result.errors, 'Should have no errors');
@@ -715,15 +714,14 @@ describe('standalone build', () => {
 				packageRoot: extensionPath('standalone-basic'),
 				publicPath: '/test/',
 				targets: [],
-				namespace: 'BX.Test.Standalone',
-				standalone: true,
+				namespace: 'BX.Test.BuildCode',
 			});
 
 			assert.isEmpty(result.errors, 'Should have no errors');
 			assert.include(result.dependencies, 'nonexistent.extension', 'Unresolved dependency should be external');
 		});
 
-		it('should inline resolved JS dependency', async () => {
+		it('should treat other extensions as external and not inline them', async () => {
 			const code = `
 				import { Core } from 'main.core';
 				export class App {
@@ -736,39 +734,36 @@ describe('standalone build', () => {
 				packageRoot: extensionPath('standalone-basic'),
 				publicPath: '/test/',
 				targets: [],
-				namespace: 'BX.Test.Standalone',
-				standalone: true,
+				namespace: 'BX.Test.BuildCode',
 			});
 
 			assert.isEmpty(result.errors, 'Should have no errors');
 			assert.include(result.code, 'App', 'Code should contain own class');
-			assert.notInclude(result.dependencies, 'main.core', 'Inlined dependency should not be listed as external');
+			assert.include(result.dependencies, 'main.core', 'External dependency should be listed');
 		});
 
-		it('should inline and transpile TypeScript dependency from JS code', async () => {
+		it('should resolve currentPackage import to its source', async () => {
+			// Extension ui.js-extension exports Greeter class from src/index.js
 			const code = `
-				import { TsLib } from 'main.ts-lib';
-				export class App {
-					init() { return new TsLib({ name: 'test', version: 1 }); }
-				}
+				import { Greeter } from 'ui.js-extension';
+				export const instance = new Greeter('hi');
 			`;
 
 			const result = await buildService.buildCode({
 				code,
-				packageRoot: extensionPath('standalone-basic'),
+				packageName: 'ui.js-extension',
+				packageRoot: extensionPath('js-extension'),
 				publicPath: '/test/',
 				targets: [],
-				namespace: 'BX.Test.JsWithTsDep',
-				standalone: true,
+				namespace: 'BX.Test.BuildCode',
 			});
 
 			assert.isEmpty(result.errors, 'Should have no errors');
-			assert.include(result.code, 'App', 'Code should contain own class');
-			assert.include(result.code, 'TsLib', 'Code should inline TS dependency');
-			assert.notInclude(result.code, ': LibConfig', 'TypeScript types should be stripped');
+			assert.notInclude(result.dependencies, 'ui.js-extension', 'Own package should not be external');
+			assert.include(result.code, 'Greeter', 'Source of currentPackage should be inlined');
 		});
 
-		it('should return sourcemap in standalone mode', async () => {
+		it('should return sourcemap', async () => {
 			const code = `export const value = 42;`;
 
 			const result = await buildService.buildCode({
@@ -777,7 +772,6 @@ describe('standalone build', () => {
 				publicPath: '/test/',
 				targets: [],
 				namespace: 'BX.Test.Sourcemap',
-				standalone: true,
 				sourcemap: true,
 			});
 
