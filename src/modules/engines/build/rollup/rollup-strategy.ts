@@ -591,6 +591,31 @@ export class RollupBuildStrategy extends BuildStrategy
 		};
 	}
 
+	static #buildExposeProxy(inputPath: string, namespace: string, cssDeps: string[] = []): string
+	{
+		const normalizedPath = inputPath.replaceAll('\\', '/');
+		const cssImports = cssDeps
+			.map((cssPath) => `import '${cssPath.replaceAll('\\', '/')}';`)
+			.join('\n');
+
+		const parts = namespace.split('.');
+		const nsInit = parts
+			.map((_, i) =>
+			{
+				const ns = parts.slice(0, i + 1).join('.');
+				return `try { globalThis.${ns} = globalThis.${ns} || {}; } catch {}`;
+			})
+			.join('\n');
+
+		return [
+			...(cssImports ? [cssImports] : []),
+			`export * from '${normalizedPath}';`,
+			`import * as __ns__ from '${normalizedPath}';`,
+			nsInit,
+			`for (const [k, v] of Object.entries(__ns__)) { try { globalThis.${namespace}[k] = v; } catch {} }`,
+		].join('\n');
+	}
+
 	static #buildCssInjectProxy(inputPath: string, cssDeps: string[]): string
 	{
 		const normalizedPath = inputPath.replaceAll('\\', '/');
@@ -601,36 +626,6 @@ export class RollupBuildStrategy extends BuildStrategy
 		return [
 			cssImports,
 			`export * from '${normalizedPath}';`,
-		].join('\n');
-	}
-
-	static #buildExposeProxy(inputPath: string, namespace: string, cssDeps: string[] = []): string
-	{
-		const normalizedPath = inputPath.replaceAll('\\', '/');
-		const parts = namespace.split('.');
-		const nsInit = parts
-			.map((_, i) => {
-				const ns = parts.slice(0, i + 1).join('.');
-				return `try { globalThis.${ns} = globalThis.${ns} || {}; } catch {}`;
-			})
-			.join('\n');
-
-		const cssImports = cssDeps
-			.map((cssPath) => `import '${cssPath.replaceAll('\\', '/')}';`)
-			.join('\n');
-
-		const expose = [
-			'for (const [k, d] of Object.entries(Object.getOwnPropertyDescriptors(__ns__))) {',
-			'	try { Object.defineProperty(target, k, d); } catch {}',
-			'}',
-		].join(' ');
-
-		return [
-			...(cssImports ? [cssImports] : []),
-			`export * from '${normalizedPath}';`,
-			`import * as __ns__ from '${normalizedPath}';`,
-			nsInit,
-			`{ const target = globalThis.${namespace}; ${expose} }`,
 		].join('\n');
 	}
 
