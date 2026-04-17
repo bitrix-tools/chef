@@ -1,6 +1,5 @@
 import path from 'node:path';
 import fs from 'node:fs';
-import { createRequire } from 'node:module';
 
 import {
 	rollup,
@@ -470,7 +469,7 @@ export class RollupBuildStrategy extends BuildStrategy
 		return {
 			name: 'standalone-plugin',
 
-			resolveId(id)
+			async resolveId(id, importer)
 			{
 				if (id === currentPackageName)
 				{
@@ -486,7 +485,12 @@ export class RollupBuildStrategy extends BuildStrategy
 
 				if (remapResult.npm)
 				{
-					return RollupBuildStrategy.#resolveNpmPackage(remapResult.npm, remapResult.from);
+					const fromExtension = PackageResolver.resolve(remapResult.from ?? id);
+					const resolveFrom = fromExtension
+						? path.join(fromExtension.getPath(), 'src', '_resolve.js')
+						: importer;
+
+					return this.resolve(remapResult.npm, resolveFrom, { skipSelf: true });
 				}
 
 				const extensionName = remapResult.extension ?? id;
@@ -560,11 +564,14 @@ export class RollupBuildStrategy extends BuildStrategy
 				const lines = code.split('\n');
 
 				let firstExportAssignment = -1;
+				let indent = '';
 				for (let i = lines.length - 1; i >= 0; i--)
 				{
-					if (/^\texports\./.test(lines[i]))
+					const match = lines[i].match(/^(\s+)exports\./);
+					if (match)
 					{
 						firstExportAssignment = i;
+						indent = match[1];
 					}
 					else if (firstExportAssignment !== -1)
 					{
@@ -577,7 +584,7 @@ export class RollupBuildStrategy extends BuildStrategy
 					return null;
 				}
 
-				lines.splice(firstExportAssignment, 0, '\texports = __originalExports__;');
+				lines.splice(firstExportAssignment, 0, `${indent}exports = __originalExports__;`);
 
 				return { code: lines.join('\n'), map: null };
 			},
@@ -790,26 +797,6 @@ export class RollupBuildStrategy extends BuildStrategy
 		}
 
 		return null;
-	}
-
-	static #resolveNpmPackage(npmPackage: string, extensionName: string): string | null
-	{
-		const extension = PackageResolver.resolve(extensionName);
-		if (!extension)
-		{
-			return null;
-		}
-
-		try
-		{
-			const require_ = createRequire(path.join(extension.getPath(), 'src', '_resolve.js'));
-
-			return require_.resolve(npmPackage);
-		}
-		catch
-		{
-			return null;
-		}
 	}
 
 	static #resolveTreeshake(
