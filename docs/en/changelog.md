@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.8.3 <Badge type="tip" text="4/17/2026" />
+
+• standalone: npm packages in remap now resolve through Rollup's node-resolve (ESM instead of CJS)
+• standalone: simplified dependency namespace exposure — less runtime code, cleaner bundle
+• test runner: test bundle no longer inlines the dependency graph; building tests for large packages no longer breaks
+
 ## v1.8.2 <Badge type="tip" text="4/16/2026" />
 
 Fixed runtime errors in standalone builds with `exposeNamespaces: true`: TDZ errors with circular dependencies, crashes on read-only properties of frozen objects, and conflicts when a dependency namespace matches the current extension namespace.
