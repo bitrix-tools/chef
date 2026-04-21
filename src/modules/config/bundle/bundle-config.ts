@@ -41,7 +41,7 @@ export interface BundleConfig {
 		};
 	};
 	rebuild?: string[];
-	emitDeclaration?: boolean;
+	emitDeclaration?: boolean | 'ambient' | 'module' | 'both' | { enabled?: boolean; mode?: 'ambient' | 'module' | 'both' };
 	safeNamespaces?: boolean;
 	baseline?: boolean;
 	production?: boolean;

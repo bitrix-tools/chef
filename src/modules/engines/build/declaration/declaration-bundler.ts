@@ -1,0 +1,1269 @@
+import path from 'node:path';
+import fs from 'node:fs';
+
+import type ts from 'typescript';
+
+import { PackageResolver } from '../../../packages/package-resolver';
+
+export interface DeclarationBundleOptions
+{
+	packageRoot: string;
+	input: string;
+	extensionName?: string;
+	compilerOptions?: ts.CompilerOptions;
+}
+
+export interface DeclarationBundle
+{
+	ts: typeof ts;
+	topLevelMembers: DeclarationMember[];
+	namespaceMembers: DeclarationMember[];
+	namespaceMemberNames: Set<string>;
+	npmModules: NpmModule[];
+}
+
+export interface DeclarationMember
+{
+	text: string;
+	name: string | null;
+}
+
+export interface NpmModule
+{
+	moduleName: string;
+	body: string;
+}
+
+export async function bundleDeclarations(options: DeclarationBundleOptions): Promise<DeclarationBundle | null>
+{
+	const { default: tsModule } = await import('typescript');
+
+	const emitted = await emitSourceDeclarations(tsModule, options);
+	if (!emitted)
+	{
+		return null;
+	}
+
+	const entryDtsPath = findEntryDeclarationPath(options.input, options.packageRoot, emitted);
+	if (!entryDtsPath)
+	{
+		return null;
+	}
+
+	const dtsProgram = createDtsProgram(tsModule, emitted, entryDtsPath);
+	const checker = dtsProgram.getTypeChecker();
+	const entryFile = dtsProgram.getSourceFile(entryDtsPath);
+
+	if (!entryFile)
+	{
+		return null;
+	}
+
+	const collector = new SymbolCollector(tsModule, dtsProgram, checker, {
+		packageRoot: options.packageRoot,
+		extensionName: options.extensionName ?? null,
+	});
+	const members = collector.collectFromEntry(entryFile);
+
+	if (members.length === 0)
+	{
+		return null;
+	}
+
+	return splitMembers(tsModule, members, collector.getNpmModules());
+}
+
+interface CollectedMember
+{
+	text: string;
+	name: string | null;
+	kind: 'type' | 'namespaceMember';
+	sourceDecl?: ts.Node;
+}
+
+interface SymbolCollectorOptions
+{
+	packageRoot: string;
+	extensionName: string | null;
+}
+
+interface NpmPackageBuffer
+{
+	statements: string[];
+	seenSymbolKeys: Set<string>;
+}
+
+class SymbolCollector
+{
+	readonly #ts: typeof ts;
+	readonly #program: ts.Program;
+	readonly #checker: ts.TypeChecker;
+	readonly #seen = new Set<string>();
+	readonly #result: CollectedMember[] = [];
+	readonly #visitingSymbols = new Set<ts.Symbol>();
+	readonly #siblingReplacements = new Map<ts.Symbol, string>();
+	readonly #options: SymbolCollectorOptions;
+	readonly #npmPackages = new Map<string, NpmPackageBuffer>();
+	readonly #npmReplacements = new Map<ts.Symbol, string>();
+
+	constructor(tsModule: typeof ts, program: ts.Program, checker: ts.TypeChecker, options: SymbolCollectorOptions)
+	{
+		this.#ts = tsModule;
+		this.#program = program;
+		this.#checker = checker;
+		this.#options = options;
+	}
+
+	getNpmModules(): NpmModule[]
+	{
+		if (!this.#options.extensionName) return [];
+
+		const result: NpmModule[] = [];
+		for (const [pkgName, buffer] of this.#npmPackages)
+		{
+			result.push({
+				moduleName: `${this.#options.extensionName}/internal/${pkgName}`,
+				body: buffer.statements.join('\n\n'),
+			});
+		}
+
+		return result;
+	}
+
+	collectFromEntry(entryFile: ts.SourceFile): CollectedMember[]
+	{
+		const moduleSymbol = this.#checker.getSymbolAtLocation(entryFile);
+		if (!moduleSymbol)
+		{
+			return [];
+		}
+
+		const exports = this.#checker.getExportsOfModule(moduleSymbol);
+
+		for (const exportSymbol of exports)
+		{
+			this.#collectExportSymbol(exportSymbol, exportSymbol.name);
+		}
+
+		this.#applyCollectedReplacements();
+
+		return this.#result;
+	}
+
+	#applyCollectedReplacements(): void
+	{
+		if (this.#siblingReplacements.size === 0 && this.#npmReplacements.size === 0) return;
+
+		for (const member of this.#result)
+		{
+			if (!member.sourceDecl) continue;
+
+			const substitutions = this.#findExternalSubstitutions(member.sourceDecl);
+			if (substitutions.size === 0) continue;
+
+			member.text = applyNameSubstitutions(member.text, substitutions);
+		}
+	}
+
+	#findExternalSubstitutions(decl: ts.Node): Map<string, string>
+	{
+		const ts = this.#ts;
+		const result = new Map<string, string>();
+
+		const visit = (node: ts.Node): void => {
+			if (ts.isIdentifier(node) && this.#isReferencePosition(node))
+			{
+				const symbol = this.#checker.getSymbolAtLocation(node);
+				if (symbol)
+				{
+					const replacement = this.#siblingReplacements.get(symbol) ?? this.#npmReplacements.get(symbol);
+					if (replacement && !result.has(node.text))
+					{
+						result.set(node.text, replacement);
+					}
+				}
+			}
+
+			ts.forEachChild(node, visit);
+		};
+
+		visit(decl);
+
+		return result;
+	}
+
+	#isReferencePosition(node: ts.Identifier): boolean
+	{
+		const ts = this.#ts;
+		const parent = node.parent;
+		if (!parent) return false;
+
+		if (ts.isTypeReferenceNode(parent) && parent.typeName === node) return true;
+		if (ts.isExpressionWithTypeArguments(parent) && parent.expression === node) return true;
+		if (ts.isQualifiedName(parent) && parent.left === node) return true;
+		if (ts.isTypeQueryNode(parent) && parent.exprName === node) return true;
+		if (ts.isHeritageClause(parent)) return true;
+
+		return false;
+	}
+
+	#collectExportSymbol(symbol: ts.Symbol, publicName: string): void
+	{
+		const resolved = this.#resolveAliasDeep(symbol);
+		if (!resolved)
+		{
+			return;
+		}
+
+		const key = `${publicName}:${getSymbolKey(resolved)}`;
+		if (this.#seen.has(key))
+		{
+			return;
+		}
+
+		this.#seen.add(key);
+
+		const declarations = resolved.getDeclarations() ?? [];
+
+		if (declarations.length === 0)
+		{
+			return;
+		}
+
+		for (const decl of declarations)
+		{
+			const member = this.#buildMemberFromDeclaration(decl, publicName, resolved);
+			if (member)
+			{
+				this.#result.push(member);
+				this.#collectReferencedSymbols(decl);
+			}
+		}
+	}
+
+	#buildMemberFromDeclaration(decl: ts.Declaration, publicName: string, _symbol: ts.Symbol): CollectedMember | null
+	{
+		const ts = this.#ts;
+
+		if (ts.isVariableDeclaration(decl))
+		{
+			const list = decl.parent;
+			if (!ts.isVariableDeclarationList(list)) return null;
+			const statement = list.parent;
+			if (!ts.isVariableStatement(statement)) return null;
+
+			const nameNode = ts.isIdentifier(decl.name) ? decl.name : null;
+			const originalName = nameNode?.text ?? null;
+			const rendered = renderDeclaration(ts, statement, nameNode, originalName, publicName);
+
+			return { ...rendered, name: publicName, kind: 'namespaceMember', sourceDecl: statement };
+		}
+
+		if (ts.isClassDeclaration(decl))
+		{
+			const nameNode = decl.name ?? null;
+			const originalName = nameNode?.text ?? null;
+			const rendered = renderDeclaration(ts, decl, nameNode, originalName, publicName);
+
+			return { ...rendered, name: publicName, kind: 'namespaceMember', sourceDecl: decl };
+		}
+
+		if (ts.isFunctionDeclaration(decl))
+		{
+			const nameNode = decl.name ?? null;
+			const originalName = nameNode?.text ?? null;
+			const rendered = renderDeclaration(ts, decl, nameNode, originalName, publicName);
+
+			return { ...rendered, name: publicName, kind: 'namespaceMember', sourceDecl: decl };
+		}
+
+		if (ts.isEnumDeclaration(decl))
+		{
+			const nameNode = decl.name;
+			const originalName = nameNode.text;
+			const rendered = renderDeclaration(ts, decl, nameNode, originalName, publicName);
+
+			return { ...rendered, name: publicName, kind: 'namespaceMember', sourceDecl: decl };
+		}
+
+		if (ts.isInterfaceDeclaration(decl))
+		{
+			const nameNode = decl.name;
+			const originalName = nameNode.text;
+			const rendered = renderDeclaration(ts, decl, nameNode, originalName, publicName);
+
+			return { ...rendered, name: publicName, kind: 'type', sourceDecl: decl };
+		}
+
+		if (ts.isTypeAliasDeclaration(decl))
+		{
+			const nameNode = decl.name;
+			const originalName = nameNode.text;
+			const rendered = renderDeclaration(ts, decl, nameNode, originalName, publicName);
+
+			return { ...rendered, name: publicName, kind: 'type', sourceDecl: decl };
+		}
+
+		return null;
+	}
+
+	#collectReferencedSymbols(decl: ts.Declaration): void
+	{
+		const ts = this.#ts;
+
+		const visit = (node: ts.Node): void => {
+			if (ts.isTypeReferenceNode(node))
+			{
+				const nameNode = getEntityNameLeft(ts, node.typeName);
+				if (nameNode)
+				{
+					this.#tryCollectReferencedName(nameNode);
+				}
+			}
+
+			if (ts.isExpressionWithTypeArguments(node) && ts.isIdentifier(node.expression))
+			{
+				this.#tryCollectReferencedName(node.expression);
+			}
+
+			if (ts.isIdentifier(node) && this.#isTypePosition(node))
+			{
+				this.#tryCollectReferencedName(node);
+			}
+
+			if (ts.isComputedPropertyName(node) && ts.isIdentifier(node.expression))
+			{
+				this.#tryCollectReferencedName(node.expression);
+			}
+
+			if (ts.isTypeQueryNode(node))
+			{
+				const nameNode = getEntityNameLeft(ts, node.exprName);
+				if (nameNode)
+				{
+					this.#tryCollectReferencedName(nameNode);
+				}
+			}
+
+			ts.forEachChild(node, visit);
+		};
+
+		visit(decl);
+	}
+
+	#isTypePosition(node: ts.Identifier): boolean
+	{
+		const ts = this.#ts;
+		const parent = node.parent;
+
+		if (!parent) return false;
+		if (ts.isTypeReferenceNode(parent) && parent.typeName === node) return true;
+		if (ts.isHeritageClause(parent)) return true;
+		if (ts.isExpressionWithTypeArguments(parent) && parent.expression === node) return true;
+		if (ts.isTypeQueryNode(parent) && parent.exprName === node) return true;
+
+		return false;
+	}
+
+	#tryCollectReferencedName(node: ts.EntityName | ts.Identifier): void
+	{
+		const ts = this.#ts;
+		const symbol = this.#checker.getSymbolAtLocation(node);
+		if (!symbol)
+		{
+			return;
+		}
+
+		const siblingReplacement = this.#tryRegisterSiblingExtension(symbol);
+		if (siblingReplacement)
+		{
+			return;
+		}
+
+		const resolved = this.#resolveAliasDeep(symbol);
+		if (!resolved)
+		{
+			return;
+		}
+
+		const nodeName = ts.isIdentifier(node) ? node.text : null;
+
+		if (this.#visitingSymbols.has(resolved))
+		{
+			return;
+		}
+
+		const declarations = resolved.getDeclarations() ?? [];
+		if (declarations.length === 0)
+		{
+			if (nodeName)
+			{
+				this.#collectBuiltinAlias(symbol, nodeName, node);
+			}
+
+			return;
+		}
+
+		const isBuiltin = declarations.some((d) => isBuiltinLibFile(d.getSourceFile()));
+
+		if (isBuiltin)
+		{
+			if (nodeName && symbol.name !== resolved.name)
+			{
+				this.#collectBuiltinAlias(symbol, nodeName, node);
+			}
+
+			return;
+		}
+
+		const isInNodeModules = declarations.every((d) => d.getSourceFile().fileName.includes('node_modules'));
+
+		if (isInNodeModules)
+		{
+			if (nodeName)
+			{
+				this.#tryRegisterNpmPackage(symbol, resolved, nodeName, declarations);
+			}
+
+			return;
+		}
+
+		const isInProgram = declarations.some((d) => {
+			const src = d.getSourceFile();
+
+			return this.#program.getSourceFile(src.fileName) === src;
+		});
+
+		if (!isInProgram)
+		{
+			if (nodeName)
+			{
+				this.#tryRegisterNpmPackage(symbol, resolved, nodeName, declarations);
+			}
+
+			return;
+		}
+
+		const name = this.#extractDeclarationName(resolved, declarations);
+		if (!name)
+		{
+			return;
+		}
+
+		const key = `${name}:${getSymbolKey(resolved)}`;
+		if (this.#seen.has(key))
+		{
+			return;
+		}
+
+		this.#visitingSymbols.add(resolved);
+		this.#seen.add(key);
+
+		for (const decl of declarations)
+		{
+			const member = this.#buildMemberFromDeclaration(decl, name, resolved);
+			if (member)
+			{
+				this.#result.push(member);
+				this.#collectReferencedSymbols(decl);
+			}
+		}
+
+		this.#visitingSymbols.delete(resolved);
+	}
+
+	#tryRegisterNpmPackage(symbol: ts.Symbol, resolved: ts.Symbol, nodeName: string, declarations: readonly ts.Declaration[]): void
+	{
+		if (!this.#options.extensionName) return;
+
+		const pkgName = this.#findNpmPackageName(declarations);
+		if (!pkgName) return;
+
+		const targetName = resolved.name && resolved.name !== 'default' ? resolved.name : nodeName;
+
+		const containerModule = `${this.#options.extensionName}/internal/${pkgName}`;
+		const replacement = `import('${containerModule}').${targetName}`;
+
+		this.#npmReplacements.set(symbol, replacement);
+		this.#npmReplacements.set(resolved, replacement);
+
+		const buffer = this.#getOrCreateNpmBuffer(pkgName);
+		this.#inlineNpmDeclarations(resolved, buffer, targetName);
+	}
+
+	#findNpmPackageName(declarations: readonly ts.Declaration[]): string | null
+	{
+		for (const decl of declarations)
+		{
+			const src = decl.getSourceFile();
+			if (isBuiltinLibFile(src)) continue;
+
+			const match = /node_modules[\\/]((?:@[^\\/]+[\\/])?[^\\/]+)[\\/]/.exec(src.fileName);
+			if (match)
+			{
+				const pkgName = match[1];
+				if (pkgName === 'typescript' || pkgName === '@types/node') continue;
+
+				return pkgName;
+			}
+		}
+
+		return null;
+	}
+
+	#getOrCreateNpmBuffer(pkgName: string): NpmPackageBuffer
+	{
+		let buffer = this.#npmPackages.get(pkgName);
+		if (!buffer)
+		{
+			buffer = { statements: [], seenSymbolKeys: new Set() };
+			this.#npmPackages.set(pkgName, buffer);
+		}
+
+		return buffer;
+	}
+
+	#inlineNpmDeclarations(symbol: ts.Symbol, buffer: NpmPackageBuffer, publicName: string): void
+	{
+		const ts = this.#ts;
+		const declarations = symbol.getDeclarations() ?? [];
+		if (declarations.length === 0) return;
+
+		const key = `${publicName}:${getSymbolKey(symbol)}`;
+		if (buffer.seenSymbolKeys.has(key)) return;
+		buffer.seenSymbolKeys.add(key);
+
+		for (const decl of declarations)
+		{
+			if (ts.isSourceFile(decl)) continue;
+
+			const rendered = this.#renderNpmDeclaration(decl, publicName);
+			if (rendered)
+			{
+				buffer.statements.push(rendered);
+			}
+
+			this.#collectNpmReferencedSymbols(decl, buffer);
+		}
+	}
+
+	#renderNpmDeclaration(decl: ts.Declaration, publicName: string): string | null
+	{
+		const ts = this.#ts;
+		const parent = decl.parent;
+
+		// Unwrap `declare module 'x' { ... }` — we only want the inner declarations, re-wrapped into our container.
+		if (parent && ts.isModuleBlock(parent))
+		{
+			const sourceFile = decl.getSourceFile();
+			const start = decl.getStart(sourceFile, false);
+			const end = decl.getEnd();
+			let text = sourceFile.text.slice(start, end);
+			text = stripLeadingKeywords(text, 0);
+			text = dropPrivateIdentifierLines(text);
+
+			if (ts.isClassDeclaration(decl) || ts.isFunctionDeclaration(decl)
+				|| ts.isInterfaceDeclaration(decl) || ts.isTypeAliasDeclaration(decl)
+				|| ts.isEnumDeclaration(decl))
+			{
+				return `export ${text}`;
+			}
+
+			if (ts.isVariableStatement(decl))
+			{
+				return `export ${text}`;
+			}
+
+			return text;
+		}
+
+		if (ts.isClassDeclaration(decl) || ts.isFunctionDeclaration(decl)
+			|| ts.isInterfaceDeclaration(decl) || ts.isTypeAliasDeclaration(decl)
+			|| ts.isEnumDeclaration(decl))
+		{
+			const nameNode = getDeclarationNameNode(ts, decl);
+			const originalName = nameNode?.text ?? null;
+			const { text } = renderDeclaration(ts, decl, nameNode, originalName, publicName);
+
+			return `export ${text}`;
+		}
+
+		if (ts.isVariableDeclaration(decl))
+		{
+			const list = decl.parent;
+			if (!ts.isVariableDeclarationList(list)) return null;
+			const statement = list.parent;
+			if (!ts.isVariableStatement(statement)) return null;
+
+			const nameNode = ts.isIdentifier(decl.name) ? decl.name : null;
+			const originalName = nameNode?.text ?? null;
+			const { text } = renderDeclaration(ts, statement, nameNode, originalName, publicName);
+
+			return `export ${text}`;
+		}
+
+		return null;
+	}
+
+	#collectNpmReferencedSymbols(decl: ts.Declaration, buffer: NpmPackageBuffer): void
+	{
+		const ts = this.#ts;
+
+		const visit = (node: ts.Node): void => {
+			if (ts.isTypeReferenceNode(node))
+			{
+				const nameNode = getEntityNameLeft(ts, node.typeName);
+				if (nameNode)
+				{
+					this.#tryInlineReferencedNpmSymbol(nameNode, buffer);
+				}
+			}
+
+			if (ts.isExpressionWithTypeArguments(node) && ts.isIdentifier(node.expression))
+			{
+				this.#tryInlineReferencedNpmSymbol(node.expression, buffer);
+			}
+
+			ts.forEachChild(node, visit);
+		};
+
+		visit(decl);
+	}
+
+	#tryInlineReferencedNpmSymbol(node: ts.Identifier, buffer: NpmPackageBuffer): void
+	{
+		const ts = this.#ts;
+		const symbol = this.#checker.getSymbolAtLocation(node);
+		if (!symbol) return;
+
+		const resolved = this.#resolveAliasDeep(symbol) ?? symbol;
+		const declarations = resolved.getDeclarations() ?? [];
+		if (declarations.length === 0) return;
+
+		const isBuiltin = declarations.some((d) => isBuiltinLibFile(d.getSourceFile()));
+		if (isBuiltin) return;
+
+		// Only inline if symbol lives in node_modules (even across packages — we duplicate everything).
+		const allInNodeModules = declarations.every((d) => d.getSourceFile().fileName.includes('node_modules'));
+		if (!allInNodeModules) return;
+
+		const name = resolved.name && resolved.name !== 'default' ? resolved.name : node.text;
+		this.#inlineNpmDeclarations(resolved, buffer, name);
+	}
+
+	#tryRegisterSiblingExtension(symbol: ts.Symbol): boolean
+	{
+		const ts = this.#ts;
+
+		if ((symbol.flags & ts.SymbolFlags.Alias) === 0)
+		{
+			return false;
+		}
+
+		const decls = symbol.getDeclarations();
+		if (!decls || decls.length === 0) return false;
+
+		for (const decl of decls)
+		{
+			const { moduleSpecifier, importedName } = extractImportSource(ts, decl);
+			if (!moduleSpecifier) continue;
+			if (!isSiblingExtensionName(moduleSpecifier)) continue;
+
+			const pkg = PackageResolver.resolve(moduleSpecifier);
+			if (!pkg) continue;
+
+			const siblingNamespace = pkg.getGlobal()[pkg.getName()];
+			if (!siblingNamespace || siblingNamespace === 'window') continue;
+
+			const localName = getImportLocalName(ts, decl);
+			if (!localName) continue;
+
+			// For default imports, the referenced symbol lives in the sibling's namespace under
+			// its own declaration name. We use the local alias as a best-guess fallback
+			// (which matches the typical convention of `import Foo from 'x.y'` where sibling
+			// exports `class Foo`).
+			const targetName = importedName && importedName !== 'default' ? importedName : localName;
+			const replacement = `${siblingNamespace}.${targetName}`;
+
+			this.#siblingReplacements.set(symbol, replacement);
+
+			return true;
+		}
+
+		return false;
+	}
+
+	#collectBuiltinAlias(originalSymbol: ts.Symbol, aliasName: string, referenceNode: ts.Node): void
+	{
+		const ts = this.#ts;
+
+		if ((originalSymbol.flags & ts.SymbolFlags.Alias) === 0)
+		{
+			return;
+		}
+
+		const resolved = this.#resolveAliasDeep(originalSymbol);
+		if (!resolved)
+		{
+			return;
+		}
+
+		if (aliasName === resolved.name)
+		{
+			return;
+		}
+
+		const targetName = resolved.name;
+		if (!targetName || targetName === 'default')
+		{
+			return;
+		}
+
+		const key = `${aliasName}:builtin:${targetName}`;
+		if (this.#seen.has(key))
+		{
+			return;
+		}
+
+		this.#seen.add(key);
+
+		const generics = inferGenericParams(ts, aliasName, referenceNode);
+		const text = generics
+			? `type ${aliasName}${generics.params} = ${targetName}${generics.args};`
+			: `type ${aliasName} = ${targetName};`;
+
+		this.#result.push({ text, name: aliasName, kind: 'type' });
+	}
+
+	#extractDeclarationName(symbol: ts.Symbol, declarations: readonly ts.Declaration[]): string | null
+	{
+		const ts = this.#ts;
+
+		if (symbol.name && symbol.name !== 'default' && symbol.name !== '__export')
+		{
+			return symbol.name;
+		}
+
+		for (const decl of declarations)
+		{
+			if (ts.isClassDeclaration(decl) || ts.isFunctionDeclaration(decl) || ts.isInterfaceDeclaration(decl)
+				|| ts.isTypeAliasDeclaration(decl) || ts.isEnumDeclaration(decl))
+			{
+				if (decl.name && ts.isIdentifier(decl.name))
+				{
+					return decl.name.text;
+				}
+			}
+
+			if (ts.isVariableDeclaration(decl) && ts.isIdentifier(decl.name))
+			{
+				return decl.name.text;
+			}
+		}
+
+		return null;
+	}
+
+	#resolveAliasDeep(symbol: ts.Symbol): ts.Symbol | null
+	{
+		const ts = this.#ts;
+		const SymbolFlags = ts.SymbolFlags;
+
+		let current: ts.Symbol | undefined = symbol;
+		const seen = new Set<ts.Symbol>();
+
+		while (current && (current.flags & SymbolFlags.Alias) !== 0)
+		{
+			if (seen.has(current))
+			{
+				break;
+			}
+
+			seen.add(current);
+
+			const next = this.#checker.getAliasedSymbol(current);
+			if (!next || next === current)
+			{
+				break;
+			}
+
+			current = next;
+		}
+
+		return current ?? null;
+	}
+}
+
+function splitMembers(tsModule: typeof ts, members: CollectedMember[], npmModules: NpmModule[]): DeclarationBundle
+{
+	const topLevelMembers: DeclarationMember[] = [];
+	const namespaceMembers: DeclarationMember[] = [];
+	const namespaceMemberNames = new Set<string>();
+
+	for (const member of members)
+	{
+		if (member.kind === 'type')
+		{
+			topLevelMembers.push({ text: member.text, name: member.name });
+		}
+		else
+		{
+			namespaceMembers.push({ text: member.text, name: member.name });
+			if (member.name)
+			{
+				namespaceMemberNames.add(member.name);
+			}
+		}
+	}
+
+	return {
+		ts: tsModule,
+		topLevelMembers,
+		namespaceMembers,
+		namespaceMemberNames,
+		npmModules,
+	};
+}
+
+function renderDeclaration(
+	tsModule: typeof ts,
+	statement: ts.Statement,
+	nameNode: ts.Identifier | null,
+	originalName: string | null,
+	publicName: string,
+): { text: string }
+{
+	const sourceFile = statement.getSourceFile();
+	const source = sourceFile.text;
+
+	const jsdocStart = findJsDocStart(tsModule, statement);
+	const start = jsdocStart ?? statement.getStart(sourceFile, false);
+	const end = statement.getEnd();
+
+	let text = source.slice(start, end);
+
+	const declStartWithinText = (statement.getStart(sourceFile, false)) - start;
+
+	if (originalName && originalName !== publicName && nameNode)
+	{
+		const nameStart = nameNode.getStart(sourceFile, false) - start;
+		const nameEnd = nameNode.getEnd() - start;
+		text = text.slice(0, nameStart) + publicName + text.slice(nameEnd);
+	}
+
+	text = stripLeadingKeywords(text, declStartWithinText);
+	text = dropPrivateIdentifierLines(text);
+
+	return { text };
+}
+
+function applyNameSubstitutions(text: string, substitutions: Map<string, string>): string
+{
+	if (substitutions.size === 0) return text;
+
+	let result = text;
+	for (const [name, replacement] of substitutions)
+	{
+		const pattern = new RegExp(`\\b${escapeRegExp(name)}\\b`, 'g');
+		result = result.replace(pattern, replacement);
+	}
+
+	return result;
+}
+
+function escapeRegExp(s: string): string
+{
+	return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function findJsDocStart(tsModule: typeof ts, node: ts.Node): number | null
+{
+	const nodeWithJsdoc = node as unknown as { jsDoc?: ts.JSDoc[] };
+	const jsdocs = nodeWithJsdoc.jsDoc;
+	if (jsdocs && jsdocs.length > 0)
+	{
+		return jsdocs[0].getStart(node.getSourceFile(), false);
+	}
+
+	void tsModule;
+
+	return null;
+}
+
+function stripLeadingKeywords(text: string, declStart: number): string
+{
+	const jsdocPart = text.slice(0, declStart);
+	let decl = text.slice(declStart);
+	decl = decl.replace(/^\s*export\s+/, '').replace(/^\s*default\s+/, '').replace(/^\s*declare\s+/, '');
+
+	return jsdocPart + decl;
+}
+
+function dropPrivateIdentifierLines(text: string): string
+{
+	return text
+		.split('\n')
+		.filter((line) => line.trim() !== '#private;')
+		.join('\n');
+}
+
+async function emitSourceDeclarations(
+	tsModule: typeof ts,
+	options: DeclarationBundleOptions,
+): Promise<Map<string, string> | null>
+{
+	const { packageRoot, compilerOptions: externalOptions } = options;
+	const sourceDir = path.join(packageRoot, 'src');
+
+	if (!fs.existsSync(sourceDir))
+	{
+		return null;
+	}
+
+	const tsExtensions = ['.ts', '.tsx', '.mts', '.cts'];
+	const rootNames = collectSourceFiles(sourceDir, tsExtensions);
+
+	if (rootNames.length === 0)
+	{
+		return null;
+	}
+
+	const compilerOptions: ts.CompilerOptions = {
+		...externalOptions,
+		target: tsModule.ScriptTarget.ESNext,
+		module: tsModule.ModuleKind.ESNext,
+		moduleResolution: tsModule.ModuleResolutionKind.Bundler,
+		strict: true,
+		declaration: true,
+		emitDeclarationOnly: true,
+		skipLibCheck: true,
+		rootDir: packageRoot,
+		outDir: path.join(packageRoot, 'dist'),
+		noEmitOnError: false,
+	};
+
+	const host = tsModule.createCompilerHost(compilerOptions, true);
+	const declarations = new Map<string, string>();
+
+	host.writeFile = (fileName: string, text: string) => {
+		if (fileName.endsWith('.d.ts'))
+		{
+			declarations.set(path.normalize(fileName), text);
+		}
+	};
+
+	const program = tsModule.createProgram(rootNames, compilerOptions, host);
+	program.emit();
+
+	return declarations.size > 0 ? declarations : null;
+}
+
+function findEntryDeclarationPath(input: string, packageRoot: string, declarations: Map<string, string>): string | null
+{
+	const outDir = path.join(packageRoot, 'dist');
+	const relative = path.relative(packageRoot, input).replace(/\.tsx?$/, '.d.ts');
+	const expected = path.normalize(path.join(outDir, relative));
+
+	if (declarations.has(expected))
+	{
+		return expected;
+	}
+
+	const basename = path.basename(input).replace(/\.tsx?$/, '.d.ts');
+	for (const key of declarations.keys())
+	{
+		if (path.basename(key) === basename)
+		{
+			return key;
+		}
+	}
+
+	return null;
+}
+
+function createDtsProgram(
+	tsModule: typeof ts,
+	declarations: Map<string, string>,
+	_entryPath: string,
+): ts.Program
+{
+	const compilerOptions: ts.CompilerOptions = {
+		target: tsModule.ScriptTarget.ESNext,
+		module: tsModule.ModuleKind.ESNext,
+		moduleResolution: tsModule.ModuleResolutionKind.Bundler,
+		skipLibCheck: true,
+		strict: false,
+		noResolve: false,
+		allowJs: false,
+		declaration: false,
+		noEmit: true,
+		allowImportingTsExtensions: true,
+	};
+
+	const sources = new Map<string, ts.SourceFile>();
+	for (const [fileName, text] of declarations)
+	{
+		const source = tsModule.createSourceFile(
+			fileName,
+			text,
+			tsModule.ScriptTarget.ESNext,
+			true,
+			tsModule.ScriptKind.TS,
+		);
+		sources.set(path.normalize(fileName), source);
+	}
+
+	const defaultHost = tsModule.createCompilerHost(compilerOptions, true);
+
+	const host: ts.CompilerHost = {
+		...defaultHost,
+		getSourceFile: (fileName, languageVersion, onError, shouldCreateNewSourceFile) => {
+			const normalized = path.normalize(fileName);
+			if (sources.has(normalized))
+			{
+				return sources.get(normalized);
+			}
+
+			return defaultHost.getSourceFile(fileName, languageVersion, onError, shouldCreateNewSourceFile);
+		},
+		fileExists: (fileName) => {
+			const normalized = path.normalize(fileName);
+			if (sources.has(normalized))
+			{
+				return true;
+			}
+
+			return defaultHost.fileExists(fileName);
+		},
+		readFile: (fileName) => {
+			const normalized = path.normalize(fileName);
+			const source = sources.get(normalized);
+			if (source)
+			{
+				return source.text;
+			}
+
+			return defaultHost.readFile(fileName);
+		},
+		writeFile: () => {},
+		resolveModuleNameLiterals: (moduleLiterals, containingFile) => {
+			return moduleLiterals.map((literal) => {
+				const moduleName = literal.text;
+				if (!moduleName.startsWith('.'))
+				{
+					const fallback = tsModule.resolveModuleName(
+						moduleName,
+						containingFile,
+						compilerOptions,
+						defaultHost,
+					);
+
+					return { resolvedModule: fallback.resolvedModule };
+				}
+
+				const containingDir = path.dirname(containingFile);
+				const baseResolved = path.resolve(containingDir, moduleName);
+
+				const candidates = [
+					baseResolved + '.d.ts',
+					baseResolved + '.ts',
+					path.join(baseResolved, 'index.d.ts'),
+					path.join(baseResolved, 'index.ts'),
+				];
+
+				for (const candidate of candidates)
+				{
+					const normalized = path.normalize(candidate);
+					if (sources.has(normalized))
+					{
+						return {
+							resolvedModule: {
+								resolvedFileName: normalized,
+								extension: tsModule.Extension.Dts,
+								isExternalLibraryImport: false,
+							},
+						};
+					}
+				}
+
+				return { resolvedModule: undefined };
+			});
+		},
+	};
+
+	return tsModule.createProgram({
+		rootNames: [...sources.keys()],
+		options: compilerOptions,
+		host,
+	});
+}
+
+function collectSourceFiles(directory: string, extensions: string[]): string[]
+{
+	const files: string[] = [];
+
+	for (const entry of fs.readdirSync(directory, { withFileTypes: true }))
+	{
+		const fullPath = path.join(directory, entry.name);
+
+		if (entry.isDirectory())
+		{
+			files.push(...collectSourceFiles(fullPath, extensions));
+		}
+		else if (extensions.some((ext) => entry.name.endsWith(ext)))
+		{
+			files.push(fullPath);
+		}
+	}
+
+	return files;
+}
+
+function isBuiltinLibFile(src: ts.SourceFile): boolean
+{
+	if (src.hasNoDefaultLib) return true;
+
+	const fileName = src.fileName;
+
+	return fileName.includes('typescript/lib/lib.')
+		|| fileName.includes('node_modules/@types/node/');
+}
+
+const EXTENSION_NAME_PATTERN = /^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)+$/;
+
+function isSiblingExtensionName(name: string): boolean
+{
+	return EXTENSION_NAME_PATTERN.test(name);
+}
+
+function extractImportSource(
+	tsModule: typeof ts,
+	decl: ts.Declaration,
+): { moduleSpecifier: string | null; importedName: string | null }
+{
+	if (tsModule.isImportSpecifier(decl))
+	{
+		const importDecl = decl.parent.parent.parent;
+		const moduleSpec = tsModule.isImportDeclaration(importDecl) && tsModule.isStringLiteral(importDecl.moduleSpecifier)
+			? importDecl.moduleSpecifier.text
+			: null;
+		const importedName = decl.propertyName?.text ?? decl.name.text;
+
+		return { moduleSpecifier: moduleSpec, importedName };
+	}
+
+	if (tsModule.isImportClause(decl))
+	{
+		const importDecl = decl.parent;
+		const moduleSpec = tsModule.isImportDeclaration(importDecl) && tsModule.isStringLiteral(importDecl.moduleSpecifier)
+			? importDecl.moduleSpecifier.text
+			: null;
+
+		return { moduleSpecifier: moduleSpec, importedName: 'default' };
+	}
+
+	if (tsModule.isNamespaceImport(decl))
+	{
+		const importDecl = decl.parent.parent;
+		const moduleSpec = tsModule.isImportDeclaration(importDecl) && tsModule.isStringLiteral(importDecl.moduleSpecifier)
+			? importDecl.moduleSpecifier.text
+			: null;
+
+		return { moduleSpecifier: moduleSpec, importedName: null };
+	}
+
+	return { moduleSpecifier: null, importedName: null };
+}
+
+function getImportLocalName(tsModule: typeof ts, decl: ts.Declaration): string | null
+{
+	if (tsModule.isImportSpecifier(decl)) return decl.name.text;
+	if (tsModule.isImportClause(decl)) return decl.name?.text ?? null;
+	if (tsModule.isNamespaceImport(decl)) return decl.name.text;
+
+	return null;
+}
+
+function inferGenericParams(tsModule: typeof ts, aliasName: string, referenceNode: ts.Node): { params: string; args: string } | null
+{
+	let parent: ts.Node | undefined = referenceNode.parent;
+	while (parent)
+	{
+		if (tsModule.isTypeReferenceNode(parent) && parent.typeArguments)
+		{
+			const args = parent.typeArguments;
+			if (args.length > 0)
+			{
+				const paramNames: string[] = [];
+				const seen = new Set<string>();
+				for (let i = 0; i < args.length; i++)
+				{
+					const arg = args[i];
+					const argText = arg.getText(arg.getSourceFile());
+					const baseName = argText.replace(/\[\]$/, '').trim();
+					if (/^[A-Z]$/.test(baseName) && !seen.has(baseName))
+					{
+						paramNames.push(baseName);
+						seen.add(baseName);
+					}
+					else
+					{
+						paramNames.push(String.fromCharCode(75 + paramNames.length));
+					}
+				}
+
+				return {
+					params: `<${paramNames.join(', ')}>`,
+					args: `<${paramNames.join(', ')}>`,
+				};
+			}
+			break;
+		}
+
+		parent = parent.parent;
+	}
+
+	void aliasName;
+
+	return null;
+}
+
+function getDeclarationNameNode(tsModule: typeof ts, decl: ts.Declaration): ts.Identifier | null
+{
+	if (tsModule.isClassDeclaration(decl) || tsModule.isFunctionDeclaration(decl))
+	{
+		return decl.name ?? null;
+	}
+
+	if (tsModule.isInterfaceDeclaration(decl) || tsModule.isTypeAliasDeclaration(decl) || tsModule.isEnumDeclaration(decl))
+	{
+		return decl.name;
+	}
+
+	return null;
+}
+
+function getEntityNameLeft(tsModule: typeof ts, name: ts.EntityName): ts.Identifier | null
+{
+	let current: ts.EntityName = name;
+
+	while (tsModule.isQualifiedName(current))
+	{
+		current = current.left;
+	}
+
+	return tsModule.isIdentifier(current) ? current : null;
+}
+
+function getSymbolKey(symbol: ts.Symbol): string
+{
+	const declarations = symbol.getDeclarations() ?? [];
+	if (declarations.length === 0)
+	{
+		return symbol.name;
+	}
+
+	const d = declarations[0];
+
+	return `${d.getSourceFile().fileName}:${d.pos}:${d.end}`;
+}

@@ -59,7 +59,7 @@ export type BuildOptions = {
 	babel?: boolean,
 	customPlugins?: Plugin[],
 	production?: boolean,
-	emitDeclaration?: boolean,
+	emitDeclaration?: import('../../config/bundle/strategies/emit-declaration-strategy').EmitDeclarationConfig,
 	safeNamespaces?: boolean,
 	baseline?: boolean,
 };

@@ -8,6 +8,7 @@ import { DeclarationEmitter } from '../engines/build/declaration-emitter';
 import { Environment } from '../../environment/environment';
 import { FileFinder } from '../../utils/file-finder';
 import { loadTsConfig } from '../../utils/load-tsconfig';
+import { emitDeclarationStrategy } from '../config/bundle/strategies/emit-declaration-strategy';
 import type { BasePackage } from '../packages/base-package';
 import type { BuildEngine } from '../engines/build/build-engine';
 import type { BuildOptions, BuildResult } from '../engines/build/build-types';
@@ -34,7 +35,7 @@ export class PackageBuilder
 
 		const buildResult = await buildEngine.build(buildOptions);
 
-		if (buildResult.errors.length === 0 && buildOptions.emitDeclaration && buildOptions.typescript)
+		if (buildResult.errors.length === 0 && buildOptions.emitDeclaration?.enabled && buildOptions.typescript)
 		{
 			await this.#emitDeclaration(buildOptions);
 		}
@@ -120,10 +121,12 @@ export class PackageBuilder
 			treeshake: bundleConfig.get('treeshake'),
 			customPlugins: bundleConfig.get('plugins'),
 			production,
-			emitDeclaration: enforce?.emitDeclaration
-				?? (bundleConfig.has('emitDeclaration')
-					? bundleConfig.get('emitDeclaration')
-					: (defaults?.emitDeclaration ?? true)),
+			emitDeclaration: emitDeclarationStrategy.prepare(
+				enforce?.emitDeclaration
+					?? (bundleConfig.has('emitDeclaration')
+						? bundleConfig.get('emitDeclaration')
+						: (defaults?.emitDeclaration ?? true)),
+			),
 			safeNamespaces: bundleConfig.get('safeNamespaces'),
 			baseline: enforce?.baseline
 				?? (bundleConfig.has('baseline')
@@ -179,11 +182,17 @@ export class PackageBuilder
 			compilerOptions = tsConfig.options;
 		}
 
+		const extensionName = options.packageName ?? this.#package.getName();
+		const mode = options.emitDeclaration?.mode ?? 'ambient';
+
 		await emitter.emit({
 			packageRoot: options.packageRoot,
 			input: options.input,
 			namespace: options.namespace,
 			outputPath,
+			extensionName,
+			mode,
+			moduleName: extensionName,
 			compilerOptions,
 		});
 	}

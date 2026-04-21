@@ -23,7 +23,7 @@ export interface ChefConfig
 		targets?: string | string[];
 		sourceMaps?: boolean;
 		treeshake?: boolean;
-		emitDeclaration?: boolean;
+		emitDeclaration?: boolean | 'ambient' | 'module' | 'both' | { enabled?: boolean; mode?: 'ambient' | 'module' | 'both' };
 		baseline?: boolean;
 	};
 	enforce?: {
@@ -31,7 +31,7 @@ export interface ChefConfig
 		sourceMaps?: boolean;
 		treeshake?: boolean;
 		babel?: boolean;
-		emitDeclaration?: boolean;
+		emitDeclaration?: boolean | 'ambient' | 'module' | 'both' | { enabled?: boolean; mode?: 'ambient' | 'module' | 'both' };
 		baseline?: boolean;
 	};
 }

@@ -30,7 +30,7 @@ export interface PreparedBundleConfig {
 	minification: boolean | MinifyOptions;
 	transformClasses: boolean | string[];
 	sourceMaps: boolean;
-	emitDeclaration: boolean;
+	emitDeclaration: import('./strategies/emit-declaration-strategy').EmitDeclarationConfig;
 	safeNamespaces: boolean;
 	baseline: boolean;
 	tests: {
