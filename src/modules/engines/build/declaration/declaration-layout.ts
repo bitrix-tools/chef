@@ -9,50 +9,21 @@ export interface LaidOutBundle
 	namespace: string;
 }
 
+// Top-level references to namespace members are already qualified at collection time
+// (positionally, via TypeChecker) inside DeclarationBundler. For module-mode rendering,
+// the unqualified variant is used so references stay in the same lexical scope.
 export function qualifyTopLevelReferences(bundle: DeclarationBundle, namespace: string): LaidOutBundle
 {
-	const namespaceMemberNames = bundle.namespaceMemberNames;
-	const moduleTopLevelMembers = bundle.topLevelMembers;
-
-	if (namespaceMemberNames.size === 0 || bundle.topLevelMembers.length === 0)
-	{
-		return {
-			topLevelMembers: bundle.topLevelMembers,
-			moduleTopLevelMembers,
-			namespaceMembers: bundle.namespaceMembers,
-			npmModules: bundle.npmModules,
-			namespace,
-		};
-	}
-
-	const qualified = bundle.topLevelMembers.map((member) => ({
-		...member,
-		text: qualifyReferences(member.text, namespaceMemberNames, namespace),
+	const moduleTopLevelMembers = bundle.topLevelMembers.map((m) => ({
+		...m,
+		text: m.textUnqualified ?? m.text,
 	}));
 
 	return {
-		topLevelMembers: qualified,
+		topLevelMembers: bundle.topLevelMembers,
 		moduleTopLevelMembers,
 		namespaceMembers: bundle.namespaceMembers,
 		npmModules: bundle.npmModules,
 		namespace,
 	};
-}
-
-function qualifyReferences(text: string, namespaceMemberNames: Set<string>, namespace: string): string
-{
-	let result = text;
-
-	for (const memberName of namespaceMemberNames)
-	{
-		const pattern = new RegExp(`\\b${escapeRegExp(memberName)}\\b`, 'g');
-		result = result.replace(pattern, `${namespace}.${memberName}`);
-	}
-
-	return result;
-}
-
-function escapeRegExp(s: string): string
-{
-	return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

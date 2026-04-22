@@ -9,6 +9,7 @@ export interface DeclarationBundleOptions
 {
 	packageRoot: string;
 	input: string;
+	namespace: string;
 	extensionName?: string;
 	compilerOptions?: ts.CompilerOptions;
 }
@@ -25,6 +26,12 @@ export interface DeclarationBundle
 export interface DeclarationMember
 {
 	text: string;
+	/**
+	 * Unqualified variant of the member text — without namespace prefix applied to
+	 * namespace members. Used when rendering the member inside `declare module '...' { ... }`
+	 * where the members share the same lexical scope.
+	 */
+	textUnqualified?: string;
 	name: string | null;
 }
 
@@ -63,7 +70,7 @@ export async function bundleDeclarations(options: DeclarationBundleOptions): Pro
 		packageRoot: options.packageRoot,
 		extensionName: options.extensionName ?? null,
 	});
-	const members = collector.collectFromEntry(entryFile);
+	const members = collector.collectFromEntry(entryFile, options.namespace);
 
 	if (members.length === 0)
 	{
@@ -76,9 +83,12 @@ export async function bundleDeclarations(options: DeclarationBundleOptions): Pro
 interface CollectedMember
 {
 	text: string;
+	textUnqualified?: string;
 	name: string | null;
 	kind: 'type' | 'namespaceMember';
 	sourceDecl?: ts.Node;
+	sourceTextStart?: number;
+	renames?: Array<{ start: number; end: number; replacement: string }>;
 }
 
 interface SymbolCollectorOptions
@@ -130,7 +140,7 @@ class SymbolCollector
 		return result;
 	}
 
-	collectFromEntry(entryFile: ts.SourceFile): CollectedMember[]
+	collectFromEntry(entryFile: ts.SourceFile, namespace: string): CollectedMember[]
 	{
 		const moduleSymbol = this.#checker.getSymbolAtLocation(entryFile);
 		if (!moduleSymbol)
@@ -145,30 +155,135 @@ class SymbolCollector
 			this.#collectExportSymbol(exportSymbol, exportSymbol.name);
 		}
 
-		this.#applyCollectedReplacements();
+		this.#applyCollectedReplacements(namespace);
 
 		return this.#result;
 	}
 
-	#applyCollectedReplacements(): void
+	#applyCollectedReplacements(namespace: string): void
 	{
-		if (this.#siblingReplacements.size === 0 && this.#npmReplacements.size === 0) return;
+		const namespaceMemberSymbols = this.#collectNamespaceMemberSymbols();
+		const hasExternal = this.#siblingReplacements.size > 0 || this.#npmReplacements.size > 0;
+		const needsNamespaceQualification = namespaceMemberSymbols.size > 0;
 
 		for (const member of this.#result)
 		{
-			if (!member.sourceDecl) continue;
+			if (member.sourceDecl === undefined || member.sourceTextStart === undefined)
+			{
+				// Pre-rendered member (e.g. builtin alias) — already finalized.
+				continue;
+			}
 
-			const substitutions = this.#findExternalSubstitutions(member.sourceDecl);
-			if (substitutions.size === 0) continue;
+			const externalEdits = hasExternal
+				? this.#findExternalEdits(member.sourceDecl, member.sourceTextStart)
+				: [];
 
-			member.text = applyNameSubstitutions(member.text, substitutions);
+			const renames = member.renames ?? [];
+
+			const sourceText = member.text;
+
+			const nsEdits = (needsNamespaceQualification && member.kind === 'type')
+				? this.#findNamespaceQualificationEdits(
+					member.sourceDecl,
+					member.sourceTextStart,
+					namespaceMemberSymbols,
+					namespace,
+				)
+				: [];
+
+			// Namespace qualification takes priority over external (npm/sibling) edits
+			// that overlap the same position — a symbol that exists as our namespace member
+			// should not be inlined as npm.
+			const externalEditsFiltered = externalEdits.filter((ext) => {
+				return !nsEdits.some((ns) => rangesOverlap(ns, ext));
+			});
+
+			member.textUnqualified = applyPositionalEdits(sourceText, externalEditsFiltered, renames);
+
+			if (nsEdits.length > 0)
+			{
+				member.text = applyPositionalEdits(sourceText, [...externalEditsFiltered, ...nsEdits], renames);
+			}
+			else
+			{
+				member.text = member.textUnqualified;
+			}
 		}
 	}
 
-	#findExternalSubstitutions(decl: ts.Node): Map<string, string>
+	#collectNamespaceMemberSymbols(): Set<ts.Symbol>
 	{
 		const ts = this.#ts;
-		const result = new Map<string, string>();
+		const result = new Set<ts.Symbol>();
+
+		for (const member of this.#result)
+		{
+			if (member.kind !== 'namespaceMember' || !member.sourceDecl) continue;
+
+			const decl = member.sourceDecl;
+			let nameNode: ts.Identifier | null = null;
+
+			if (ts.isClassDeclaration(decl) || ts.isFunctionDeclaration(decl))
+			{
+				nameNode = decl.name ?? null;
+			}
+			else if (ts.isEnumDeclaration(decl))
+			{
+				nameNode = decl.name;
+			}
+			else if (ts.isVariableStatement(decl))
+			{
+				const first = decl.declarationList.declarations[0];
+				if (first && ts.isIdentifier(first.name)) nameNode = first.name;
+			}
+
+			if (nameNode)
+			{
+				const sym = this.#checker.getSymbolAtLocation(nameNode);
+				if (sym) result.add(sym);
+			}
+		}
+
+		return result;
+	}
+
+	#findNamespaceQualificationEdits(
+		decl: ts.Node,
+		textStart: number,
+		namespaceMemberSymbols: Set<ts.Symbol>,
+		namespace: string,
+	): Array<{ start: number; end: number; replacement: string }>
+	{
+		const ts = this.#ts;
+		const edits: Array<{ start: number; end: number; replacement: string }> = [];
+		const sourceFile = decl.getSourceFile();
+
+		const visit = (node: ts.Node): void => {
+			if (ts.isIdentifier(node) && this.#isReferencePosition(node))
+			{
+				const symbol = this.#checker.getSymbolAtLocation(node);
+				const resolved = symbol ? (this.#resolveAliasDeep(symbol) ?? symbol) : null;
+				if (resolved && namespaceMemberSymbols.has(resolved))
+				{
+					const nodeStart = node.getStart(sourceFile, false) - textStart;
+					const nodeEnd = node.getEnd() - textStart;
+					edits.push({ start: nodeStart, end: nodeEnd, replacement: `${namespace}.${node.text}` });
+				}
+			}
+
+			ts.forEachChild(node, visit);
+		};
+
+		visit(decl);
+
+		return edits;
+	}
+
+	#findExternalEdits(decl: ts.Node, textStart: number): Array<{ start: number; end: number; replacement: string }>
+	{
+		const ts = this.#ts;
+		const edits: Array<{ start: number; end: number; replacement: string }> = [];
+		const sourceFile = decl.getSourceFile();
 
 		const visit = (node: ts.Node): void => {
 			if (ts.isIdentifier(node) && this.#isReferencePosition(node))
@@ -177,9 +292,11 @@ class SymbolCollector
 				if (symbol)
 				{
 					const replacement = this.#siblingReplacements.get(symbol) ?? this.#npmReplacements.get(symbol);
-					if (replacement && !result.has(node.text))
+					if (replacement)
 					{
-						result.set(node.text, replacement);
+						const nodeStart = node.getStart(sourceFile, false) - textStart;
+						const nodeEnd = node.getEnd() - textStart;
+						edits.push({ start: nodeStart, end: nodeEnd, replacement });
 					}
 				}
 			}
@@ -189,7 +306,7 @@ class SymbolCollector
 
 		visit(decl);
 
-		return result;
+		return edits;
 	}
 
 	#isReferencePosition(node: ts.Identifier): boolean
@@ -583,9 +700,10 @@ class SymbolCollector
 		{
 			const nameNode = getDeclarationNameNode(ts, decl);
 			const originalName = nameNode?.text ?? null;
-			const { text } = renderDeclaration(ts, decl, nameNode, originalName, publicName);
+			const rendered = renderDeclaration(ts, decl, nameNode, originalName, publicName);
+			const finalText = applyPositionalEdits(rendered.text, [], rendered.renames);
 
-			return `export ${text}`;
+			return `export ${finalText}`;
 		}
 
 		if (ts.isVariableDeclaration(decl))
@@ -597,9 +715,10 @@ class SymbolCollector
 
 			const nameNode = ts.isIdentifier(decl.name) ? decl.name : null;
 			const originalName = nameNode?.text ?? null;
-			const { text } = renderDeclaration(ts, statement, nameNode, originalName, publicName);
+			const rendered = renderDeclaration(ts, statement, nameNode, originalName, publicName);
+			const finalText = applyPositionalEdits(rendered.text, [], rendered.renames);
 
-			return `export ${text}`;
+			return `export ${finalText}`;
 		}
 
 		return null;
@@ -804,11 +923,11 @@ function splitMembers(tsModule: typeof ts, members: CollectedMember[], npmModule
 	{
 		if (member.kind === 'type')
 		{
-			topLevelMembers.push({ text: member.text, name: member.name });
+			topLevelMembers.push({ text: member.text, textUnqualified: member.textUnqualified, name: member.name });
 		}
 		else
 		{
-			namespaceMembers.push({ text: member.text, name: member.name });
+			namespaceMembers.push({ text: member.text, textUnqualified: member.textUnqualified, name: member.name });
 			if (member.name)
 			{
 				namespaceMemberNames.add(member.name);
@@ -831,7 +950,7 @@ function renderDeclaration(
 	nameNode: ts.Identifier | null,
 	originalName: string | null,
 	publicName: string,
-): { text: string }
+): { text: string; sourceTextStart: number; renames: Array<{ start: number; end: number; replacement: string }> }
 {
 	const sourceFile = statement.getSourceFile();
 	const source = sourceFile.text;
@@ -840,40 +959,107 @@ function renderDeclaration(
 	const start = jsdocStart ?? statement.getStart(sourceFile, false);
 	const end = statement.getEnd();
 
-	let text = source.slice(start, end);
+	const text = source.slice(start, end);
 
-	const declStartWithinText = (statement.getStart(sourceFile, false)) - start;
+	const renames: Array<{ start: number; end: number; replacement: string }> = [];
 
 	if (originalName && originalName !== publicName && nameNode)
 	{
 		const nameStart = nameNode.getStart(sourceFile, false) - start;
 		const nameEnd = nameNode.getEnd() - start;
-		text = text.slice(0, nameStart) + publicName + text.slice(nameEnd);
+		renames.push({ start: nameStart, end: nameEnd, replacement: publicName });
 	}
 
-	text = stripLeadingKeywords(text, declStartWithinText);
-	text = dropPrivateIdentifierLines(text);
-
-	return { text };
+	return { text, sourceTextStart: start, renames };
 }
 
-function applyNameSubstitutions(text: string, substitutions: Map<string, string>): string
+function rangesOverlap(
+	a: { start: number; end: number },
+	b: { start: number; end: number },
+): boolean
 {
-	if (substitutions.size === 0) return text;
+	return a.start < b.end && b.start < a.end;
+}
 
-	let result = text;
-	for (const [name, replacement] of substitutions)
+function applyPositionalEdits(
+	text: string,
+	externalEdits: Array<{ start: number; end: number; replacement: string }>,
+	renames: Array<{ start: number; end: number; replacement: string }>,
+): string
+{
+	// Drop later edits that overlap earlier kept ones — ascending by start picks the first
+	// occurrence at each position; then we apply in descending order to preserve offsets.
+	const sortedAsc = [...externalEdits, ...renames].sort((a, b) => a.start - b.start);
+	const kept: Array<{ start: number; end: number; replacement: string }> = [];
+	for (const edit of sortedAsc)
 	{
-		const pattern = new RegExp(`\\b${escapeRegExp(name)}\\b`, 'g');
-		result = result.replace(pattern, replacement);
+		if (kept.some((k) => rangesOverlap(k, edit))) continue;
+		kept.push(edit);
 	}
+
+	const all = kept.sort((a, b) => b.start - a.start);
+	let result = text;
+	for (const edit of all)
+	{
+		if (edit.start < 0 || edit.end > result.length) continue;
+		result = result.slice(0, edit.start) + edit.replacement + result.slice(edit.end);
+	}
+
+	// Compute declStart offset inside the (possibly rename-modified) text
+	// Since rename happens at identifier position AFTER the keyword block,
+	// declStart of original text equals result's decl position.
+	// We re-detect declaration keyword and strip it.
+	result = stripLeadingKeywordsAfterJsdoc(result);
+	result = dropPrivateIdentifierLines(result);
 
 	return result;
 }
 
-function escapeRegExp(s: string): string
+function stripLeadingKeywordsAfterJsdoc(text: string): string
 {
-	return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	// Find the end of leading JSDoc/comment block (if any) then strip export/default/declare.
+	let i = 0;
+	// Skip leading whitespace and comments
+	while (i < text.length)
+	{
+		// Skip whitespace
+		while (i < text.length && /\s/.test(text[i])) i++;
+		// Skip /* ... */ comment
+		if (text.startsWith('/*', i))
+		{
+			const close = text.indexOf('*/', i + 2);
+			if (close < 0) break;
+			i = close + 2;
+			continue;
+		}
+		// Skip // comment
+		if (text.startsWith('//', i))
+		{
+			const nl = text.indexOf('\n', i);
+			if (nl < 0) { i = text.length; break; }
+			i = nl + 1;
+			continue;
+		}
+		break;
+	}
+
+	const jsdocEnd = i;
+	let rest = text.slice(jsdocEnd);
+
+	// Strip export / default / declare in any order, with intervening whitespace.
+	let changed = true;
+	while (changed)
+	{
+		changed = false;
+		const m = /^(\s*)(export|default|declare)\s+/.exec(rest);
+		if (m)
+		{
+			rest = m[1] + rest.slice(m[0].length);
+			changed = true;
+		}
+	}
+
+	return text.slice(0, jsdocEnd) + rest;
 }
 
 function findJsDocStart(tsModule: typeof ts, node: ts.Node): number | null
@@ -952,10 +1138,90 @@ async function emitSourceDeclarations(
 		}
 	};
 
+	host.resolveModuleNameLiterals = (moduleLiterals, containingFile) => {
+		return moduleLiterals.map((literal) => {
+			const moduleName = literal.text;
+			const resolution = tsModule.resolveModuleName(moduleName, containingFile, compilerOptions, host);
+			const resolved = resolution.resolvedModule;
+
+			if (!resolved) return { resolvedModule: undefined };
+
+			if (resolved.extension === tsModule.Extension.Js && resolved.isExternalLibraryImport)
+			{
+				const patched = resolveNpmTypesFallback(tsModule, resolved.resolvedFileName, resolved.packageId?.name);
+				if (patched)
+				{
+					return {
+						resolvedModule: {
+							...resolved,
+							resolvedFileName: patched,
+							extension: tsModule.Extension.Dts,
+						},
+					};
+				}
+			}
+
+			return { resolvedModule: resolved };
+		});
+	};
+
 	const program = tsModule.createProgram(rootNames, compilerOptions, host);
 	program.emit();
 
 	return declarations.size > 0 ? declarations : null;
+}
+
+function resolveNpmTypesFallback(tsModule: typeof ts, jsFilePath: string, packageName: string | undefined): string | null
+{
+	const candidates = [
+		jsFilePath.replace(/\.js$/, '.d.ts'),
+		jsFilePath.replace(/\.js$/, '.d.mts'),
+	];
+
+	for (const candidate of candidates)
+	{
+		if (fs.existsSync(candidate)) return candidate;
+	}
+
+	if (!packageName) return null;
+
+	// Find package.json by walking up from jsFilePath
+	let dir = path.dirname(jsFilePath);
+	while (dir !== path.dirname(dir))
+	{
+		const pkgJson = path.join(dir, 'package.json');
+		if (fs.existsSync(pkgJson))
+		{
+			try
+			{
+				const json = JSON.parse(fs.readFileSync(pkgJson, 'utf-8'));
+				if (json.name !== packageName)
+				{
+					dir = path.dirname(dir);
+					continue;
+				}
+
+				const types = json.types ?? json.typings;
+				if (typeof types === 'string')
+				{
+					const typesPath = path.join(dir, types);
+					if (fs.existsSync(typesPath)) return typesPath;
+				}
+			}
+			catch
+			{
+				// ignore malformed package.json
+			}
+
+			break;
+		}
+
+		dir = path.dirname(dir);
+	}
+
+	void tsModule;
+
+	return null;
 }
 
 function findEntryDeclarationPath(input: string, packageRoot: string, declarations: Map<string, string>): string | null
@@ -1057,8 +1323,24 @@ function createDtsProgram(
 						compilerOptions,
 						defaultHost,
 					);
+					const resolved = fallback.resolvedModule;
 
-					return { resolvedModule: fallback.resolvedModule };
+					if (resolved && resolved.extension === tsModule.Extension.Js && resolved.isExternalLibraryImport)
+					{
+						const patched = resolveNpmTypesFallback(tsModule, resolved.resolvedFileName, resolved.packageId?.name);
+						if (patched)
+						{
+							return {
+								resolvedModule: {
+									...resolved,
+									resolvedFileName: patched,
+									extension: tsModule.Extension.Dts,
+								},
+							};
+						}
+					}
+
+					return { resolvedModule: resolved };
 				}
 
 				const containingDir = path.dirname(containingFile);

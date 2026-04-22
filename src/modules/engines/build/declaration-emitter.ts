@@ -30,6 +30,7 @@ export class DeclarationEmitter
 		const bundle = await bundleDeclarations({
 			packageRoot,
 			input,
+			namespace,
 			extensionName: options.extensionName,
 			compilerOptions: options.compilerOptions,
 		});
