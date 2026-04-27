@@ -33,6 +33,7 @@ export interface PreparedBundleConfig {
 	emitDeclaration: import('./strategies/emit-declaration-strategy').EmitDeclarationConfig;
 	safeNamespaces: boolean;
 	baseline: boolean;
+	alias: boolean;
 	tests: {
 		localization: {
 			languageId: string;

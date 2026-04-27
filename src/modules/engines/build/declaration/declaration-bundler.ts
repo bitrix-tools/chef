@@ -51,13 +51,13 @@ export async function bundleDeclarations(options: DeclarationBundleOptions): Pro
 		return null;
 	}
 
-	const entryDtsPath = findEntryDeclarationPath(options.input, options.packageRoot, emitted);
+	const entryDtsPath = findEntryDeclarationPath(options.input, options.packageRoot, emitted.declarations);
 	if (!entryDtsPath)
 	{
 		return null;
 	}
 
-	const dtsProgram = createDtsProgram(tsModule, emitted, entryDtsPath);
+	const dtsProgram = createDtsProgram(tsModule, emitted.declarations, entryDtsPath);
 	const checker = dtsProgram.getTypeChecker();
 	const entryFile = dtsProgram.getSourceFile(entryDtsPath);
 
@@ -69,6 +69,9 @@ export async function bundleDeclarations(options: DeclarationBundleOptions): Pro
 	const collector = new SymbolCollector(tsModule, dtsProgram, checker, {
 		packageRoot: options.packageRoot,
 		extensionName: options.extensionName ?? null,
+		tsconfigPaths: options.compilerOptions?.paths as Record<string, string[]> | undefined,
+		tsconfigBaseUrl: options.compilerOptions?.baseUrl as string | undefined,
+		sourceImports: emitted.sourceImports,
 	});
 	const members = collector.collectFromEntry(entryFile, options.namespace);
 
@@ -95,6 +98,9 @@ interface SymbolCollectorOptions
 {
 	packageRoot: string;
 	extensionName: string | null;
+	tsconfigPaths?: Record<string, string[]>;
+	tsconfigBaseUrl?: string;
+	sourceImports?: Set<string>;
 }
 
 interface NpmPackageBuffer
@@ -112,9 +118,17 @@ class SymbolCollector
 	readonly #result: CollectedMember[] = [];
 	readonly #visitingSymbols = new Set<ts.Symbol>();
 	readonly #siblingReplacements = new Map<ts.Symbol, string>();
+	readonly #siblingNamespaces = new Map<ts.Symbol, string>();
 	readonly #options: SymbolCollectorOptions;
 	readonly #npmPackages = new Map<string, NpmPackageBuffer>();
 	readonly #npmReplacements = new Map<ts.Symbol, string>();
+	/** Maps a symbol originating from an npm package to that package's internal module name. */
+	readonly #npmPackageOfSymbol = new Map<ts.Symbol, string>();
+	/** Cache: siblingName → set of npm package names it re-exports from its own entry. */
+	readonly #siblingNpmOwnership = new Map<string, Set<string>>();
+	/** Sibling extensions whose entry we've seen imported by the current bundle. */
+	readonly #importedSiblings = new Map<string, ts.SourceFile | null>();
+	#currentNamespace = '';
 
 	constructor(tsModule: typeof ts, program: ts.Program, checker: ts.TypeChecker, options: SymbolCollectorOptions)
 	{
@@ -142,11 +156,19 @@ class SymbolCollector
 
 	collectFromEntry(entryFile: ts.SourceFile, namespace: string): CollectedMember[]
 	{
+		this.#currentNamespace = namespace;
+
 		const moduleSymbol = this.#checker.getSymbolAtLocation(entryFile);
 		if (!moduleSymbol)
 		{
 			return [];
 		}
+
+		// Register sibling extensions up-front from the original source-file imports
+		// (which the declaration emit may have stripped). This lets later npm detection
+		// check sibling ownership even if a specific npm symbol never flows through a
+		// sibling-aliased identifier in the emitted dts.
+		this.#registerSiblingsFromSourceImports();
 
 		const exports = this.#checker.getExportsOfModule(moduleSymbol);
 
@@ -158,6 +180,23 @@ class SymbolCollector
 		this.#applyCollectedReplacements(namespace);
 
 		return this.#result;
+	}
+
+	#registerSiblingsFromSourceImports(): void
+	{
+		const specs = this.#options.sourceImports;
+		if (!specs) return;
+
+		for (const spec of specs)
+		{
+			if (!isSiblingExtensionName(spec)) continue;
+			if (!PackageResolver.resolve(spec)) continue;
+
+			if (!this.#importedSiblings.has(spec))
+			{
+				this.#importedSiblings.set(spec, this.#resolveSiblingSourceFile(spec));
+			}
+		}
 	}
 
 	#applyCollectedReplacements(namespace: string): void
@@ -286,6 +325,14 @@ class SymbolCollector
 		const sourceFile = decl.getSourceFile();
 
 		const visit = (node: ts.Node): void => {
+			// Handle `import("pkg").X<...>` — rewrite only the head (everything up to `<`).
+			// Type arguments are traversed normally below so nested ImportTypeNodes are handled.
+			if (ts.isImportTypeNode(node))
+			{
+				const edit = this.#buildImportTypeEdit(node, sourceFile, textStart);
+				if (edit) edits.push(edit);
+			}
+
 			if (ts.isIdentifier(node) && this.#isReferencePosition(node))
 			{
 				const symbol = this.#checker.getSymbolAtLocation(node);
@@ -307,6 +354,163 @@ class SymbolCollector
 		visit(decl);
 
 		return edits;
+	}
+
+	#buildLocalImportTypeEdit(
+		node: ts.ImportTypeNode,
+		resolved: ts.Symbol,
+		headStart: number,
+		headEnd: number,
+		qualifierText: string,
+	): { start: number; end: number; replacement: string } | null
+	{
+		const ts = this.#ts;
+
+		// Only handle `import("./relative-path").X` — non-relative is handled elsewhere.
+		if (!ts.isLiteralTypeNode(node.argument)) return null;
+		if (!ts.isStringLiteral(node.argument.literal)) return null;
+		if (!node.argument.literal.text.startsWith('.')) return null;
+
+		// Symbol must be backed by declarations inside our own dts program (i.e. our extension's source).
+		const declarations = resolved.getDeclarations() ?? [];
+		if (declarations.length === 0) return null;
+
+		const isLocal = declarations.some((d) => {
+			const src = d.getSourceFile();
+			if (src.fileName.includes('node_modules')) return false;
+			if (isBuiltinLibFile(src)) return false;
+
+			return this.#program.getSourceFile(src.fileName) === src;
+		});
+		if (!isLocal) return null;
+
+		// Use the leftmost identifier of the qualifier as the public name.
+		// For `import("./x").Foo` → "Foo"; for `import("./x").Foo.Bar` → still rooted at "Foo".
+		const leftmost = getEntityNameLeft(ts, node.qualifier!);
+		if (!leftmost) return null;
+		const memberName = leftmost.text;
+		const restOfQualifier = qualifierText.slice(memberName.length); // ".Bar" or ""
+
+		// Make sure the symbol gets collected as a member if it isn't already.
+		if (!this.#hasCollectedMember(resolved))
+		{
+			this.#tryCollectReferencedName(leftmost);
+		}
+
+		const collected = this.#findCollectedMember(resolved);
+		if (!collected) return null;
+
+		const replacement = collected.kind === 'type'
+			? `${memberName}${restOfQualifier}`
+			: `${this.#currentNamespace}.${memberName}${restOfQualifier}`;
+
+		return { start: headStart, end: headEnd, replacement };
+	}
+
+	#hasCollectedMember(symbol: ts.Symbol): boolean
+	{
+		const key = `:${getSymbolKey(symbol)}`;
+		for (const seenKey of this.#seen)
+		{
+			if (seenKey.endsWith(key)) return true;
+		}
+
+		return false;
+	}
+
+	#findCollectedMember(symbol: ts.Symbol): CollectedMember | null
+	{
+		const ts = this.#ts;
+		const declarations = symbol.getDeclarations() ?? [];
+		if (declarations.length === 0) return null;
+
+		const targetFile = declarations[0].getSourceFile().fileName;
+		const symName = symbol.name;
+
+		for (const member of this.#result)
+		{
+			if (member.name !== symName) continue;
+			if (!member.sourceDecl) continue;
+
+			const memberFile = member.sourceDecl.getSourceFile().fileName;
+			if (memberFile === targetFile) return member;
+		}
+
+		void ts;
+
+		return null;
+	}
+
+	#buildImportTypeEdit(
+		node: ts.ImportTypeNode,
+		sourceFile: ts.SourceFile,
+		textStart: number,
+	): { start: number; end: number; replacement: string } | null
+	{
+		const ts = this.#ts;
+
+		if (!node.qualifier) return null;
+
+		const qualifierLeft = getEntityNameLeft(ts, node.qualifier);
+		if (!qualifierLeft) return null;
+
+		const symbol = this.#checker.getSymbolAtLocation(qualifierLeft);
+		if (!symbol) return null;
+
+		const resolved = this.#resolveAliasDeep(symbol) ?? symbol;
+
+		// The "head" of an ImportTypeNode is the part before type arguments:
+		// `import("pkg").QualifierPath` — everything up to `<` (or the end of node if no `<`).
+		const headStart = node.getStart(sourceFile, false) - textStart;
+		const headEnd = node.typeArguments && node.typeArguments.length > 0
+			? (node.typeArguments.pos - 1) - textStart // position of '<'
+			: node.getEnd() - textStart;
+		const qualifierText = node.qualifier.getText(sourceFile);
+
+		// Local file (relative import like `import("./header").Data`) — the symbol lives
+		// in our own dts graph. We may have already collected it as a member or need to.
+		const localEdit = this.#buildLocalImportTypeEdit(node, resolved, headStart, headEnd, qualifierText);
+		if (localEdit) return localEdit;
+
+		// Sibling extension — rewrite the head as `BX.Namespace.QualifierPath`.
+		const siblingNs = this.#siblingNamespaces.get(symbol) ?? this.#siblingNamespaces.get(resolved);
+		if (siblingNs)
+		{
+			return {
+				start: headStart,
+				end: headEnd,
+				replacement: `${siblingNs}.${qualifierText}`,
+			};
+		}
+
+		const pkgName = this.#npmPackageOfSymbol.get(symbol) ?? this.#npmPackageOfSymbol.get(resolved);
+		if (!pkgName || !this.#options.extensionName) return null;
+
+		// Sibling owns this npm package → rewrite the head as `BX.<Ns>.QualifierPath`.
+		const owner = this.#findSiblingOwnerForPackage(pkgName);
+		if (owner)
+		{
+			return {
+				start: headStart,
+				end: headEnd,
+				replacement: `${owner.namespace}.${qualifierText}`,
+			};
+		}
+
+		// Fallback: rewrite just the module literal inside `import("...")`.
+		if (!ts.isLiteralTypeNode(node.argument)) return null;
+		if (!ts.isStringLiteral(node.argument.literal)) return null;
+
+		const literal = node.argument.literal;
+		const literalStart = literal.getStart(sourceFile, false) - textStart;
+		const literalEnd = literal.getEnd() - textStart;
+		const containerModule = `${this.#options.extensionName}/internal/${pkgName}`;
+
+		return {
+			start: literalStart,
+			end: literalEnd,
+			replacement: `'${containerModule}'`,
+		};
 	}
 
 	#isReferencePosition(node: ts.Identifier): boolean
@@ -462,6 +666,15 @@ class SymbolCollector
 				}
 			}
 
+			if (ts.isImportTypeNode(node) && node.qualifier)
+			{
+				const nameNode = getEntityNameLeft(ts, node.qualifier);
+				if (nameNode)
+				{
+					this.#tryCollectReferencedName(nameNode);
+				}
+			}
+
 			ts.forEachChild(node, visit);
 		};
 
@@ -598,11 +811,30 @@ class SymbolCollector
 
 		const targetName = resolved.name && resolved.name !== 'default' ? resolved.name : nodeName;
 
+		// If an imported sibling extension owns types from this npm package, reference
+		// its ambient namespace (BX.<Namespace>.<Type>) instead of inlining a duplicate
+		// copy into our own bundle. The sibling's hand-written entry (or generated dts)
+		// is expected to re-declare the type under `declare global namespace BX.<Ns> { ... }`.
+		const owner = this.#findSiblingOwnerForPackage(pkgName);
+
+		if (owner)
+		{
+			const replacement = `${owner.namespace}.${targetName}`;
+			this.#npmReplacements.set(symbol, replacement);
+			this.#npmReplacements.set(resolved, replacement);
+			this.#npmPackageOfSymbol.set(symbol, pkgName);
+			this.#npmPackageOfSymbol.set(resolved, pkgName);
+
+			return;
+		}
+
 		const containerModule = `${this.#options.extensionName}/internal/${pkgName}`;
 		const replacement = `import('${containerModule}').${targetName}`;
 
 		this.#npmReplacements.set(symbol, replacement);
 		this.#npmReplacements.set(resolved, replacement);
+		this.#npmPackageOfSymbol.set(symbol, pkgName);
+		this.#npmPackageOfSymbol.set(resolved, pkgName);
 
 		const buffer = this.#getOrCreateNpmBuffer(pkgName);
 		this.#inlineNpmDeclarations(resolved, buffer, targetName);
@@ -805,11 +1037,104 @@ class SymbolCollector
 			const replacement = `${siblingNamespace}.${targetName}`;
 
 			this.#siblingReplacements.set(symbol, replacement);
+			this.#siblingNamespaces.set(symbol, siblingNamespace);
+
+			// Record that this sibling was imported; later we can check which npm packages
+			// it owns so that we reference them through the sibling instead of inlining.
+			if (!this.#importedSiblings.has(moduleSpecifier))
+			{
+				this.#importedSiblings.set(moduleSpecifier, this.#resolveSiblingSourceFile(moduleSpecifier));
+			}
 
 			return true;
 		}
 
 		return false;
+	}
+
+	#resolveSiblingSourceFile(siblingName: string): ts.SourceFile | null
+	{
+		const paths = this.#options.tsconfigPaths;
+		if (!paths) return null;
+
+		const mapped = paths[siblingName];
+		if (!mapped || mapped.length === 0) return null;
+
+		const baseUrl = this.#options.tsconfigBaseUrl ?? this.#options.packageRoot;
+		const ts = this.#ts;
+
+		for (const p of mapped)
+		{
+			const absolute = path.isAbsolute(p) ? p : path.resolve(baseUrl, p);
+
+			// Try to fetch from the in-memory dts program first (faster, already parsed).
+			const inProgram = this.#program.getSourceFile(absolute);
+			if (inProgram) return inProgram;
+
+			// Fallback: read the file from disk and parse it ad-hoc — we only need to
+			// inspect its top-level imports/exports to determine npm ownership.
+			if (fs.existsSync(absolute))
+			{
+				const text = fs.readFileSync(absolute, 'utf-8');
+
+				return ts.createSourceFile(absolute, text, ts.ScriptTarget.ESNext, true, ts.ScriptKind.TS);
+			}
+		}
+
+		return null;
+	}
+
+	#getSiblingNpmOwnership(siblingName: string, source: ts.SourceFile): Set<string>
+	{
+		let cached = this.#siblingNpmOwnership.get(siblingName);
+		if (cached) return cached;
+
+		const ts = this.#ts;
+		cached = new Set<string>();
+
+		for (const stmt of source.statements)
+		{
+			const spec = getTopLevelModuleSpecifier(ts, stmt);
+			if (!spec) continue;
+			if (spec.startsWith('.')) continue;
+			if (isSiblingExtensionName(spec)) continue;
+			const pkg = normalizeNpmPackageName(spec);
+			if (pkg) cached.add(pkg);
+		}
+
+		this.#siblingNpmOwnership.set(siblingName, cached);
+
+		return cached;
+	}
+
+	#findSiblingOwnerForPackage(pkgName: string): { siblingName: string; namespace: string } | null
+	{
+		const pick = (siblingName: string): { siblingName: string; namespace: string } | null => {
+			const pkg = PackageResolver.resolve(siblingName);
+			if (!pkg) return null;
+			const namespace = pkg.getGlobal()[pkg.getName()];
+			if (!namespace || namespace === 'window') return null;
+
+			return { siblingName, namespace };
+		};
+
+		// Direct ownership: sibling entry imports the npm package by name.
+		for (const [siblingName, source] of this.#importedSiblings)
+		{
+			if (!source) continue;
+			const ownership = this.#getSiblingNpmOwnership(siblingName, source);
+			if (ownership.has(pkgName)) return pick(siblingName);
+		}
+
+		// Transitive ownership: when there's a single imported sibling and the npm
+		// symbol is unowned by anyone else, treat the sibling as the owner. This
+		// covers transitive npm packages (e.g. sibling imports `vue`, the bundled
+		// types come from `@vue/runtime-core`) without false positives across
+		// multiple unrelated siblings.
+		const siblings = [...this.#importedSiblings.entries()].filter(([, src]) => src !== null);
+		if (siblings.length === 1) return pick(siblings[0][0]);
+
+		return null;
 	}
 
 	#collectBuiltinAlias(originalSymbol: ts.Symbol, aliasName: string, referenceNode: ts.Node): void
@@ -1093,10 +1418,16 @@ function dropPrivateIdentifierLines(text: string): string
 		.join('\n');
 }
 
+interface EmitResult
+{
+	declarations: Map<string, string>;
+	sourceImports: Set<string>;
+}
+
 async function emitSourceDeclarations(
 	tsModule: typeof ts,
 	options: DeclarationBundleOptions,
-): Promise<Map<string, string> | null>
+): Promise<EmitResult | null>
 {
 	const { packageRoot, compilerOptions: externalOptions } = options;
 	const sourceDir = path.join(packageRoot, 'src');
@@ -1106,8 +1437,8 @@ async function emitSourceDeclarations(
 		return null;
 	}
 
-	const tsExtensions = ['.ts', '.tsx', '.mts', '.cts'];
-	const rootNames = collectSourceFiles(sourceDir, tsExtensions);
+	const sourceExtensions = ['.ts', '.tsx', '.mts', '.cts'];
+	const rootNames = collectSourceFiles(sourceDir, sourceExtensions);
 
 	if (rootNames.length === 0)
 	{
@@ -1168,7 +1499,21 @@ async function emitSourceDeclarations(
 	const program = tsModule.createProgram(rootNames, compilerOptions, host);
 	program.emit();
 
-	return declarations.size > 0 ? declarations : null;
+	// Collect module specifiers from source files so we know about sibling imports,
+	// even when TS strips them during declaration emit.
+	const sourceImports = new Set<string>();
+	for (const rootName of rootNames)
+	{
+		const src = program.getSourceFile(rootName);
+		if (!src) continue;
+		for (const stmt of src.statements)
+		{
+			const spec = getTopLevelModuleSpecifier(tsModule, stmt);
+			if (spec) sourceImports.add(spec);
+		}
+	}
+
+	return declarations.size > 0 ? { declarations, sourceImports } : null;
 }
 
 function resolveNpmTypesFallback(tsModule: typeof ts, jsFilePath: string, packageName: string | undefined): string | null
@@ -1227,7 +1572,8 @@ function resolveNpmTypesFallback(tsModule: typeof ts, jsFilePath: string, packag
 function findEntryDeclarationPath(input: string, packageRoot: string, declarations: Map<string, string>): string | null
 {
 	const outDir = path.join(packageRoot, 'dist');
-	const relative = path.relative(packageRoot, input).replace(/\.tsx?$/, '.d.ts');
+	const sourceExtRe = /\.(?:tsx?|mts|cts|jsx?|mjs|cjs)$/;
+	const relative = path.relative(packageRoot, input).replace(sourceExtRe, '.d.ts');
 	const expected = path.normalize(path.join(outDir, relative));
 
 	if (declarations.has(expected))
@@ -1235,7 +1581,7 @@ function findEntryDeclarationPath(input: string, packageRoot: string, declaratio
 		return expected;
 	}
 
-	const basename = path.basename(input).replace(/\.tsx?$/, '.d.ts');
+	const basename = path.basename(input).replace(sourceExtRe, '.d.ts');
 	for (const key of declarations.keys())
 	{
 		if (path.basename(key) === basename)
@@ -1412,6 +1758,36 @@ function isBuiltinLibFile(src: ts.SourceFile): boolean
 }
 
 const EXTENSION_NAME_PATTERN = /^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)+$/;
+
+function getTopLevelModuleSpecifier(tsModule: typeof ts, stmt: ts.Statement): string | null
+{
+	if (tsModule.isImportDeclaration(stmt) && tsModule.isStringLiteral(stmt.moduleSpecifier))
+	{
+		return stmt.moduleSpecifier.text;
+	}
+
+	if (tsModule.isExportDeclaration(stmt) && stmt.moduleSpecifier && tsModule.isStringLiteral(stmt.moduleSpecifier))
+	{
+		return stmt.moduleSpecifier.text;
+	}
+
+	return null;
+}
+
+function normalizeNpmPackageName(specifier: string): string | null
+{
+	// `@scope/pkg/subpath` → `@scope/pkg`; `pkg/subpath` → `pkg`.
+	if (specifier.startsWith('@'))
+	{
+		const match = /^(@[^/]+\/[^/]+)/.exec(specifier);
+
+		return match ? match[1] : null;
+	}
+
+	const match = /^([^/]+)/.exec(specifier);
+
+	return match ? match[1] : null;
+}
 
 function isSiblingExtensionName(name: string): boolean
 {

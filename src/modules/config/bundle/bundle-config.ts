@@ -42,6 +42,16 @@ export interface BundleConfig {
 	};
 	rebuild?: string[];
 	emitDeclaration?: boolean | 'ambient' | 'module' | 'both' | { enabled?: boolean; mode?: 'ambient' | 'module' | 'both' };
+	/**
+	 * Whether `chef aliases` should add this extension to `paths` in
+	 * `aliases.tsconfig.json`. Default: `true`.
+	 *
+	 * Set to `false` for extensions that publish their own ambient module
+	 * declaration (`declare module '<ext>' { ... }`) — a paths mapping would
+	 * make the file simultaneously a primary module and an augmentation of
+	 * itself, leading to TypeScript errors.
+	 */
+	alias?: boolean;
 	safeNamespaces?: boolean;
 	baseline?: boolean;
 	production?: boolean;

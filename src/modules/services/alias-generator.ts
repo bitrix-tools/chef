@@ -55,17 +55,17 @@ export class AliasGenerator
 		await new Promise<void>((resolve, reject) => {
 			extensionsStream
 				.on('data', ({ extension }: { extension: BasePackage }) => {
-					if (EXTENSION_NAME_PATTERN.test(extension.getName()))
-					{
-						const relativePath = path.relative(
-							rootPath,
-							extension.getInputPath(),
-						);
-						tsconfig.compilerOptions.paths![extension.getName()] = [`./${relativePath}`];
+					if (!EXTENSION_NAME_PATTERN.test(extension.getName())) return;
+					if (extension.getBundleConfig().get('alias') === false) return;
 
-						aliasesCount++;
-						onProgress?.(aliasesCount);
-					}
+					const relativePath = path.relative(
+						rootPath,
+						extension.getInputPath(),
+					);
+					tsconfig.compilerOptions.paths![extension.getName()] = [`./${relativePath}`];
+
+					aliasesCount++;
+					onProgress?.(aliasesCount);
 				})
 				.on('done', () => resolve())
 				.on('error', (err: Error) => reject(err));
@@ -96,12 +96,12 @@ export class AliasGenerator
 			const extension = packageFactory.create({ path: absolutePath });
 			const name = extension.getName();
 
-			if (name && EXTENSION_NAME_PATTERN.test(name))
-			{
-				const relativePath = path.relative(rootPath, extension.getInputPath());
-				aliases.compilerOptions.paths[name] = [`./${relativePath}`];
-				addedNames.push(name);
-			}
+			if (!name || !EXTENSION_NAME_PATTERN.test(name)) continue;
+			if (extension.getBundleConfig().get('alias') === false) continue;
+
+			const relativePath = path.relative(rootPath, extension.getInputPath());
+			aliases.compilerOptions.paths[name] = [`./${relativePath}`];
+			addedNames.push(name);
 		}
 
 		const removedNames: string[] = [];
