@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.9.0 <Badge type="tip" text="4/29/2026" />
+
+- Rewrote the .d.ts emitter on top of the TypeScript Compiler API: AST-positional edits, proper npm type resolution via sibling extensions, ImportTypeNode support, emit for entries that import outside packageRoot
+- Transitively walk sibling npm imports when matching ownership — types from sub-packages (e.g. @vue/runtime-core behind vue) now reference the sibling's ambient namespace instead of being inlined
+- bundle.config: new `types` field pointing at a .d.ts file — `chef aliases` and webpack resolvers use it instead of `input` for design-time resolution
+
 ## v1.8.3 <Badge type="tip" text="4/17/2026" />
 
 • standalone: npm packages in remap now resolve through Rollup's node-resolve (ESM instead of CJS)

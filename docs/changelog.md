@@ -1,5 +1,11 @@
 # История изменений
 
+## v1.9.0 <Badge type="tip" text="29.04.2026" />
+
+- Полная переработка эмиттера .d.ts на TypeScript Compiler API: правки через AST по точным позициям, корректный резолв npm-типов через sibling-экстеншены, поддержка ImportTypeNode, эмит для entry-файлов с импортами за пределами packageRoot
+- Транзитивный обход npm-импортов sibling-экстеншенов: типы из под-пакетов (например, @vue/runtime-core за vue) теперь корректно ссылаются на ambient-namespace sibling'а вместо инлайн-копии
+- bundle.config: новое поле `types` для указания .d.ts файла — `chef aliases` и webpack-резолверы используют его вместо `input` для design-time резолва
+
 ## v1.8.3 <Badge type="tip" text="17.04.2026" />
 
 • standalone: npm-пакеты в remap резолвятся через Rollup node-resolve (ESM вместо CJS)
