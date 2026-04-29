@@ -3,6 +3,13 @@ import type { MinifyOptions } from 'terser';
 
 export interface BundleConfig {
 	input: string;
+	/**
+	 * Path to a TypeScript declaration file (`.d.ts`) that exposes the
+	 * extension's design-time types. Used by `chef aliases` and
+	 * `webpack.config.js` to resolve IDE imports of this extension to the
+	 * declaration instead of `input`. Has no effect on the runtime build.
+	 */
+	types?: string;
 	output: string | { js: string; css: string };
 	namespace?: string;
 	concat?: {

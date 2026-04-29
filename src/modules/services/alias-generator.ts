@@ -58,10 +58,8 @@ export class AliasGenerator
 					if (!EXTENSION_NAME_PATTERN.test(extension.getName())) return;
 					if (extension.getBundleConfig().get('alias') === false) return;
 
-					const relativePath = path.relative(
-						rootPath,
-						extension.getInputPath(),
-					);
+					const aliasTarget = extension.getTypesPath() ?? extension.getInputPath();
+					const relativePath = path.relative(rootPath, aliasTarget);
 					tsconfig.compilerOptions.paths![extension.getName()] = [`./${relativePath}`];
 
 					aliasesCount++;
@@ -99,7 +97,8 @@ export class AliasGenerator
 			if (!name || !EXTENSION_NAME_PATTERN.test(name)) continue;
 			if (extension.getBundleConfig().get('alias') === false) continue;
 
-			const relativePath = path.relative(rootPath, extension.getInputPath());
+			const aliasTarget = extension.getTypesPath() ?? extension.getInputPath();
+			const relativePath = path.relative(rootPath, aliasTarget);
 			aliases.compilerOptions.paths[name] = [`./${relativePath}`];
 			addedNames.push(name);
 		}

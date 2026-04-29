@@ -1,4 +1,5 @@
 export * from './input-strategy';
+export * from './types-strategy';
 export * from './output-strategy';
 export * from './namespace-strategy';
 export * from './namespace-function-strategy';

@@ -226,6 +226,25 @@ export abstract class BasePackage
 		return path.join(this.getPath(), this.getBundleConfig().get('input'));
 	}
 
+	/**
+	 * Path to a TypeScript declaration file for the extension's design-time
+	 * type surface. Returns null when the bundle config has no `types` field.
+	 *
+	 * IDE-facing tooling (`chef aliases`, the project's `webpack.config.js`)
+	 * prefers this path over `getInputPath()` so that PhpStorm/WebStorm and
+	 * `tsc` resolve the extension to its declaration instead of the source.
+	 */
+	getTypesPath(): string | null
+	{
+		const types = this.getBundleConfig().get('types');
+		if (!types)
+		{
+			return null;
+		}
+
+		return path.join(this.getPath(), types);
+	}
+
 	getOutputJsPath(): string
 	{
 		return path.join(this.getPath(), this.getBundleConfig().get('output').js);

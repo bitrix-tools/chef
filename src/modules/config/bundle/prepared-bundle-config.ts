@@ -3,6 +3,7 @@ import type { MinifyOptions } from 'terser';
 
 export interface PreparedBundleConfig {
 	input: string;
+	types: string | null;
 	output: { js: string; css: string };
 	namespace: string;
 	concat: {
