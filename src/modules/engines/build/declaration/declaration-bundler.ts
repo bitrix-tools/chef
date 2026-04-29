@@ -51,13 +51,19 @@ export async function bundleDeclarations(options: DeclarationBundleOptions): Pro
 		return null;
 	}
 
-	const entryDtsPath = findEntryDeclarationPath(options.input, options.packageRoot, emitted.declarations);
+	const entryDtsPath = findEntryDeclarationPath(
+		options.input,
+		options.packageRoot,
+		emitted.commonSourceDirectory,
+		emitted.declarations,
+	);
+
 	if (!entryDtsPath)
 	{
 		return null;
 	}
 
-	const dtsProgram = createDtsProgram(tsModule, emitted.declarations, entryDtsPath);
+	const dtsProgram = createDtsProgram(tsModule, emitted.declarations, entryDtsPath, emitted.sourceToDts);
 	const checker = dtsProgram.getTypeChecker();
 	const entryFile = dtsProgram.getSourceFile(entryDtsPath);
 
@@ -1422,6 +1428,9 @@ interface EmitResult
 {
 	declarations: Map<string, string>;
 	sourceImports: Set<string>;
+	commonSourceDirectory: string;
+	/** Maps original .ts source file path → emitted .d.ts path inside `declarations`. */
+	sourceToDts: Map<string, string>;
 }
 
 async function emitSourceDeclarations(
@@ -1454,7 +1463,18 @@ async function emitSourceDeclarations(
 		declaration: true,
 		emitDeclarationOnly: true,
 		skipLibCheck: true,
-		rootDir: packageRoot,
+		// No `rootDir`: when an entry imports files outside `packageRoot`
+		// (e.g. `main.core.minimal` pulls `../../src/lib/...` from `main.core`),
+		// fixing rootDir to packageRoot makes TS skip declaration emit for those
+		// files. Letting TS infer the common source directory keeps relative
+		// `import` paths inside emitted .d.ts consistent with the source tree.
+		//
+		// `outDir` is virtual: TS uses it only to compute output paths it passes
+		// to `host.writeFile`, which we override to capture into an in-memory
+		// Map below. Nothing is written to disk here — the user's actual
+		// `bundle.config.output` is honoured separately by the `DeclarationEmitter`
+		// facade, which writes the final bundled .d.ts next to the .js bundle.
+		// `<packageRoot>/dist` is just a stable virtual namespace.
 		outDir: path.join(packageRoot, 'dist'),
 		noEmitOnError: false,
 	};
@@ -1513,7 +1533,35 @@ async function emitSourceDeclarations(
 		}
 	}
 
-	return declarations.size > 0 ? { declarations, sourceImports } : null;
+	// `getCommonSourceDirectory` is internal API, not on the public Program type.
+	const commonSourceDirectory = (program as unknown as { getCommonSourceDirectory(): string })
+		.getCommonSourceDirectory();
+
+	// Build source-to-dts mapping: for each input .ts file, compute where TS would emit
+	// the corresponding .d.ts. This lets the secondary dts program resolve `import`
+	// paths that are written relative to the original source location.
+	const sourceToDts = new Map<string, string>();
+	for (const sourceFile of program.getSourceFiles())
+	{
+		if (sourceFile.isDeclarationFile) continue;
+		const fileName = sourceFile.fileName;
+		if (!fileName.endsWith('.ts') && !fileName.endsWith('.tsx') && !fileName.endsWith('.mts') && !fileName.endsWith('.cts')) continue;
+
+		const relative = path.relative(commonSourceDirectory, fileName);
+		if (relative.startsWith('..')) continue;
+
+		const dtsRelative = relative.replace(/\.(?:tsx?|mts|cts)$/, '.d.ts');
+		const dtsPath = path.normalize(path.join(compilerOptions.outDir!, dtsRelative));
+
+		if (declarations.has(dtsPath))
+		{
+			sourceToDts.set(path.normalize(fileName), dtsPath);
+		}
+	}
+
+	return declarations.size > 0
+		? { declarations, sourceImports, commonSourceDirectory, sourceToDts }
+		: null;
 }
 
 function resolveNpmTypesFallback(tsModule: typeof ts, jsFilePath: string, packageName: string | undefined): string | null
@@ -1569,11 +1617,21 @@ function resolveNpmTypesFallback(tsModule: typeof ts, jsFilePath: string, packag
 	return null;
 }
 
-function findEntryDeclarationPath(input: string, packageRoot: string, declarations: Map<string, string>): string | null
+function findEntryDeclarationPath(
+	input: string,
+	packageRoot: string,
+	commonSourceDirectory: string,
+	declarations: Map<string, string>,
+): string | null
 {
 	const outDir = path.join(packageRoot, 'dist');
 	const sourceExtRe = /\.(?:tsx?|mts|cts|jsx?|mjs|cjs)$/;
-	const relative = path.relative(packageRoot, input).replace(sourceExtRe, '.d.ts');
+
+	// TS emits files at `outDir/<path-relative-to-commonSourceDirectory>/<file>.d.ts`.
+	// When `rootDir` is not set, TS infers `commonSourceDirectory` from all input files
+	// (the deepest common ancestor). For `main.core.minimal` whose entry imports from
+	// `../../src/lib/...`, this becomes the parent extension's root, not the minimal's.
+	const relative = path.relative(commonSourceDirectory, input).replace(sourceExtRe, '.d.ts');
 	const expected = path.normalize(path.join(outDir, relative));
 
 	if (declarations.has(expected))
@@ -1581,6 +1639,15 @@ function findEntryDeclarationPath(input: string, packageRoot: string, declaratio
 		return expected;
 	}
 
+	// Fallback: legacy layout where rootDir was packageRoot.
+	const legacyRelative = path.relative(packageRoot, input).replace(sourceExtRe, '.d.ts');
+	const legacyExpected = path.normalize(path.join(outDir, legacyRelative));
+	if (declarations.has(legacyExpected))
+	{
+		return legacyExpected;
+	}
+
+	// Last resort: match by basename.
 	const basename = path.basename(input).replace(sourceExtRe, '.d.ts');
 	for (const key of declarations.keys())
 	{
@@ -1597,6 +1664,7 @@ function createDtsProgram(
 	tsModule: typeof ts,
 	declarations: Map<string, string>,
 	_entryPath: string,
+	sourceToDts: Map<string, string>,
 ): ts.Program
 {
 	const compilerOptions: ts.CompilerOptions = {
@@ -1699,6 +1767,7 @@ function createDtsProgram(
 					path.join(baseResolved, 'index.ts'),
 				];
 
+				// First pass: direct lookup in our in-memory dts map.
 				for (const candidate of candidates)
 				{
 					const normalized = path.normalize(candidate);
@@ -1707,6 +1776,26 @@ function createDtsProgram(
 						return {
 							resolvedModule: {
 								resolvedFileName: normalized,
+								extension: tsModule.Extension.Dts,
+								isExternalLibraryImport: false,
+							},
+						};
+					}
+				}
+
+				// Second pass: the path the import is written against may correspond
+				// to the *original* source location (TS emits relative paths from the
+				// source file's perspective). Check if any candidate maps via
+				// sourceToDts to an emitted .d.ts that we have in memory.
+				for (const candidate of candidates)
+				{
+					const normalized = path.normalize(candidate);
+					const dtsPath = sourceToDts.get(normalized);
+					if (dtsPath && sources.has(dtsPath))
+					{
+						return {
+							resolvedModule: {
+								resolvedFileName: dtsPath,
 								extension: tsModule.Extension.Dts,
 								isExternalLibraryImport: false,
 							},
