@@ -1095,8 +1095,32 @@ class SymbolCollector
 		let cached = this.#siblingNpmOwnership.get(siblingName);
 		if (cached) return cached;
 
-		const ts = this.#ts;
+		// Transitively walk the top-level imports of the sibling's entry file:
+		// for every imported npm package (`vue`, `pinia`, ...) we follow its
+		// own top-level imports too. This is what lets us match symbols whose
+		// physical declarations live in a sub-package — `DefineComponent`
+		// re-exported by `vue` actually originates in `@vue/runtime-core`, so
+		// without the transitive walk the sibling wouldn't be seen as its
+		// owner and the type would be inlined.
 		cached = new Set<string>();
+		this.#collectNpmOwnershipRecursive(source, cached, new Set<string>());
+
+		this.#siblingNpmOwnership.set(siblingName, cached);
+
+		return cached;
+	}
+
+	#collectNpmOwnershipRecursive(
+		source: ts.SourceFile,
+		owned: Set<string>,
+		visitedFiles: Set<string>,
+	): void
+	{
+		if (visitedFiles.has(source.fileName)) return;
+		visitedFiles.add(source.fileName);
+
+		const ts = this.#ts;
+		const containingFile = source.fileName;
 
 		for (const stmt of source.statements)
 		{
@@ -1104,13 +1128,64 @@ class SymbolCollector
 			if (!spec) continue;
 			if (spec.startsWith('.')) continue;
 			if (isSiblingExtensionName(spec)) continue;
-			const pkg = normalizeNpmPackageName(spec);
-			if (pkg) cached.add(pkg);
+
+			const pkgName = normalizeNpmPackageName(spec);
+			if (!pkgName) continue;
+
+			const alreadyKnown = owned.has(pkgName);
+			owned.add(pkgName);
+
+			// Only recurse into a package the first time we see it.
+			if (alreadyKnown) continue;
+
+			const resolved = this.#resolveModuleFromFile(spec, containingFile);
+			if (!resolved) continue;
+
+			const resolvedSource = this.#getOrLoadSourceFile(resolved);
+			if (!resolvedSource) continue;
+
+			this.#collectNpmOwnershipRecursive(resolvedSource, owned, visitedFiles);
 		}
+	}
 
-		this.#siblingNpmOwnership.set(siblingName, cached);
+	#resolveModuleFromFile(moduleSpecifier: string, containingFile: string): string | null
+	{
+		const ts = this.#ts;
+		const compilerOptions = this.#program.getCompilerOptions();
 
-		return cached;
+		const result = ts.resolveModuleName(
+			moduleSpecifier,
+			containingFile,
+			compilerOptions,
+			ts.sys,
+		);
+
+		const fileName = result.resolvedModule?.resolvedFileName;
+		if (!fileName) return null;
+
+		// We only care about declaration-carrying files inside an npm package —
+		// a resolution that lands in TypeScript's lib bundle tells us nothing
+		// about transitive ownership.
+		if (!/[\\/]node_modules[\\/]/.test(fileName)) return null;
+
+		return fileName;
+	}
+
+	#getOrLoadSourceFile(fileName: string): ts.SourceFile | null
+	{
+		const ts = this.#ts;
+
+		const inProgram = this.#program.getSourceFile(fileName);
+		if (inProgram) return inProgram;
+
+		if (!fs.existsSync(fileName)) return null;
+
+		const text = fs.readFileSync(fileName, 'utf-8');
+		const scriptKind = fileName.endsWith('.d.ts') || fileName.endsWith('.ts')
+			? ts.ScriptKind.TS
+			: ts.ScriptKind.JS;
+
+		return ts.createSourceFile(fileName, text, ts.ScriptTarget.ESNext, true, scriptKind);
 	}
 
 	#findSiblingOwnerForPackage(pkgName: string): { siblingName: string; namespace: string } | null
