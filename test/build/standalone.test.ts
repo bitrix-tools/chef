@@ -443,6 +443,67 @@ describe('standalone build', () => {
 		});
 	});
 
+	describe('exposeNamespaces with npm remap', () => {
+		const dir = extensionPath('standalone-expose-remap-npm');
+
+		beforeEach(() => cleanDist(dir));
+		afterEach(() => cleanDist(dir));
+
+		it('should expose npm-remapped dependency under source extension namespace', async () => {
+			const bundleConfig = loadBundleConfig(dir);
+			const options = getBuildOptions(dir, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+			assert.notInclude(result.dependencies, 'ui.npm-wrapper-types', 'Remapped dependency should not be external');
+
+			const jsOutput = path.join(dir, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(content, 'ExposeRemapNpmApp', 'Bundle should contain own class');
+			assert.include(content, 'Hello', 'Bundle should contain inlined npm package code');
+			assert.include(content, 'globalThis.BX.UI.NpmWrapperTypes', 'Bundle should expose npm-remapped exports under source extension namespace');
+			assert.match(content, /globalThis\.BX\.UI\.NpmWrapperTypes\[k\] = v/, 'Bundle should assign npm exports to namespace');
+		});
+
+		it('should not expose npm-remapped dependency when exposeNamespaces is disabled', async () => {
+			const bundleConfig = loadBundleConfig(dir);
+			const options = getBuildOptions(dir, bundleConfig);
+			options.standaloneExposeNamespaces = false;
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+
+			const jsOutput = path.join(dir, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(content, 'ExposeRemapNpmApp', 'Bundle should contain own class');
+			assert.include(content, 'Hello', 'Bundle should contain inlined npm package code');
+			assert.notInclude(content, 'globalThis.BX.UI.NpmWrapperTypes', 'Bundle should not expose namespace');
+		});
+	});
+
+	describe('exposeNamespaces with glob npm remap', () => {
+		const dir = extensionPath('standalone-expose-remap-npm-glob');
+
+		beforeEach(() => cleanDist(dir));
+		afterEach(() => cleanDist(dir));
+
+		it('should expose glob-npm-remapped dependency under source extension namespace', async () => {
+			const bundleConfig = loadBundleConfig(dir);
+			const options = getBuildOptions(dir, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+			assert.notInclude(result.dependencies, 'ui.npm-wrapper-types.greet', 'Remapped dependency should not be external');
+
+			const jsOutput = path.join(dir, 'dist', 'bundle.js');
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(content, 'ExposeRemapNpmGlobApp', 'Bundle should contain own class');
+			assert.include(content, 'Hi,', 'Bundle should contain inlined npm package code');
+			assert.include(content, 'globalThis.BX.UI.NpmWrapperTypes.Greet', 'Bundle should expose glob-npm-remapped exports under source extension namespace');
+			assert.match(content, /globalThis\.BX\.UI\.NpmWrapperTypes\.Greet\[k\] = v/, 'Bundle should assign npm exports to namespace');
+		});
+	});
+
 	describe('exports restoration', () => {
 		const dir = extensionPath('standalone-basic');
 

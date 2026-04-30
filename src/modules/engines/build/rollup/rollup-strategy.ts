@@ -516,7 +516,25 @@ export class RollupBuildStrategy extends BuildStrategy
 						? path.join(fromExtension.getPath(), 'src', '_resolve.js')
 						: importer;
 
-					return this.resolve(remapResult.npm, resolveFrom, { skipSelf: true });
+					const npmResolved = await this.resolve(remapResult.npm, resolveFrom, { skipSelf: true });
+
+					if (options.exposeNamespaces && npmResolved && !npmResolved.external)
+					{
+						const sourceExtension = PackageResolver.resolve(id);
+						const namespace = sourceExtension?.getBundleConfig().get('namespace');
+						if (namespace && namespace !== 'window' && namespace !== options.currentNamespace)
+						{
+							const proxyId = `\0expose-npm:${id}`;
+							if (!proxyModules.has(proxyId))
+							{
+								proxyModules.set(proxyId, RollupBuildStrategy.#buildExposeProxy(npmResolved.id, namespace));
+							}
+
+							return proxyId;
+						}
+					}
+
+					return npmResolved;
 				}
 
 				const extensionName = remapResult.extension ?? id;
