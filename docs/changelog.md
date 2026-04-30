@@ -1,5 +1,9 @@
 # История изменений
 
+## v1.9.1 <Badge type="tip" text="30.04.2026" />
+
+Глобальные неймспейсы для зависимостей, заремапленных на npm-пакеты: при включённом standalone.exposeNamespaces экспорты npm-пакета теперь регистрируются под неймспейсом исходного расширения (например, ui.lexical.core → globalThis.BX.UI.Lexical.Core).
+
 ## v1.9.0 <Badge type="tip" text="29.04.2026" />
 
 - Полная переработка эмиттера .d.ts на TypeScript Compiler API: правки через AST по точным позициям, корректный резолв npm-типов через sibling-экстеншены, поддержка ImportTypeNode, эмит для entry-файлов с импортами за пределами packageRoot

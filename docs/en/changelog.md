@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.9.1 <Badge type="tip" text="4/30/2026" />
+
+Global namespaces for npm-remapped dependencies: when standalone.exposeNamespaces is enabled, npm package exports are now registered under the source extension namespace (e.g. ui.lexical.core → globalThis.BX.UI.Lexical.Core).
+
 ## v1.9.0 <Badge type="tip" text="4/29/2026" />
 
 - Rewrote the .d.ts emitter on top of the TypeScript Compiler API: AST-positional edits, proper npm type resolution via sibling extensions, ImportTypeNode support, emit for entries that import outside packageRoot
