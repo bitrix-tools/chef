@@ -86,6 +86,39 @@ chef test vendor.my-extension --project chromium
 
 In `--debug` mode, source maps are enabled and DevTools are opened — you can set breakpoints directly in your TypeScript source code.
 
+## Bulk Runs
+
+`chef test` without arguments or with a glob pattern (`im.v2.**`) walks through every matching extension. Extensions without tests are skipped silently — only those with tests or problems show up in the output.
+
+Browser console output is hidden by default to keep bulk reports clean. Add `--console` if you need it:
+
+```bash
+chef test im.v2.** --console
+```
+
+### Task Statuses
+
+Chef shows the failure reason inline next to each extension:
+
+| Status | Meaning |
+|--------|---------|
+| `✓ Unit tests` | All tests passed |
+| `✗ Unit tests (3 failed)` | Some tests failed, the number is how many |
+| `✗ Unit tests (build failed)` | The test bundle did not compile (Rollup) |
+| `✗ Unit tests (crashed before any tests ran)` | Crashed before the first `it` — usually a setup error |
+| `⚠ Unit tests (no tests collected)` | Files exist but Mocha found no `it` (empty `describe`, `.skip`) |
+| `— Unit tests (no test files)` | No `*.test.{ts,js}` in the `test/unit/` (or `test/`) directory |
+| `— E2E tests (no test files)` | Same for e2e |
+
+### Final Summary
+
+After the run chef prints an aggregated report:
+
+- **Failed Tests (N)** — all failed tests with stack traces and code frames, grouped by extension.
+- **Errors (N)** — build errors and runtime crashes, one line per cause.
+- **Issues** — list of extensions with error/warning counts.
+- **Extensions / Tests / Time** — totals: how many extensions and tests passed/failed, how long it took.
+
 ## Tips
 
 ### Test Isolation
