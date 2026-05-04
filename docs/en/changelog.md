@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.10.0 <Badge type="tip" text="5/4/2026" />
+
+- Improved `chef test` bulk run output: extensions without tests are skipped silently, errors and failed tests are aggregated into a single end-of-run summary
+- Failure reason is now shown inline next to each task: `(build failed)`, `(N failed)`, `(crashed before any tests ran)`, `(no tests collected)`, `(no test files)`
+- Added `--console` flag — browser console output is now hidden by default to keep bulk reports clean
+- Added a `Tests` row to the final summary with totals across all extensions
+
 ## v1.9.1 <Badge type="tip" text="4/30/2026" />
 
 Global namespaces for npm-remapped dependencies: when standalone.exposeNamespaces is enabled, npm package exports are now registered under the source extension namespace (e.g. ui.lexical.core → globalThis.BX.UI.Lexical.Core).
