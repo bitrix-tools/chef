@@ -57,6 +57,7 @@ chef test e2e [extensions...] [file?]      # e2e only
 | `--debug` | Open browser with DevTools and sourcemaps |
 | `--grep <pattern>` | Run only tests matching the pattern |
 | `--project <names>` | Run in specific browsers (chromium, firefox, webkit) |
+| `--console` | Print captured browser console output (hidden by default) |
 
 ```bash
 chef test main.core ui.buttons                    # All tests
@@ -69,6 +70,7 @@ chef test main.core -w                            # Watch mode
 chef test main.core --debug                       # Debug with DevTools
 chef test --grep "should render"                  # Filter by name
 chef test main.core --project chromium firefox    # Specific browsers
+chef test main.core --console                     # With browser console output
 ```
 
 ## chef typecheck

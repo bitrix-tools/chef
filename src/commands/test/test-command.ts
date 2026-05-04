@@ -43,6 +43,26 @@ function createExtensionsStream(extensions: string[], args: Record<string, any>)
 	});
 }
 
+async function hasTestsForType(extension: BasePackage, type?: 'unit' | 'e2e'): Promise<boolean>
+{
+	if (type === 'unit')
+	{
+		return extension.hasUnitTests();
+	}
+
+	if (type === 'e2e')
+	{
+		return extension.hasEndToEndTests();
+	}
+
+	const [unit, e2e] = await Promise.all([
+		extension.hasUnitTests(),
+		extension.hasEndToEndTests(),
+	]);
+
+	return unit || e2e;
+}
+
 function runTestsTeamcity({ extensions, args, type }: RunTestsOptions): void
 {
 	const queue = new SequentialQueue();
@@ -54,7 +74,12 @@ function runTestsTeamcity({ extensions, args, type }: RunTestsOptions): void
 			console.log('');
 			console.log(message);
 		})
-		.on('data', async ({ extension }: { extension: BasePackage }) => {
+		.on('data', async ({ extension, explicit }: { extension: BasePackage; explicit: boolean }) => {
+			if (!explicit && !(await hasTestsForType(extension, type)))
+			{
+				return;
+			}
+
 			await queue.add(async () => {
 				if (type !== 'e2e')
 				{
@@ -144,13 +169,20 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 			console.log('');
 			console.log(message);
 		})
-		.on('data', async ({ extension }: { extension: BasePackage }) => {
+		.on('data', async ({ extension, explicit }: { extension: BasePackage; explicit: boolean }) => {
+			if (!explicit && !(await hasTestsForType(extension, type)))
+			{
+				return;
+			}
+
 			const tasks = createTestTasks(extension, args, type);
 
 			await queue.add(async () => {
 				const result = await TaskRunner.run({
 					title: extension.getName(),
 					tasks,
+					showSummary: false,
+					suppressErrorDetails: true,
 				});
 				testResults.push(result);
 			});
@@ -183,6 +215,8 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 						await TaskRunner.run({
 							title: name,
 							tasks: freshTasks,
+							showSummary: false,
+							suppressErrorDetails: true,
 						});
 						running = false;
 
@@ -230,7 +264,7 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 			}
 			else
 			{
-				printSummary(testResults, startTime);
+				printSummary(testResults, startTime, { isTestRun: true });
 
 				process.exit(0);
 			}
@@ -269,6 +303,7 @@ const commonOptions = (cmd: Command) => cmd
 	.option('--grep <pattern>', 'Run only tests that match the given pattern')
 	.option('--project <projects...>', 'Run tests in the specified Playwright projects')
 	.option('--reporter <type>', 'Reporter to use: default, teamcity', 'default')
+	.option('--console', 'Print captured browser console output for each extension')
 	.option('--cdp-port <port>', 'Launch browser with Chrome DevTools Protocol on this port', parseInt);
 
 export const testCommand = new Command('test');

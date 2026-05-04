@@ -3,12 +3,20 @@ import { TeamcityReporter } from '../../modules/engines/test/teamcity-reporter';
 
 export type Reporter = TestReporter | TeamcityReporter;
 
-export function createReporter(type?: string, onStatus?: (message: string) => void): Reporter
+export type CreateReporterOptions = {
+	showSummary?: boolean;
+};
+
+export function createReporter(
+	type?: string,
+	onStatus?: (message: string) => void,
+	options: CreateReporterOptions = {},
+): Reporter
 {
 	if (type === 'teamcity')
 	{
 		return new TeamcityReporter();
 	}
 
-	return new TestReporter(onStatus);
+	return new TestReporter(onStatus, options);
 }

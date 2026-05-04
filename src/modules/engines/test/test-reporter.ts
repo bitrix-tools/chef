@@ -8,7 +8,7 @@ import type { TestToken, ConsoleLog } from './test-types';
 export { stripAnsi, hasLocalFilePath };
 
 const SLOW_TEST_THRESHOLD = 75;
-const PREFIX = '    ';
+const PREFIX = '  ';
 const isTTY = process.stdout.isTTY ?? false;
 
 type FailedTest = {
@@ -36,6 +36,16 @@ type SlowTest = {
 };
 
 type BrowserStatus = 'passed' | 'failed' | 'pending';
+
+export type FailedTestGroup = {
+	suitePath: string;
+	title: string;
+	browsers: string[];
+	error?: { message: string; stack?: string };
+	showDiff?: boolean;
+	actual?: unknown;
+	expected?: unknown;
+};
 
 type LiveLine = {
 	status: BrowserStatus;
@@ -86,6 +96,7 @@ export class TestReporter
 	readonly #lines: LiveLine[] = [];
 	readonly #startTime: number;
 	readonly #onStatus: (message: string) => void;
+	readonly #showSummary: boolean;
 	#hasResults = false;
 	#expectedBrowsers = 1;
 	#viewportHeight = 0;
@@ -94,10 +105,11 @@ export class TestReporter
 	#failed = 0;
 	#pending = 0;
 
-	constructor(onStatus?: (message: string) => void)
+	constructor(onStatus?: (message: string) => void, options: { showSummary?: boolean } = {})
 	{
 		this.#startTime = Date.now();
 		this.#onStatus = onStatus ?? (() => {});
+		this.#showSummary = options.showSummary ?? true;
 		this.#onStatus('Preparing tests...');
 	}
 
@@ -135,6 +147,12 @@ export class TestReporter
 		{
 			this.#onStatus(status);
 		}
+	}
+
+	clearStatus(): void
+	{
+		this.#browserStatuses.clear();
+		this.#onStatus('');
 	}
 
 	handleToken(token: TestToken, browser?: string): void
@@ -406,25 +424,9 @@ export class TestReporter
 		return '';
 	}
 
-	#groupFailedTests(): Array<{
-		suitePath: string;
-		title: string;
-		browsers: string[];
-		error?: { message: string; stack?: string };
-		showDiff?: boolean;
-		actual?: unknown;
-		expected?: unknown;
-	}>
+	#groupFailedTests(): FailedTestGroup[]
 	{
-		const groups = new Map<string, {
-			suitePath: string;
-			title: string;
-			browsers: string[];
-			error?: { message: string; stack?: string };
-			showDiff?: boolean;
-			actual?: unknown;
-			expected?: unknown;
-		}>();
+		const groups = new Map<string, FailedTestGroup>();
 
 		for (const test of this.#failedTests)
 		{
@@ -460,10 +462,15 @@ export class TestReporter
 		return [...groups.values()];
 	}
 
-	finish(consoleLogs: ConsoleLog[] = []): { passed: number; failed: number }
+	finish(consoleLogs: ConsoleLog[] = []): { passed: number; failed: number; failures: FailedTestGroup[] }
 	{
 		const wallTime = Date.now() - this.#startTime;
 		const total = this.#passed + this.#failed + this.#pending;
+		const failures = this.#groupFailedTests();
+
+		// Clear status line — covers the case where no TEST_* tokens arrived
+		// (empty describe blocks, suites without any tests).
+		this.#onStatus('');
 
 		// Clear live viewport and print full report
 		if (isTTY && this.#viewportRenderedLines > 0)
@@ -483,22 +490,21 @@ export class TestReporter
 
 		const lines: string[] = [];
 
-		// Failed test details (grouped by path)
-		if (this.#failedTests.length > 0)
+		// Failed test details (grouped by path) — only in single-extension mode.
+		// In bulk mode the failures are aggregated and printed once in printSummary.
+		if (this.#showSummary && failures.length > 0)
 		{
-			const grouped = this.#groupFailedTests();
-
 			lines.push('');
-			lines.push(`${PREFIX} ${chalk.red.bold(`Failed Tests (${grouped.length}):`)}`);
+			lines.push(`${PREFIX} ${chalk.red.bold(`Failed Tests (${failures.length}):`)}`);
 
-			for (let idx = 0; idx < grouped.length; idx++)
+			for (let idx = 0; idx < failures.length; idx++)
 			{
-				const group = grouped[idx];
+				const group = failures[idx];
 				const browsers = group.browsers.length > 0
 					? chalk.dim(` [${group.browsers.join(' · ')}]`)
 					: '';
 				const path = group.suitePath ? `${group.suitePath} > ${group.title}` : group.title;
-				const counter = chalk.dim(`${idx + 1}/${grouped.length}`);
+				const counter = chalk.dim(`${idx + 1}/${failures.length}`);
 
 				lines.push('');
 				if (idx > 0)
@@ -524,38 +530,41 @@ export class TestReporter
 			}
 		}
 
-		// Summary
-		lines.push('');
-
-		const summaryParts = [
-			this.#passed > 0 ? chalk.green.bold(`${this.#passed} passed`) : null,
-			this.#failed > 0 ? chalk.red.bold(`${this.#failed} failed`) : null,
-			this.#pending > 0 ? chalk.yellow(`${this.#pending} pending`) : null,
-		].filter(Boolean);
-
-		lines.push(`${PREFIX} ${chalk.bold('Tests')}     ${summaryParts.join(chalk.gray(' | '))} ${chalk.gray(`(${total})`)}`);
-
-		if (this.#browsers.size > 0)
+		if (this.#showSummary)
 		{
-			const browserList = [...this.#browsers].join(chalk.gray(' · '));
-			lines.push(`${PREFIX} ${chalk.bold('Browsers')}  ${browserList}`);
-		}
-
-		lines.push(`${PREFIX} ${chalk.bold('Time')}      ${formatDuration(wallTime)}`);
-
-		// Slow tests
-		const slowTests = this.#slowTests
-			.sort((a, b) => b.duration - a.duration)
-			.slice(0, 3);
-
-		if (slowTests.length > 0)
-		{
+			// Summary
 			lines.push('');
-			lines.push(`${PREFIX} ${chalk.yellow.bold('Slow tests:')}`);
-			for (const test of slowTests)
+
+			const summaryParts = [
+				this.#passed > 0 ? chalk.green.bold(`${this.#passed} passed`) : null,
+				this.#failed > 0 ? chalk.red.bold(`${this.#failed} failed`) : null,
+				this.#pending > 0 ? chalk.yellow(`${this.#pending} pending`) : null,
+			].filter(Boolean);
+
+			lines.push(`${PREFIX} ${chalk.bold('Tests')}     ${summaryParts.join(chalk.gray(' | '))} ${chalk.gray(`(${total})`)}`);
+
+			if (this.#browsers.size > 0)
 			{
-				const browserTag = test.browser ? chalk.dim(` [${test.browser}]`) : '';
-				lines.push(`${PREFIX}   ${chalk.yellow(`${test.duration}ms`)} ${chalk.gray('→')} ${test.title}${browserTag}`);
+				const browserList = [...this.#browsers].join(chalk.gray(' · '));
+				lines.push(`${PREFIX} ${chalk.bold('Browsers')}  ${browserList}`);
+			}
+
+			lines.push(`${PREFIX} ${chalk.bold('Time')}      ${formatDuration(wallTime)}`);
+
+			// Slow tests
+			const slowTests = this.#slowTests
+				.sort((a, b) => b.duration - a.duration)
+				.slice(0, 3);
+
+			if (slowTests.length > 0)
+			{
+				lines.push('');
+				lines.push(`${PREFIX} ${chalk.yellow.bold('Slow tests:')}`);
+				for (const test of slowTests)
+				{
+					const browserTag = test.browser ? chalk.dim(` [${test.browser}]`) : '';
+					lines.push(`${PREFIX}   ${chalk.yellow(`${test.duration}ms`)} ${chalk.gray('→')} ${test.title}${browserTag}`);
+				}
 			}
 		}
 
@@ -595,6 +604,6 @@ export class TestReporter
 		lines.push('');
 		console.log(lines.join('\n'));
 
-		return { passed: this.#passed, failed: this.#failed };
+		return { passed: this.#passed, failed: this.#failed, failures };
 	}
 }

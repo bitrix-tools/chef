@@ -88,7 +88,7 @@ function createDebugTask(extension: BasePackage, args: Record<string, any>, brow
 			for (const browserType of browsers)
 			{
 				const label = BROWSER_LABEL[browserType] ?? browserType;
-				const reporter = createReporter(args.reporter, onUpdate);
+				const reporter = createReporter(args.reporter, onUpdate, { showSummary: false });
 
 				const testResult = await extension.runUnitTests({
 					...args,
@@ -114,7 +114,7 @@ function createDebugTask(extension: BasePackage, args: Record<string, any>, brow
 
 				if (testResult.report.length > 0)
 				{
-					reporter.finish(testResult.consoleLogs);
+					reporter.finish(args.console ? testResult.consoleLogs : []);
 				}
 
 				if (testResult.debugCleanup)
@@ -164,7 +164,7 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 		title: 'Unit tests',
 		run: async (onUpdate): Promise<TaskResult> => {
 			const browsers = await resolveBrowsers();
-			const reporter = createReporter(args.reporter, onUpdate);
+			const reporter = createReporter(args.reporter, onUpdate, { showSummary: false });
 			reporter.setBrowserCount(browsers.length);
 			const consoleLogSets: ConsoleLog[][] = [];
 			const allErrors: Error[] = [];
@@ -185,7 +185,12 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 					allErrors.push(...testResult.errors);
 				}
 
-				if (testResult.report.length > 0)
+				const hasTestTokens = testResult.report.some(
+					(token) => token.id === 'TEST_PASSED'
+						|| token.id === 'TEST_FAILED'
+						|| token.id === 'TEST_PENDING',
+				);
+				if (hasTestTokens)
 				{
 					hasTests = true;
 				}
@@ -200,16 +205,48 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 
 			if (allErrors.length > 0)
 			{
-				const details: TaskDetail[] = allErrors.map((error) => ({
-					type: 'error' as const,
-					code: 'code' in error ? (error as any).code : undefined,
-					message: error.message,
-					stack: error.stack,
-				}));
-				console.log('');
+				const seen = new Set<string>();
+				const details: TaskDetail[] = [];
+				for (const error of allErrors)
+				{
+					const code = 'code' in error ? (error as any).code as string | undefined : undefined;
+					const key = `${code ?? ''}:${error.message}`;
+					if (seen.has(key))
+					{
+						continue;
+					}
+					seen.add(key);
+					details.push({
+						type: 'error',
+						code,
+						message: error.message,
+						stack: error.stack,
+					});
+				}
+
+				const isBuildErrorCode = (code: unknown): boolean => {
+					if (typeof code !== 'string')
+					{
+						return false;
+					}
+
+					if (code.startsWith('CF1'))
+					{
+						return true;
+					}
+
+					// Raw Rollup error codes that surface from buildCode without CF mapping
+					return /^[A-Z_]+$/.test(code);
+				};
+
+				const allBuildErrors = details.every(
+					(detail) => detail.type === 'error' && isBuildErrorCode(detail.code),
+				);
+
+				reporter.clearStatus();
 
 				return {
-					title: 'Unit tests',
+					title: allBuildErrors ? 'Unit tests (build failed)' : 'Unit tests',
 					status: 'failed',
 					details,
 				};
@@ -217,18 +254,75 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 
 			if (!hasTests)
 			{
+				reporter.clearStatus();
+
+				const hasFiles = await extension.hasUnitTests();
+				if (!hasFiles)
+				{
+					return {
+						title: 'Unit tests (no test files)',
+						status: 'skipped',
+					};
+				}
+
+				const errorLogs: ConsoleLog[] = [];
+				const seenLogs = new Set<string>();
+				for (const set of consoleLogSets)
+				{
+					for (const log of set)
+					{
+						if (log.type !== 'error')
+						{
+							continue;
+						}
+						const key = log.text;
+						if (seenLogs.has(key))
+						{
+							continue;
+						}
+						seenLogs.add(key);
+						errorLogs.push(log);
+					}
+				}
+
+				if (errorLogs.length > 0)
+				{
+					const details: TaskDetail[] = errorLogs.map((log) => ({
+						type: 'error',
+						message: log.text,
+					}));
+
+					return {
+						title: 'Unit tests (crashed before any tests ran)',
+						status: 'failed',
+						details,
+					};
+				}
+
 				return {
-					title: 'Unit tests',
-					status: 'skipped',
+					title: 'Unit tests (no tests collected)',
+					status: 'warning',
+					details: [
+						{
+							type: 'block',
+							text: 'Test files exist but Mocha did not collect any tests. Check that describe/it blocks are not empty or skipped.',
+							color: 'yellow',
+						},
+					],
 				};
 			}
 
-			const allConsoleLogs = deduplicateConsoleLogs(consoleLogSets);
-			const { failed } = reporter.finish(allConsoleLogs);
+			const allConsoleLogs = args.console ? deduplicateConsoleLogs(consoleLogSets) : [];
+			const { passed, failed, failures } = reporter.finish(allConsoleLogs);
+
+			const title = failed === 0
+				? 'Unit tests'
+				: `Unit tests (${failed} failed)`;
 
 			return {
-				title: 'Unit tests',
+				title,
 				status: failed === 0 ? 'passed' : 'failed',
+				metrics: { passed, failed, failures },
 			};
 		},
 	};

@@ -11,7 +11,7 @@ export function runEndToEndTestsTask(extension: BasePackage, args: Record<string
 		run: async (onUpdate): Promise<TaskResult> => {
 			checkCredentialsWarning(extension.getPath());
 
-			const reporter = createReporter(args.reporter, onUpdate);
+			const reporter = createReporter(args.reporter, onUpdate, { showSummary: false });
 
 			const testResult = await extension.runEndToEndTests({
 				...args,
@@ -23,6 +23,7 @@ export function runEndToEndTestsTask(extension: BasePackage, args: Record<string
 			if (testResult.errors.length > 0)
 			{
 				reporter.stop();
+				reporter.clearStatus();
 
 				const details: TaskDetail[] = testResult.errors.map((error: Error) => ({
 					type: 'error' as const,
@@ -30,10 +31,9 @@ export function runEndToEndTestsTask(extension: BasePackage, args: Record<string
 					message: error.message,
 					stack: error.stack,
 				}));
-				console.log('');
 
 				return {
-					title: 'E2E tests',
+					title: 'E2E tests (errored)',
 					status: 'failed',
 					details,
 				};
@@ -42,18 +42,26 @@ export function runEndToEndTestsTask(extension: BasePackage, args: Record<string
 			if (testResult.report.length === 0)
 			{
 				reporter.stop();
+				reporter.clearStatus();
+
+				const hasFiles = await extension.hasEndToEndTests();
 
 				return {
-					title: 'E2E tests',
+					title: hasFiles ? 'E2E tests (no tests collected)' : 'E2E tests (no test files)',
 					status: 'skipped',
 				};
 			}
 
-			const { failed } = reporter.finish(testResult.consoleLogs);
+			const { passed, failed, failures } = reporter.finish(args.console ? testResult.consoleLogs : []);
+
+			const title = failed === 0
+				? 'E2E tests'
+				: `E2E tests (${failed} failed)`;
 
 			return {
-				title: 'E2E tests',
+				title,
 				status: failed === 0 ? 'passed' : 'failed',
+				metrics: { passed, failed, failures },
 			};
 		},
 	};

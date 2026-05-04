@@ -401,6 +401,16 @@ export abstract class BasePackage
 		);
 	}
 
+	async hasUnitTests(): Promise<boolean>
+	{
+		return (await this.getUnitTests()).length > 0;
+	}
+
+	async hasEndToEndTests(): Promise<boolean>
+	{
+		return (await this.getEndToEndTests()).length > 0;
+	}
+
 	// endregion
 
 	// region Dependencies

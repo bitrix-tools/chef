@@ -88,6 +88,8 @@ export class TaskReporter
 	readonly #startTime: number;
 	readonly #groupTitle: string;
 	readonly #isGroup: boolean;
+	readonly #showSummary: boolean;
+	readonly #suppressErrorDetails: boolean;
 	readonly #taskPrefix: string;
 	readonly #detailPrefix: string;
 	#spinnerTimer: ReturnType<typeof setInterval> | null = null;
@@ -98,11 +100,18 @@ export class TaskReporter
 	#failed = 0;
 	#warnings = 0;
 
-	constructor(groupTitle: string, taskCount: number)
+	constructor(
+		groupTitle: string,
+		taskCount: number,
+		showSummary: boolean = true,
+		suppressErrorDetails: boolean = false,
+	)
 	{
 		this.#startTime = Date.now();
 		this.#groupTitle = groupTitle;
 		this.#isGroup = taskCount > 1;
+		this.#showSummary = showSummary;
+		this.#suppressErrorDetails = suppressErrorDetails;
 
 		//  Single task:  " ✓ title"  details: "   text"
 		//  Group task:   "   ✓ title"  details: "     text"
@@ -156,7 +165,14 @@ export class TaskReporter
 
 		if (result.details)
 		{
-			this.#renderDetails(result.details, result.status);
+			const filteredDetails = this.#suppressErrorDetails
+				? result.details.filter((d) => d.type !== 'error')
+				: result.details;
+
+			if (filteredDetails.length > 0)
+			{
+				this.#renderDetails(filteredDetails, result.status);
+			}
 		}
 	}
 
@@ -168,7 +184,7 @@ export class TaskReporter
 		const duration = Date.now() - this.#startTime;
 		const total = this.#passed + this.#failed + this.#warnings;
 
-		if (total > 1)
+		if (total > 1 && this.#showSummary)
 		{
 			console.log('');
 

@@ -7,7 +7,7 @@ export class TaskRunner
 {
 	static async run(group: TaskGroup): Promise<TaskGroupResult>
 	{
-		const reporter = new TaskReporter(group.title, group.tasks.length);
+		const reporter = new TaskReporter(group.title, group.tasks.length, group.showSummary, group.suppressErrorDetails);
 
 		for (const task of group.tasks)
 		{

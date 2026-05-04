@@ -57,6 +57,7 @@ chef test e2e [extensions...] [file?]      # только e2e
 | `--debug` | Открыть браузер с DevTools и sourcemaps |
 | `--grep <pattern>` | Запускать только тесты, соответствующие паттерну |
 | `--project <names>` | Запускать в конкретных браузерах (chromium, firefox, webkit) |
+| `--console` | Печатать консольный вывод браузера (по умолчанию скрыт) |
 
 ```bash
 chef test main.core ui.buttons                    # Все тесты
@@ -69,6 +70,7 @@ chef test main.core -w                            # Watch-режим
 chef test main.core --debug                       # Отладка с DevTools
 chef test --grep "should render"                  # Фильтрация по имени
 chef test main.core --project chromium firefox    # Конкретные браузеры
+chef test main.core --console                     # С консольным выводом браузера
 ```
 
 ## chef typecheck

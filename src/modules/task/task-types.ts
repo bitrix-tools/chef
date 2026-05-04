@@ -5,11 +5,22 @@ type TaskDetail =
 	| { type: 'block'; text: string; color?: string }
 	| { type: 'error'; severity?: 'error' | 'warning'; code?: string; message: string; stack?: string; frame?: string; loc?: { file: string; line: number; column: number; root?: string }; risk?: string; gapInfo?: string };
 
+type TaskFailure = {
+	suitePath: string;
+	title: string;
+	browsers: string[];
+	error?: { message: string; stack?: string };
+	showDiff?: boolean;
+	actual?: unknown;
+	expected?: unknown;
+};
+
 interface TaskResult
 {
 	title: string;
 	status: TaskStatus;
 	details?: TaskDetail[];
+	metrics?: { passed: number; failed: number; failures?: TaskFailure[] };
 }
 
 interface Task
@@ -22,6 +33,8 @@ interface TaskGroup
 {
 	title: string;
 	tasks: Task[];
+	showSummary?: boolean;
+	suppressErrorDetails?: boolean;
 }
 
 interface TaskGroupResult
@@ -37,6 +50,7 @@ interface TaskGroupResult
 export type {
 	TaskStatus,
 	TaskDetail,
+	TaskFailure,
 	TaskResult,
 	Task,
 	TaskGroup,
