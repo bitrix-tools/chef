@@ -39,7 +39,12 @@ export type LintDetails = {
 };
 
 export type LintExtensionResult = ChefExtensionResult<LintDetails>;
-export type LintApiResult = ChefResult<LintDetails>;
+export type LintSummaryExtras = {
+	errorCount: number,
+	warningCount: number,
+};
+
+export type LintApiResult = ChefResult<LintDetails, LintSummaryExtras>;
 
 export async function lint(options: LintOptions = {}): Promise<LintApiResult>
 {
@@ -79,6 +84,18 @@ export async function lint(options: LintOptions = {}): Promise<LintApiResult>
 	const passed = extensions.filter((extension) => extension.ok).length;
 	const failed = extensions.length - passed;
 
+	const { errorCount, warningCount } = extensions.reduce(
+		(acc, extension) => {
+			if (extension.details)
+			{
+				acc.errorCount += extension.details.errorCount;
+				acc.warningCount += extension.details.warningCount;
+			}
+			return acc;
+		},
+		{ errorCount: 0, warningCount: 0 },
+	);
+
 	return {
 		ok: passed === extensions.length && resolvedNotFound.length === 0,
 		command,
@@ -89,6 +106,8 @@ export async function lint(options: LintOptions = {}): Promise<LintApiResult>
 			passed,
 			failed,
 			durationMs: Date.now() - startedAt,
+			errorCount,
+			warningCount,
 		},
 	};
 }
@@ -169,6 +188,13 @@ function emptyResult(command: string, startedAt: number, error: ChefErrorPayload
 		extensions: [],
 		notFound: [],
 		error,
-		summary: { total: 0, passed: 0, failed: 0, durationMs: Date.now() - startedAt },
+		summary: {
+			total: 0,
+			passed: 0,
+			failed: 0,
+			durationMs: Date.now() - startedAt,
+			errorCount: 0,
+			warningCount: 0,
+		},
 	};
 }

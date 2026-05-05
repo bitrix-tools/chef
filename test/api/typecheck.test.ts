@@ -17,12 +17,14 @@ describe('chef.typecheck', () => {
 
 		assert.equal(r.command, 'typecheck');
 		assert.hasAllKeys(r, ['ok', 'command', 'extensions', 'notFound', 'summary']);
+		assert.containsAllKeys(r.summary, ['total', 'passed', 'failed', 'durationMs', 'errorCount', 'skippedCount']);
 	});
 
 	it('marks JS extensions as skipped', async () => {
 		const r = await typecheck({ cwd: sourceRepo, extension: 'ui.buttons' });
 
 		assert.isTrue(r.ok);
+		assert.equal(r.summary.skippedCount, 1);
 		const ext = r.extensions[0];
 		assert.isTrue(ext.details!.skipped);
 		assert.isString(ext.details!.skipReason);

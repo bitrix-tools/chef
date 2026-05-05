@@ -17,6 +17,7 @@ describe('chef.lint', () => {
 
 		assert.equal(r.command, 'lint');
 		assert.hasAllKeys(r, ['ok', 'command', 'extensions', 'notFound', 'summary']);
+		assert.containsAllKeys(r.summary, ['total', 'passed', 'failed', 'durationMs', 'errorCount', 'warningCount']);
 	});
 
 	it('reports notFound, no fatal error', async () => {

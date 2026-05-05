@@ -41,6 +41,25 @@ type TypecheckDetails = {
 
 `code` is the TypeScript diagnostic code (e.g. `TS2322`). `frame` is a snippet around the error location, when available.
 
+## `summary` shape
+
+Alongside the common fields (extension counters), `chef.typecheck` adds aggregates over type errors and skipped packages across the whole set:
+
+```ts
+type TypecheckApiResult['summary'] = {
+  total: number;        // how many extensions were processed
+  passed: number;       // how many passed (including JS extensions marked as skipped)
+  failed: number;       // how many had type errors
+  durationMs: number;
+
+  // typecheck-specific
+  errorCount: number;     // total type errors across all extensions
+  skippedCount: number;   // how many extensions were skipped (non-TypeScript)
+};
+```
+
+JS extensions land in `passed` with `details.skipped: true` and contribute to `skippedCount`.
+
 ## Example: check and fail on errors
 
 ```ts

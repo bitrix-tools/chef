@@ -9,20 +9,29 @@ API использует **три формы результата** — кажд
 Возвращается из `chef.build`, `chef.lint`, `chef.test`, `chef.typecheck`.
 
 ```ts
-type ChefResult<TDetails> = {
+type ChefResult<TDetails, TSummaryExtras = {}> = {
   ok: boolean;                          // true ⇔ всё успешно
   command: string;                      // 'build' | 'lint' | ...
   extensions: ChefExtensionResult<TDetails>[];
   notFound: Array<{ name: string; code: string; reason: string }>;
   error?: ChefErrorPayload;             // фатальная ошибка операции в целом
   summary: {
-    total: number;
-    passed: number;
-    failed: number;
+    total: number;       // расширений всего
+    passed: number;      // расширений успешно
+    failed: number;      // расширений с ошибками
     durationMs: number;
-  };
+  } & TSummaryExtras;
 };
 ```
+
+`TSummaryExtras` — командные поля в `summary`. Счётчики `total/passed/failed` всегда считают **расширения**, а агрегаты по «единицам внутри» (тестам, lint-сообщениям, размеру бандлов) живут в этих расширениях:
+
+- `chef.build` → `bundlesSize`, `warningCount`
+- `chef.lint` → `errorCount`, `warningCount`
+- `chef.test` → `tests: { passed, failed, skipped }`
+- `chef.typecheck` → `errorCount`, `skippedCount`
+
+Подробности — на страницах соответствующих команд.
 
 ### `ChefExtensionResult<TDetails>` — результат по одному расширению
 

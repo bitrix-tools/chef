@@ -14,6 +14,11 @@ export type ChefNotFoundEntry = {
 	reason: string,
 };
 
+/**
+ * Common summary fields shared across all bulk operations. The numbers count
+ * extensions, not individual tests/errors/etc — for those, see command-specific
+ * summary extras (e.g. `summary.tests`, `summary.lint`).
+ */
 export type ChefSummary = {
 	total: number,
 	passed: number,
@@ -31,13 +36,13 @@ export type ChefExtensionResult<TDetails = unknown> = {
 	warnings?: ChefErrorPayload[],
 };
 
-export type ChefResult<TDetails = unknown> = {
+export type ChefResult<TDetails = unknown, TSummaryExtras = {}> = {
 	ok: boolean,
 	command: string,
 	extensions: ChefExtensionResult<TDetails>[],
 	notFound: ChefNotFoundEntry[],
 	error?: ChefErrorPayload,
-	summary: ChefSummary,
+	summary: ChefSummary & TSummaryExtras,
 };
 
 export type ChefDataResult<TData> = {

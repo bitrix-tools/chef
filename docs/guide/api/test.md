@@ -49,11 +49,39 @@ type TestRunDetails = {
 };
 ```
 
-Каждый запуск (unit на каждый браузер, e2e отдельно) — отдельный элемент в `runs`. Цифры на верхнем уровне — суммы по всем `runs`.
+Каждый запуск (unit на каждый браузер, e2e отдельно) — отдельный элемент в `runs`. Цифры на верхнем уровне `details.passed/failed/skipped` — суммы по всем `runs` **этого расширения**.
 
 ::: warning
 Если у расширения нет тестов выбранного типа — `runs` будет пустым, а `passed`/`failed`/`skipped` равны `0`. Чтобы отличить «прошло 0 тестов» от «тестов не было», проверяйте `runs.length > 0` или сначала вызывайте `pkg.hasUnitTests()` / `pkg.hasEndToEndTests()`.
 :::
+
+## Структура `summary`
+
+Помимо общих полей (`total`, `passed`, `failed`, `durationMs` — это про **расширения**), `chef.test` добавляет агрегаты по **тестам всего набора**:
+
+```ts
+type TestApiResult['summary'] = {
+  // общие — счётчики расширений
+  total: number;        // сколько расширений запущено
+  passed: number;       // сколько расширений прошло (все тесты внутри ok)
+  failed: number;       // сколько расширений упало
+  durationMs: number;   // суммарное время всей операции
+
+  // специфика test
+  tests: {
+    passed: number;     // сколько тестов прошло (по всем расширениям × всем браузерам)
+    failed: number;
+    skipped: number;
+  };
+};
+```
+
+Это удобно, чтобы в CI-сценарии не приходилось обходить `result.extensions[].details.runs[]` вручную:
+
+```ts
+const r = await chef.test({ extension: 'main.core', kind: 'unit' });
+console.log(`${r.summary.tests.passed}/${r.summary.tests.passed + r.summary.tests.failed} passed`);
+```
 
 ## Пример: прогнать unit-тесты
 

@@ -45,6 +45,25 @@ type LintDetails = {
 
 В `details.files` попадают только те файлы, у которых есть хотя бы одно сообщение. Если ошибок ноль — массив пустой.
 
+## Структура `summary`
+
+Помимо общих полей (счётчики расширений), `chef.lint` добавляет агрегаты по сообщениям лита по всему набору:
+
+```ts
+type LintApiResult['summary'] = {
+  total: number;        // сколько расширений было обработано
+  passed: number;       // сколько прошло без ошибок
+  failed: number;       // сколько с ошибками
+  durationMs: number;
+
+  // специфика lint
+  errorCount: number;     // суммарно error-сообщений по всем расширениям
+  warningCount: number;   // суммарно warning-сообщений
+};
+```
+
+`errorCount`/`warningCount` подсчитываются по `details.files[].messages[]` всех расширений.
+
 ## Пример: проверить и упасть на ошибках
 
 ```ts

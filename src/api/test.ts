@@ -45,7 +45,16 @@ export type TestDetails = {
 };
 
 export type TestExtensionResult = ChefExtensionResult<TestDetails>;
-export type TestApiResult = ChefResult<TestDetails>;
+
+export type TestSummaryExtras = {
+	tests: {
+		passed: number,
+		failed: number,
+		skipped: number,
+	},
+};
+
+export type TestApiResult = ChefResult<TestDetails, TestSummaryExtras>;
 
 export async function test(options: TestOptions = {}): Promise<TestApiResult>
 {
@@ -85,6 +94,20 @@ export async function test(options: TestOptions = {}): Promise<TestApiResult>
 	const passed = extensions.filter((extension) => extension.ok).length;
 	const failed = extensions.length - passed;
 
+	const tests = extensions.reduce(
+		(acc, extension) => {
+			const details = extension.details;
+			if (details)
+			{
+				acc.passed += details.passed;
+				acc.failed += details.failed;
+				acc.skipped += details.skipped;
+			}
+			return acc;
+		},
+		{ passed: 0, failed: 0, skipped: 0 },
+	);
+
 	return {
 		ok: passed === extensions.length && resolvedNotFound.length === 0,
 		command,
@@ -95,6 +118,7 @@ export async function test(options: TestOptions = {}): Promise<TestApiResult>
 			passed,
 			failed,
 			durationMs: Date.now() - startedAt,
+			tests,
 		},
 	};
 }
@@ -230,6 +254,12 @@ function emptyResult(command: string, startedAt: number, error: ChefErrorPayload
 		extensions: [],
 		notFound: [],
 		error,
-		summary: { total: 0, passed: 0, failed: 0, durationMs: Date.now() - startedAt },
+		summary: {
+			total: 0,
+			passed: 0,
+			failed: 0,
+			durationMs: Date.now() - startedAt,
+			tests: { passed: 0, failed: 0, skipped: 0 },
+		},
 	};
 }

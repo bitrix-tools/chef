@@ -34,6 +34,25 @@ In addition, each `extensions[i]` may carry:
 - `error` — critical build error (Rollup crash, missing file, etc.)
 - `warnings[]` — warnings with `CF1xxx` codes (cycles, unused exports, baseline warnings, etc.)
 
+## `summary` shape
+
+Alongside the common fields (extension counters), `chef.build` adds aggregates over bundles across the whole set:
+
+```ts
+type BuildApiResult['summary'] = {
+  total: number;        // how many extensions were built
+  passed: number;       // how many built with no errors
+  failed: number;       // how many failed
+  durationMs: number;
+
+  // build-specific
+  bundlesSize: number;    // total size of all output bundles, in bytes
+  warningCount: number;   // total warnings across all extensions
+};
+```
+
+`bundlesSize` sums `details.bundles[].size` across all `extensions[]`. Handy for CI notifications like "total size grew by X KB".
+
 ## Example: build a single extension
 
 ```ts

@@ -37,7 +37,13 @@ export type TypecheckDetails = {
 };
 
 export type TypecheckExtensionResult = ChefExtensionResult<TypecheckDetails>;
-export type TypecheckApiResult = ChefResult<TypecheckDetails>;
+
+export type TypecheckSummaryExtras = {
+	errorCount: number,
+	skippedCount: number,
+};
+
+export type TypecheckApiResult = ChefResult<TypecheckDetails, TypecheckSummaryExtras>;
 
 export async function typecheck(options: TypecheckOptions = {}): Promise<TypecheckApiResult>
 {
@@ -77,6 +83,21 @@ export async function typecheck(options: TypecheckOptions = {}): Promise<Typeche
 	const passed = extensions.filter((extension) => extension.ok).length;
 	const failed = extensions.length - passed;
 
+	const { errorCount, skippedCount } = extensions.reduce(
+		(acc, extension) => {
+			if (extension.details)
+			{
+				acc.errorCount += extension.details.errors.length;
+				if (extension.details.skipped)
+				{
+					acc.skippedCount += 1;
+				}
+			}
+			return acc;
+		},
+		{ errorCount: 0, skippedCount: 0 },
+	);
+
 	return {
 		ok: passed === extensions.length && resolvedNotFound.length === 0,
 		command,
@@ -87,6 +108,8 @@ export async function typecheck(options: TypecheckOptions = {}): Promise<Typeche
 			passed,
 			failed,
 			durationMs: Date.now() - startedAt,
+			errorCount,
+			skippedCount,
 		},
 	};
 }
@@ -217,6 +240,13 @@ function emptyResult(command: string, startedAt: number, error: ChefErrorPayload
 		extensions: [],
 		notFound: [],
 		error,
-		summary: { total: 0, passed: 0, failed: 0, durationMs: Date.now() - startedAt },
+		summary: {
+			total: 0,
+			passed: 0,
+			failed: 0,
+			durationMs: Date.now() - startedAt,
+			errorCount: 0,
+			skippedCount: 0,
+		},
 	};
 }

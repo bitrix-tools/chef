@@ -45,6 +45,25 @@ type LintDetails = {
 
 `details.files` only contains files that have at least one message. Zero issues — empty array.
 
+## `summary` shape
+
+Alongside the common fields (extension counters), `chef.lint` adds aggregates over lint messages across the whole set:
+
+```ts
+type LintApiResult['summary'] = {
+  total: number;        // how many extensions were processed
+  passed: number;       // how many passed with no errors
+  failed: number;       // how many had errors
+  durationMs: number;
+
+  // lint-specific
+  errorCount: number;     // total error messages across all extensions
+  warningCount: number;   // total warning messages
+};
+```
+
+`errorCount`/`warningCount` are summed across `details.files[].messages[]` of all extensions.
+
 ## Example: lint and fail on errors
 
 ```ts

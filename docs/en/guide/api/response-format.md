@@ -9,20 +9,29 @@ The API uses **three result shapes** — one per call type. And **never throws**
 Returned by `chef.build`, `chef.lint`, `chef.test`, `chef.typecheck`.
 
 ```ts
-type ChefResult<TDetails> = {
+type ChefResult<TDetails, TSummaryExtras = {}> = {
   ok: boolean;                          // true iff everything succeeded
   command: string;                      // 'build' | 'lint' | ...
   extensions: ChefExtensionResult<TDetails>[];
   notFound: Array<{ name: string; code: string; reason: string }>;
   error?: ChefErrorPayload;             // fatal error for the whole operation
   summary: {
-    total: number;
-    passed: number;
-    failed: number;
+    total: number;       // total extensions
+    passed: number;      // extensions that succeeded
+    failed: number;      // extensions that failed
     durationMs: number;
-  };
+  } & TSummaryExtras;
 };
 ```
+
+`TSummaryExtras` carries command-specific fields in `summary`. `total/passed/failed` always count **extensions**; aggregates over the units inside them (tests, lint messages, bundle bytes) live in these extras:
+
+- `chef.build` → `bundlesSize`, `warningCount`
+- `chef.lint` → `errorCount`, `warningCount`
+- `chef.test` → `tests: { passed, failed, skipped }`
+- `chef.typecheck` → `errorCount`, `skippedCount`
+
+Details on the corresponding command pages.
 
 ### `ChefExtensionResult<TDetails>` — per-extension result
 

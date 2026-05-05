@@ -31,7 +31,7 @@ describe('chef.build', () => {
 			assert.equal(r.command, 'build');
 			assert.isArray(r.extensions);
 			assert.isArray(r.notFound);
-			assert.hasAllKeys(r.summary, ['total', 'passed', 'failed', 'durationMs']);
+			assert.containsAllKeys(r.summary, ['total', 'passed', 'failed', 'durationMs']);
 		});
 
 		it('reports notFound separately from error', async () => {
@@ -96,6 +96,8 @@ describe('chef.build', () => {
 			assert.equal(r.summary.total, 1);
 			assert.equal(r.summary.passed, 1);
 			assert.equal(r.summary.failed, 0);
+			assert.isAbove(r.summary.bundlesSize, 0);
+			assert.isNumber(r.summary.warningCount);
 
 			const ext = r.extensions[0];
 			assert.equal(ext.name, 'ui.ts-valid');

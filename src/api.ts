@@ -26,6 +26,7 @@ export type {
 	BuildDetails,
 	BuildExtensionResult,
 	BuildApiResult,
+	BuildSummaryExtras,
 } from './api/build';
 
 export type {
@@ -36,6 +37,7 @@ export type {
 	LintFileMessage,
 	LintExtensionResult,
 	LintApiResult,
+	LintSummaryExtras,
 } from './api/lint';
 
 export type {
@@ -47,6 +49,7 @@ export type {
 	TestFailure,
 	TestExtensionResult,
 	TestApiResult,
+	TestSummaryExtras,
 } from './api/test';
 
 export type {
@@ -56,6 +59,7 @@ export type {
 	TypecheckMessage,
 	TypecheckExtensionResult,
 	TypecheckApiResult,
+	TypecheckSummaryExtras,
 } from './api/typecheck';
 
 export type {

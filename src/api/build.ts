@@ -21,7 +21,13 @@ export type BuildDetails = {
 };
 
 export type BuildExtensionResult = ChefExtensionResult<BuildDetails>;
-export type BuildApiResult = ChefResult<BuildDetails>;
+
+export type BuildSummaryExtras = {
+	bundlesSize: number,    // total size of all output bundles, in bytes
+	warningCount: number,
+};
+
+export type BuildApiResult = ChefResult<BuildDetails, BuildSummaryExtras>;
 
 export async function build(options: BuildOptions = {}): Promise<BuildApiResult>
 {
@@ -61,6 +67,18 @@ export async function build(options: BuildOptions = {}): Promise<BuildApiResult>
 	const passed = extensions.filter((extension) => extension.ok).length;
 	const failed = extensions.length - passed;
 
+	const { bundlesSize, warningCount } = extensions.reduce(
+		(acc, extension) => {
+			acc.warningCount += extension.warnings?.length ?? 0;
+			for (const bundle of extension.details?.bundles ?? [])
+			{
+				acc.bundlesSize += bundle.size;
+			}
+			return acc;
+		},
+		{ bundlesSize: 0, warningCount: 0 },
+	);
+
 	return {
 		ok: passed === extensions.length && resolvedNotFound.length === 0,
 		command,
@@ -71,6 +89,8 @@ export async function build(options: BuildOptions = {}): Promise<BuildApiResult>
 			passed,
 			failed,
 			durationMs: Date.now() - startedAt,
+			bundlesSize,
+			warningCount,
 		},
 	};
 }
@@ -148,6 +168,13 @@ function emptyResult(command: string, startedAt: number, error: ChefErrorPayload
 		extensions: [],
 		notFound: [],
 		error,
-		summary: { total: 0, passed: 0, failed: 0, durationMs: Date.now() - startedAt },
+		summary: {
+			total: 0,
+			passed: 0,
+			failed: 0,
+			durationMs: Date.now() - startedAt,
+			bundlesSize: 0,
+			warningCount: 0,
+		},
 	};
 }

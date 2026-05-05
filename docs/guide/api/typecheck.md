@@ -41,6 +41,25 @@ type TypecheckDetails = {
 
 `code` — диагностический код TypeScript (например, `TS2322`). `frame` — фрагмент кода вокруг места ошибки, если доступен.
 
+## Структура `summary`
+
+Помимо общих полей (счётчики расширений), `chef.typecheck` добавляет агрегаты по ошибкам типов и пропускам по всему набору:
+
+```ts
+type TypecheckApiResult['summary'] = {
+  total: number;        // сколько расширений было обработано
+  passed: number;       // сколько прошло проверку (включая JS-расширения, помеченные skipped)
+  failed: number;       // сколько с ошибками типов
+  durationMs: number;
+
+  // специфика typecheck
+  errorCount: number;     // суммарно ошибок типов по всем расширениям
+  skippedCount: number;   // сколько расширений пропущено (не TypeScript)
+};
+```
+
+JS-расширения попадают в `passed` с флагом `details.skipped: true` и засчитываются в `skippedCount`.
+
 ## Пример: проверить и упасть на ошибках
 
 ```ts

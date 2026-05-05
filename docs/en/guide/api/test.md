@@ -49,11 +49,39 @@ type TestRunDetails = {
 };
 ```
 
-Each run (unit per browser, e2e separately) is its own entry in `runs`. Top-level numbers are sums across `runs`.
+Each run (unit per browser, e2e separately) is its own entry in `runs`. Top-level numbers (`details.passed/failed/skipped`) are sums across `runs` **for this extension**.
 
 ::: warning
 If the extension has no tests of the selected kind — `runs` is empty and `passed`/`failed`/`skipped` are all `0`. To distinguish "0 tests passed" from "no tests at all", check `runs.length > 0` or call `pkg.hasUnitTests()` / `pkg.hasEndToEndTests()` first.
 :::
+
+## `summary` shape
+
+Alongside the common fields (`total`, `passed`, `failed`, `durationMs` — these count **extensions**), `chef.test` adds aggregates over **tests across the whole set**:
+
+```ts
+type TestApiResult['summary'] = {
+  // common — extension counters
+  total: number;        // how many extensions were run
+  passed: number;       // how many extensions passed (all internal tests ok)
+  failed: number;       // how many extensions failed
+  durationMs: number;   // total wall time of the whole operation
+
+  // test-specific
+  tests: {
+    passed: number;     // how many tests passed (across all extensions × browsers)
+    failed: number;
+    skipped: number;
+  };
+};
+```
+
+Convenient in CI scripts so you don't have to walk `result.extensions[].details.runs[]` manually:
+
+```ts
+const r = await chef.test({ extension: 'main.core', kind: 'unit' });
+console.log(`${r.summary.tests.passed}/${r.summary.tests.passed + r.summary.tests.failed} passed`);
+```
 
 ## Example: run unit tests
 
