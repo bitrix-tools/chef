@@ -1,12 +1,19 @@
 import * as path from 'node:path';
 
-import { createRequire } from 'module';
+import { createRequire } from 'node:module';
 
 import { ConfigManager } from '../config-manager';
 import * as bundleConfigStrategies from './strategies/index'
 import { ConfigStrategy } from '../config-strategy';
 import { BundleConfig, LegacyPluginsConfig } from './bundle-config';
 import { PreparedBundleConfig } from './prepared-bundle-config';
+
+// tsx/cjs/api is loaded via createRequire so it goes through the CJS resolver
+// (which honours exports maps) at *chef's* location — not via ESM resolver
+// running from the consumer's package.json. This allows requiring user-land
+// `bundle.config.js` / `.ts` regardless of the consumer's `"type": "module"`.
+const chefRequire = createRequire(import.meta.url);
+const tsxRequire: (id: string, fromFile: string) => any = chefRequire('tsx/cjs/api').require;
 
 export class BundleConfigManager extends ConfigManager<PreparedBundleConfig>
 {
@@ -28,8 +35,12 @@ export class BundleConfigManager extends ConfigManager<PreparedBundleConfig>
 
 	loadFromFile(configPath: string): any
 	{
-		const require = createRequire(import.meta.url);
-		const sourceBundleConfig: { default: BundleConfig } & BundleConfig = require(path.resolve(configPath));
+		// tsxRequire goes through tsx's CJS loader, which transparently handles
+		// .ts files and ignores the consumer project's `"type": "module"`. This
+		// makes bundle.config loading work both from the CLI (preloaded tsx)
+		// and from the JS API consumed by an ESM project.
+		const absolutePath = path.resolve(configPath);
+		const sourceBundleConfig: { default: BundleConfig } & BundleConfig = tsxRequire(absolutePath, absolutePath);
 
 		const config: Record<string, any> = { ...(sourceBundleConfig?.default ?? sourceBundleConfig) };
 
