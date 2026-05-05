@@ -182,6 +182,33 @@ export class PackageResolver
 		});
 	}
 
+	static async resolveAll(names: string[]): Promise<{
+		found: BasePackage[],
+		notFound: Array<{ name: string, code: string, reason: string }>,
+	}>
+	{
+		const stream = this.resolveStream(names);
+		const found: BasePackage[] = [];
+		const notFound: Array<{ name: string, code: string, reason: string }> = [];
+
+		await new Promise<void>((resolve, reject) => {
+			stream.on('data', ({ extension }: { extension: BasePackage }) => {
+				found.push(extension);
+			});
+			stream.on('not-found', ({ name }: { name: string }) => {
+				notFound.push({
+					name,
+					code: CF.NOT_FOUND,
+					reason: `Extension ${name} not found`,
+				});
+			});
+			stream.on('done', () => resolve());
+			stream.on('error', (err: Error) => reject(err));
+		});
+
+		return { found, notFound };
+	}
+
 	static resolveStream(names: string[]): NodeJS.ReadableStream
 	{
 		const root = Environment.getRoot();

@@ -12,14 +12,22 @@
     "types/**/*",
     "tsconfig.json"
   ],
-  "types": "./types/index.d.ts",
+  "main": "./dist/api.js",
+  "types": "./dist/api.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/api.d.ts",
+      "import": "./dist/api.js"
+    },
+    "./package.json": "./package.json"
+  },
   "engines": {
     "node": ">=22"
   },
   "type": "module",
   "scripts": {
     "prebuild": "mkdir -p dist/ && cp -r src/commands/create/templates dist/ && cp -r src/commands/init/templates dist/ && npx tsc --outDir dist --declaration false --module nodenext --moduleResolution nodenext src/modules/engines/test/e2e/playwright/streaming-reporter.ts",
-    "build": "tsup-node ./src/cli.ts --format esm --splitting=false",
+    "build": "tsup-node ./src/cli.ts ./src/api.ts --format esm --dts --splitting=false",
     "test": "tsx --import=tsx/esm ./node_modules/.bin/mocha './test/**/*.test.ts' --inline-diffs --color=true --timeout 30000",
     "test:watch": "tsx watch --import=tsx/esm ./node_modules/.bin/mocha './test/**/*.test.ts' --inline-diffs --color=true --timeout 30000",
     "release": "tsx scripts/release.ts",

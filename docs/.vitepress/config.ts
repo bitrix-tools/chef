@@ -49,6 +49,24 @@ const sidebarRu = [
     ],
   },
   {
+    text: 'API',
+    collapsed: true,
+    items: [
+      { text: 'Обзор', link: '/guide/api/overview' },
+      { text: 'Установка и импорт', link: '/guide/api/getting-started' },
+      { text: 'Сборка', link: '/guide/api/build' },
+      { text: 'Линтинг', link: '/guide/api/lint' },
+      { text: 'Тесты', link: '/guide/api/test' },
+      { text: 'Type-check', link: '/guide/api/typecheck' },
+      { text: 'Resolve', link: '/guide/api/resolve' },
+      { text: 'Diag', link: '/guide/api/diag' },
+      { text: 'Расширение (Package)', link: '/guide/api/package' },
+      { text: 'Стандарт ответов', link: '/guide/api/response-format' },
+      { text: 'Коды ошибок', link: '/guide/api/errors' },
+      { text: 'CLI --json', link: '/guide/api/json-cli' },
+    ],
+  },
+  {
     text: 'Конфигурация',
     items: [
       { text: 'bundle.config', link: '/config/bundle-config' },
@@ -106,6 +124,24 @@ const sidebarEn = [
     items: [
       { text: 'PhpStorm', link: '/en/guide/phpstorm-plugin' },
       { text: 'VS Code <span class="VPBadge info">soon</span>', link: '/en/guide/vscode' },
+    ],
+  },
+  {
+    text: 'API',
+    collapsed: true,
+    items: [
+      { text: 'Overview', link: '/en/guide/api/overview' },
+      { text: 'Getting Started', link: '/en/guide/api/getting-started' },
+      { text: 'Build', link: '/en/guide/api/build' },
+      { text: 'Lint', link: '/en/guide/api/lint' },
+      { text: 'Test', link: '/en/guide/api/test' },
+      { text: 'Type-check', link: '/en/guide/api/typecheck' },
+      { text: 'Resolve', link: '/en/guide/api/resolve' },
+      { text: 'Diag', link: '/en/guide/api/diag' },
+      { text: 'Extension (Package)', link: '/en/guide/api/package' },
+      { text: 'Response Format', link: '/en/guide/api/response-format' },
+      { text: 'Error Codes', link: '/en/guide/api/errors' },
+      { text: 'CLI --json', link: '/en/guide/api/json-cli' },
     ],
   },
   {

@@ -12,6 +12,8 @@ import { formatInternalError } from '../../diagnostics/format-error';
 import { CF } from '../../diagnostics/diagnostic-codes';
 import { pluralize } from '../../utils/pluralize';
 import { lint } from './internal/lint';
+import { lint as lintApi } from '../../api/lint';
+import { emitJson, isJsonMode } from '../../api/json-output';
 
 import type { BasePackage } from '../../modules/packages/base-package';
 import type { LintRunResult } from './internal/lint';
@@ -149,6 +151,20 @@ lintCommand
 	.addOption(new Option('--exclude <patterns...>', 'Exclude files from linting (glob patterns relative to extension root)'))
 	.addOption(new Option('--no-cache', 'Disable caching (cache is enabled by default)'))
 	.action(async (extensions: string[], args) => {
+		if (isJsonMode())
+		{
+			const result = await lintApi({
+				extension: extensions,
+				path: args.path,
+				fix: args.fix,
+				files: args.file,
+				cache: args.cache,
+				exclude: args.exclude,
+			});
+			emitJson(result);
+			process.exit(result.ok ? 0 : 1);
+		}
+
 		const queue = new SequentialQueue();
 		const lintResults: LintRunResult[] = [];
 		const startTime = Date.now();

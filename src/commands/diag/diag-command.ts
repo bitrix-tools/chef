@@ -51,6 +51,9 @@ import type { UsageLocation } from './analyzers/find-usages-analyzer';
 import type { SnapshotField } from './package-snapshot';
 import type { BasePackage } from '../../modules/packages/base-package';
 
+import { diag as diagApi } from '../../api/diag';
+import { emitJson, isJsonMode } from '../../api/json-output';
+
 const diagCommand = new Command('diag');
 
 diagCommand.description('Diagnose and analyze extensions across the project');
@@ -105,6 +108,13 @@ const topUsedCommand = new Command('top-used')
 	.addOption(createIncludeOption())
 	.addOption(createExcludeOption())
 	.action(async (args) => {
+		if (isJsonMode())
+		{
+			const result = await diagApi.topUsed({ path: args.path, limit: args.limit });
+			emitJson(result);
+			process.exit(result.ok ? 0 : 1);
+		}
+
 		const fields: Set<SnapshotField> = new Set(['dependencies']);
 		const { snapshots, duration, scanned } = await collectPackages({
 			startDirectory: args.path,
@@ -145,6 +155,13 @@ const topDepsCommand = new Command('top-deps')
 	.addOption(createIncludeOption())
 	.addOption(createExcludeOption())
 	.action(async (args) => {
+		if (isJsonMode())
+		{
+			const result = await diagApi.topDeps({ path: args.path, limit: args.limit });
+			emitJson(result);
+			process.exit(result.ok ? 0 : 1);
+		}
+
 		const fields: Set<SnapshotField> = new Set(['dependencies']);
 		const { snapshots, duration, scanned } = await collectPackages({
 			startDirectory: args.path,
@@ -230,6 +247,14 @@ const topBundleSizeCommand = new Command('top-bundle-size')
 	.option('--sort <column>', 'Sort by column: js, css, assets, total', 'total')
 	.action(async (args) => {
 		const sortBy = args.sort as HeavyBundlesSortKey;
+
+		if (isJsonMode())
+		{
+			const result = await diagApi.topBundleSize({ path: args.path, limit: args.limit, sortBy });
+			emitJson(result);
+			process.exit(result.ok ? 0 : 1);
+		}
+
 		const fields: Set<SnapshotField> = new Set(['bundleSize', 'assetsSize']);
 		const { snapshots, duration, scanned } = await collectPackages({
 			startDirectory: args.path,
@@ -485,6 +510,13 @@ const unusedDepsCommand = new Command('unused-deps')
 	.addOption(createIncludeOption())
 	.addOption(createExcludeOption())
 	.action(async (args) => {
+		if (isJsonMode())
+		{
+			const result = await diagApi.unusedDeps({ path: args.path, limit: args.limit });
+			emitJson(result);
+			process.exit(result.ok ? 0 : 1);
+		}
+
 		const fields: Set<SnapshotField> = new Set(['dependencies', 'importedExtensions']);
 		const { snapshots, duration, scanned } = await collectPackages({
 			startDirectory: args.path,
@@ -534,6 +566,13 @@ const circularDepsCommand = new Command('circular-deps')
 	.addOption(createIncludeOption())
 	.addOption(createExcludeOption())
 	.action(async (extensions: string[], args) => {
+		if (isJsonMode())
+		{
+			const result = await diagApi.circularDeps({ extension: extensions, path: args.path });
+			emitJson(result);
+			process.exit(result.ok ? 0 : 1);
+		}
+
 		if (extensions.length === 0)
 		{
 			await checkAllCircularDeps(args);
@@ -704,6 +743,13 @@ const circularImportsCommand = new Command('circular-imports')
 	.addOption(createIncludeOption())
 	.addOption(createExcludeOption())
 	.action(async (extensions: string[], args) => {
+		if (isJsonMode())
+		{
+			const result = await diagApi.circularImports({ extension: extensions, path: args.path });
+			emitJson(result);
+			process.exit(result.ok ? 0 : 1);
+		}
+
 		if (extensions.length === 0)
 		{
 			await checkAllCircularImports(args);

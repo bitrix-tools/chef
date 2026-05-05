@@ -17,6 +17,8 @@ import { Environment } from '../../environment/environment';
 import { formatInternalError } from '../../diagnostics/format-error';
 import { CF } from '../../diagnostics/diagnostic-codes';
 import { printSummary } from '../../shared/print-summary';
+import { test as testApi } from '../../api/test';
+import { emitJson, isJsonMode } from '../../api/json-output';
 
 import type { BasePackage } from '../../modules/packages/base-package';
 import type { Task, TaskGroupResult } from '../../modules/task/task-types';
@@ -150,8 +152,43 @@ function createTestTasks(extension: BasePackage, args: Record<string, any>, type
 	];
 }
 
+async function runTestsJson({ extensions, args, type }: RunTestsOptions): Promise<void>
+{
+	if (args.watch)
+	{
+		emitJson({
+			ok: false,
+			command: 'test',
+			error: { code: CF.OPTION_DENIED, message: '--watch is not supported with --json' },
+			extensions: [],
+			notFound: [],
+			summary: { total: 0, passed: 0, failed: 0, durationMs: 0 },
+		});
+		process.exit(2);
+	}
+
+	const result = await testApi({
+		extension: extensions,
+		path: args.path,
+		kind: type ?? 'all',
+		headed: args.headed,
+		debug: args.debug,
+		grep: args.grep,
+		file: args.file,
+		project: args.project,
+	});
+	emitJson(result);
+	process.exit(result.ok ? 0 : 1);
+}
+
 function runTests({ extensions, args, type }: RunTestsOptions): void
 {
+	if (isJsonMode())
+	{
+		void runTestsJson({ extensions, args, type });
+		return;
+	}
+
 	if (args.reporter === 'teamcity')
 	{
 		return runTestsTeamcity({ extensions, args, type });

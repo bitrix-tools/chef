@@ -16,6 +16,8 @@ import { FileFinder } from '../../utils/file-finder';
 import { Environment } from '../../environment/environment';
 import { loadTsConfig } from '../../utils/load-tsconfig';
 import { checkTypes } from '../../modules/engines/build/rollup/plugins/typescript';
+import { typecheck as typecheckApi } from '../../api/typecheck';
+import { emitJson, isJsonMode } from '../../api/json-output';
 
 import type { BasePackage } from '../../modules/packages/base-package';
 import type { Task, TaskResult, TaskDetail } from '../../modules/task/task-types';
@@ -133,6 +135,18 @@ typecheckCommand
 	.addOption(new Option('--file <patterns...>', 'Check specific files (paths relative to extension root)'))
 	.addOption(new Option('--exclude <patterns...>', 'Exclude files from type checking (paths relative to extension root)'))
 	.action(async (extensions: string[], args) => {
+		if (isJsonMode())
+		{
+			const result = await typecheckApi({
+				extension: extensions,
+				path: args.path,
+				files: args.file,
+				exclude: args.exclude,
+			});
+			emitJson(result);
+			process.exit(result.ok ? 0 : 1);
+		}
+
 		const queue = new SequentialQueue();
 		const results: TaskResult[] = [];
 		const startTime = Date.now();

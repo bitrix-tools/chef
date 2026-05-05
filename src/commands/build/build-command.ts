@@ -17,6 +17,8 @@ import { createShutdown } from '../../utils/create-shutdown';
 import { formatInternalError } from '../../diagnostics/format-error';
 import { CF } from '../../diagnostics/diagnostic-codes';
 import { build } from './internal/build';
+import { build as buildApi } from '../../api/build';
+import { emitJson, isJsonMode } from '../../api/json-output';
 
 import type { FSWatcher } from 'chokidar';
 import type { BasePackage } from '../../modules/packages/base-package';
@@ -41,6 +43,30 @@ buildCommand
 		else if (args.development)
 		{
 			process.env.NODE_ENV = 'development';
+		}
+
+		if (isJsonMode())
+		{
+			if (args.watch)
+			{
+				emitJson({
+					ok: false,
+					command: 'build',
+					error: { code: CF.OPTION_DENIED, message: '--watch is not supported with --json' },
+					extensions: [],
+					notFound: [],
+					summary: { total: 0, passed: 0, failed: 0, durationMs: 0 },
+				});
+				process.exit(2);
+			}
+
+			const result = await buildApi({
+				extension: extensions,
+				path: args.path,
+				force: args.force,
+			});
+			emitJson(result);
+			process.exit(result.ok ? 0 : 1);
 		}
 
 		const queue = new SequentialQueue();
