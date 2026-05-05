@@ -5,7 +5,7 @@
 ```bash
 chef build main.core --json
 chef lint 'ui.*' --json
-chef test main.core --json --reporter=teamcity   # см. ниже
+chef test main.core --json
 chef typecheck main.core --json
 chef diag top-used --limit 10 --json
 chef diag circular-deps --json
@@ -110,3 +110,5 @@ npx tsx scripts/heaviest.ts main.core | jq '.[] | {name, total}'
 ## Альтернатива JSON: TeamCity-репортёр
 
 Для тестов есть отдельный режим — `chef test --reporter=teamcity` — который выводит сервисные сообщения TeamCity вместо JSON. Используется в CI на TeamCity. Это **не** часть API-формата, см. [страницу команд](../commands).
+
+При одновременной передаче `--json` и `--reporter=teamcity` приоритет у `--json`: вывод будет JSON, репортёр игнорируется.

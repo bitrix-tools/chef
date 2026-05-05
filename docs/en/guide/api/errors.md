@@ -23,14 +23,13 @@ if (result.error?.code === CF.PROJECT_ROOT_NOT_FOUND)
 
 These end up in `result.error` (fatal operation error).
 
-## Resolution (CF2xxx)
+## Configuration / usage (CF2xxx)
 
-| Code                       | When it occurs                                       |
-|----------------------------|-------------------------------------------------------|
-| `CF.NOT_FOUND`             | Extension by the given name/pattern was not found.   |
-| `CF.PACKAGE_PROTECTED`     | Extension marked as `protected` — skipped.           |
-
-End up in `result.notFound[]` or `result.extensions[].error`.
+| Code                       | When it occurs                                                                  |
+|----------------------------|---------------------------------------------------------------------------------|
+| `CF.NOT_FOUND`             | Extension by the given name/pattern was not found. Goes to `result.notFound[]`. |
+| `CF.PACKAGE_PROTECTED`     | Extension marked as `protected` — skipped.                                      |
+| `CF.OPTION_DENIED`         | Incompatible options: `extension` and `path` together, or `--watch` and `--json` in the CLI. Goes to `result.error` (or `throw` from `chef.findPackages`). |
 
 ## Build (CF1xxx)
 

@@ -5,7 +5,7 @@ Every CLI command supports the global `--json` flag — it suppresses normal hum
 ```bash
 chef build main.core --json
 chef lint 'ui.*' --json
-chef test main.core --json --reporter=teamcity   # see below
+chef test main.core --json
 chef typecheck main.core --json
 chef diag top-used --limit 10 --json
 chef diag circular-deps --json
@@ -110,3 +110,5 @@ npx tsx scripts/heaviest.ts main.core | jq '.[] | {name, total}'
 ## JSON alternative: TeamCity reporter
 
 For tests there is a separate mode — `chef test --reporter=teamcity` — that emits TeamCity service messages instead of JSON. Used in TeamCity CI. This is **not** part of the API format, see the [Commands page](../commands).
+
+If `--json` and `--reporter=teamcity` are passed together, `--json` wins: the output is JSON, the reporter is ignored.

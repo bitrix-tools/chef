@@ -162,6 +162,8 @@ catch (error)
 
 **Actions** (`pkg.build()`, `pkg.lint()`, `pkg.test()`, `pkg.typecheck()`) — on the contrary, do not throw. They return `ChefExtensionResult` with an `error?` inside.
 
+`chef.findPackages()` throws `ChefError(CF.OPTION_DENIED)` when both `extension` and `path` are passed — this is a clear usage error. An invalid `cwd` returns an empty array.
+
 ## When ok is exactly true
 
 For `ChefResult`:

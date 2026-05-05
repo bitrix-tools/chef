@@ -33,7 +33,7 @@ chef.findPackages(options?: {
 }): Promise<Package[]>
 ```
 
-Returns an array: by name/pattern, by directory, or every extension in the project. Never throws — environment failures yield an empty array.
+Returns an array: by name/pattern, by directory, or every extension in the project. Environment failures yield an empty array. Throws `ChefError(CF.OPTION_DENIED)` when called with both `extension` and `path`.
 
 ```ts
 const ui = await chef.findPackages({ extension: 'ui.*' });

@@ -162,6 +162,8 @@ catch (error)
 
 **Действия** (`pkg.build()`, `pkg.lint()`, `pkg.test()`, `pkg.typecheck()`) — наоборот, не throw'ят. Возвращают `ChefExtensionResult` с `error?` внутри.
 
+`chef.findPackages()` throw'ит `ChefError(CF.OPTION_DENIED)` если переданы и `extension`, и `path` — это явная usage-ошибка. На невалидный `cwd` — возвращает пустой массив.
+
 ## ok: точно когда true
 
 Для `ChefResult`:

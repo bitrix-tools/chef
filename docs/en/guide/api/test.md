@@ -51,6 +51,10 @@ type TestRunDetails = {
 
 Each run (unit per browser, e2e separately) is its own entry in `runs`. Top-level numbers are sums across `runs`.
 
+::: warning
+If the extension has no tests of the selected kind — `runs` is empty and `passed`/`failed`/`skipped` are all `0`. To distinguish "0 tests passed" from "no tests at all", check `runs.length > 0` or call `pkg.hasUnitTests()` / `pkg.hasEndToEndTests()` first.
+:::
+
 ## Example: run unit tests
 
 ```ts
