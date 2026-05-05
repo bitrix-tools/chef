@@ -138,8 +138,8 @@ typecheckCommand
 		if (isJsonMode())
 		{
 			const result = await typecheckApi({
-				extension: extensions,
-				path: args.path,
+				extension: extensions.length > 0 ? extensions : undefined,
+				path: extensions.length > 0 ? undefined : args.path,
 				files: args.file,
 				exclude: args.exclude,
 			});

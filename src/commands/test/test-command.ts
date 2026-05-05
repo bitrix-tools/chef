@@ -168,8 +168,8 @@ async function runTestsJson({ extensions, args, type }: RunTestsOptions): Promis
 	}
 
 	const result = await testApi({
-		extension: extensions,
-		path: args.path,
+		extension: extensions.length > 0 ? extensions : undefined,
+		path: extensions.length > 0 ? undefined : args.path,
 		kind: type ?? 'all',
 		headed: args.headed,
 		debug: args.debug,

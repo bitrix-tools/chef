@@ -61,8 +61,8 @@ buildCommand
 			}
 
 			const result = await buildApi({
-				extension: extensions,
-				path: args.path,
+				extension: extensions.length > 0 ? extensions : undefined,
+				path: extensions.length > 0 ? undefined : args.path,
 				force: args.force,
 			});
 			emitJson(result);

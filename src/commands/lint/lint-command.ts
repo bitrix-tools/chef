@@ -154,8 +154,8 @@ lintCommand
 		if (isJsonMode())
 		{
 			const result = await lintApi({
-				extension: extensions,
-				path: args.path,
+				extension: extensions.length > 0 ? extensions : undefined,
+				path: extensions.length > 0 ? undefined : args.path,
 				fix: args.fix,
 				files: args.file,
 				cache: args.cache,

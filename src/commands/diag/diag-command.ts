@@ -568,7 +568,10 @@ const circularDepsCommand = new Command('circular-deps')
 	.action(async (extensions: string[], args) => {
 		if (isJsonMode())
 		{
-			const result = await diagApi.circularDeps({ extension: extensions, path: args.path });
+			const result = await diagApi.circularDeps({
+				extension: extensions.length > 0 ? extensions : undefined,
+				path: extensions.length > 0 ? undefined : args.path,
+			});
 			emitJson(result);
 			process.exit(result.ok ? 0 : 1);
 		}
@@ -745,7 +748,10 @@ const circularImportsCommand = new Command('circular-imports')
 	.action(async (extensions: string[], args) => {
 		if (isJsonMode())
 		{
-			const result = await diagApi.circularImports({ extension: extensions, path: args.path });
+			const result = await diagApi.circularImports({
+				extension: extensions.length > 0 ? extensions : undefined,
+				path: extensions.length > 0 ? undefined : args.path,
+			});
 			emitJson(result);
 			process.exit(result.ok ? 0 : 1);
 		}
