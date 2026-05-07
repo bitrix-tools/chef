@@ -2,18 +2,17 @@
 
 ## v1.11.0 <Badge type="tip" text="07.05.2026" />
 
-Добавлен флаг --reporter <name> для команд build/lint/test/typecheck/diag.
-Сейчас доступны default (человекочитаемый, по умолчанию), json (структурированный
-JSON в stdout) и teamcity (только для chef test).
+Добавлен флаг `--reporter <name>` для команд build/lint/test/typecheck/diag.
+Сейчас доступны `default` (человекочитаемый, по умолчанию), `json` (структурированный
+JSON в stdout) и `teamcity` (только для `chef test`).
 
 Формат JSON-ответа:
-- В корне ответа есть chefVersion и cwd
-- Список нерешённых имён расширений отдаётся в поле notFound
-- В test failure приходят file/line/column/frame и diff (без полного стек-трейса)
-- В test JSON корректно строится путь suite, имя браузера — реальное
-  (chromium/firefox/webkit)
-- В lint и typecheck нет дублирования сообщений между details и errors
-- bundles[].fileName переименовано в bundles[].file
+- В корне ответа есть `chefVersion` и `cwd`
+- Список нерешённых имён расширений отдаётся в поле `notFound`
+- В test failure приходят `file`/`line`/`column`/`frame` и `diff` (без полного стек-трейса)
+- В test JSON корректно строится путь suite, имя браузера — реальное (`chromium`/`firefox`/`webkit`)
+- В lint и typecheck нет дублирования сообщений между `details` и `errors`
+- `bundles[].fileName` переименовано в `bundles[].file`
 
 ## v1.10.0 <Badge type="tip" text="04.05.2026" />
 
