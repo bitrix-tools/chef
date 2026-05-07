@@ -17,8 +17,9 @@ import { createShutdown } from '../../utils/create-shutdown';
 import { formatInternalError } from '../../diagnostics/format-error';
 import { CF } from '../../diagnostics/diagnostic-codes';
 import { build } from './internal/build';
-import { build as buildApi } from '../../api/build';
-import { emitJson, isJsonMode } from '../../api/json-output';
+import { build as buildJson } from '../../reporters/json/build';
+import { emitJson } from '../../reporters/json/emit';
+import { createReporterOption } from '../../shared/options/reporter-option';
 
 import type { FSWatcher } from 'chokidar';
 import type { BasePackage } from '../../modules/packages/base-package';
@@ -35,6 +36,7 @@ buildCommand
 	.addOption(forceOption)
 	.addOption(productionOption)
 	.addOption(developmentOption)
+	.addOption(createReporterOption())
 	.action(async (extensions: string[], args) => {
 		if (args.production)
 		{
@@ -45,28 +47,27 @@ buildCommand
 			process.env.NODE_ENV = 'development';
 		}
 
-		if (isJsonMode())
+		if (args.reporter === 'json')
 		{
 			if (args.watch)
 			{
 				emitJson({
-					ok: false,
+					success: false,
 					command: 'build',
-					error: { code: CF.OPTION_DENIED, message: '--watch is not supported with --json' },
+					error: { code: CF.OPTION_DENIED, message: '--watch is not supported with --reporter json' },
 					extensions: [],
-					notFound: [],
-					summary: { total: 0, passed: 0, failed: 0, durationMs: 0 },
+					summary: { total: 0, passed: 0, failed: 0, durationMs: 0, errorCount: 1, warningCount: 0 },
 				});
 				process.exit(2);
 			}
 
-			const result = await buildApi({
+			const result = await buildJson({
 				extension: extensions.length > 0 ? extensions : undefined,
 				path: extensions.length > 0 ? undefined : args.path,
 				force: args.force,
 			});
 			emitJson(result);
-			process.exit(result.ok ? 0 : 1);
+			process.exit(result.success ? 0 : 1);
 		}
 
 		const queue = new SequentialQueue();

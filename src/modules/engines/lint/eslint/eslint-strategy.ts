@@ -36,6 +36,7 @@ const EMPTY_RESULT: LintResult = {
 	getErrorsCount: () => 0,
 	hasWarnings: () => false,
 	getWarningsCount: () => 0,
+	getFixedCount: () => 0,
 };
 
 export class ESLintStrategy extends LintStrategy
@@ -101,6 +102,9 @@ export class ESLintStrategy extends LintStrategy
 
 		const errorsCount = results.reduce((sum, r) => sum + r.errorCount, 0);
 		const warningsCount = results.reduce((sum, r) => sum + r.warningCount, 0);
+		const fixedCount = options.fix
+			? results.filter((r) => r.output != null).length
+			: 0;
 
 		return {
 			files,
@@ -108,6 +112,7 @@ export class ESLintStrategy extends LintStrategy
 			getErrorsCount: () => errorsCount,
 			hasWarnings: () => warningsCount > 0,
 			getWarningsCount: () => warningsCount,
+			getFixedCount: () => fixedCount,
 		};
 	}
 }

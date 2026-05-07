@@ -11,6 +11,12 @@ export type TestToken = {
 	showDiff?: boolean;
 	actual?: unknown;
 	expected?: unknown;
+	/**
+	 * Browser the test ran in. Populated by the strategy that produced the
+	 * token: e2e — from Playwright project name, unit — from the launched
+	 * BrowserType. Absent when not applicable (e.g. SUITE_START tokens).
+	 */
+	browser?: string;
 };
 
 export type UnitTestOptions = {

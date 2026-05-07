@@ -30,4 +30,5 @@ export interface LintResult {
 	getErrorsCount(): number;
 	hasWarnings(): boolean;
 	getWarningsCount(): number;
+	getFixedCount(): number;
 }

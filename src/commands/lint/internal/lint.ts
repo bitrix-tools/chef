@@ -30,6 +30,7 @@ const EMPTY_LINT_RESULT: LintResult = {
 	getErrorsCount: () => 0,
 	hasWarnings: () => false,
 	getWarningsCount: () => 0,
+	getFixedCount: () => 0,
 };
 
 export function lint(extension: BasePackage, options: LintCommandOptions = {}): () => Promise<LintRunResult>

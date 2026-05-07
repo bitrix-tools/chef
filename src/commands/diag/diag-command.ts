@@ -51,8 +51,9 @@ import type { UsageLocation } from './analyzers/find-usages-analyzer';
 import type { SnapshotField } from './package-snapshot';
 import type { BasePackage } from '../../modules/packages/base-package';
 
-import { diag as diagApi } from '../../api/diag';
-import { emitJson, isJsonMode } from '../../api/json-output';
+import { diag as diagJson } from '../../reporters/json/diag';
+import { emitJson } from '../../reporters/json/emit';
+import { createReporterOption } from '../../shared/options/reporter-option';
 
 const diagCommand = new Command('diag');
 
@@ -108,11 +109,11 @@ const topUsedCommand = new Command('top-used')
 	.addOption(createIncludeOption())
 	.addOption(createExcludeOption())
 	.action(async (args) => {
-		if (isJsonMode())
+		if (args.reporter === 'json')
 		{
-			const result = await diagApi.topUsed({ path: args.path, limit: args.limit });
+			const result = await diagJson.topUsed({ path: args.path, limit: args.limit });
 			emitJson(result);
-			process.exit(result.ok ? 0 : 1);
+			process.exit(result.success ? 0 : 1);
 		}
 
 		const fields: Set<SnapshotField> = new Set(['dependencies']);
@@ -155,11 +156,11 @@ const topDepsCommand = new Command('top-deps')
 	.addOption(createIncludeOption())
 	.addOption(createExcludeOption())
 	.action(async (args) => {
-		if (isJsonMode())
+		if (args.reporter === 'json')
 		{
-			const result = await diagApi.topDeps({ path: args.path, limit: args.limit });
+			const result = await diagJson.topDeps({ path: args.path, limit: args.limit });
 			emitJson(result);
-			process.exit(result.ok ? 0 : 1);
+			process.exit(result.success ? 0 : 1);
 		}
 
 		const fields: Set<SnapshotField> = new Set(['dependencies']);
@@ -176,7 +177,7 @@ const topDepsCommand = new Command('top-deps')
 			items: results,
 			columns: [
 				{ label: 'Extension', value: (item) => item.name },
-				{ label: 'Dependencies', value: (item) => String(item.count), align: 'right' },
+				{ label: 'Dependencies', value: (item) => String(item.directDeps), align: 'right' },
 			],
 			scanned,
 			duration,
@@ -203,6 +204,13 @@ const topDepsTreeCommand = new Command('top-deps-tree')
 	.addOption(createIncludeOption())
 	.addOption(createExcludeOption())
 	.action(async (args) => {
+		if (args.reporter === 'json')
+		{
+			const result = await diagJson.topDepsTree({ path: args.path, limit: args.limit });
+			emitJson(result);
+			process.exit(result.success ? 0 : 1);
+		}
+
 		const fields: Set<SnapshotField> = new Set(['dependencyTreeSize']);
 		const { snapshots, duration, scanned } = await collectPackages({
 			startDirectory: args.path,
@@ -248,11 +256,11 @@ const topBundleSizeCommand = new Command('top-bundle-size')
 	.action(async (args) => {
 		const sortBy = args.sort as HeavyBundlesSortKey;
 
-		if (isJsonMode())
+		if (args.reporter === 'json')
 		{
-			const result = await diagApi.topBundleSize({ path: args.path, limit: args.limit, sortBy });
+			const result = await diagJson.topBundleSize({ path: args.path, limit: args.limit, sortBy });
 			emitJson(result);
-			process.exit(result.ok ? 0 : 1);
+			process.exit(result.success ? 0 : 1);
 		}
 
 		const fields: Set<SnapshotField> = new Set(['bundleSize', 'assetsSize']);
@@ -303,6 +311,14 @@ const topTotalSizeCommand = new Command('top-total-size')
 	.option('--sort <column>', 'Sort by column: own, total, deps, tree', 'total')
 	.action(async (args) => {
 		const sortBy = args.sort as HeavyTotalSortKey;
+
+		if (args.reporter === 'json')
+		{
+			const result = await diagJson.topTotalSize({ path: args.path, limit: args.limit, sortBy });
+			emitJson(result);
+			process.exit(result.success ? 0 : 1);
+		}
+
 		const fields: Set<SnapshotField> = new Set(['bundleSize', 'assetsSize', 'totalSize', 'dependencies', 'dependencyTreeSize']);
 		const { snapshots, duration, scanned } = await collectPackages({
 			startDirectory: args.path,
@@ -353,6 +369,20 @@ const configCommand = new Command('config')
 	.option('-m, --missing', 'Find extensions where the specified keys are absent')
 	.action(async (args) => {
 		const keys: string[] = args.key;
+
+		if (args.reporter === 'json')
+		{
+			const result = await diagJson.config({
+				path: args.path,
+				keys,
+				value: args.value,
+				except: args.except,
+				missing: args.missing,
+			});
+			emitJson(result);
+			process.exit(result.success ? 0 : 1);
+		}
+
 		const fields: Set<SnapshotField> = new Set(['bundleConfig']);
 
 		const keyLabel = keys.map((k: string) => `"${k}"`).join(', ');
@@ -510,11 +540,11 @@ const unusedDepsCommand = new Command('unused-deps')
 	.addOption(createIncludeOption())
 	.addOption(createExcludeOption())
 	.action(async (args) => {
-		if (isJsonMode())
+		if (args.reporter === 'json')
 		{
-			const result = await diagApi.unusedDeps({ path: args.path, limit: args.limit });
+			const result = await diagJson.unusedDeps({ path: args.path, limit: args.limit });
 			emitJson(result);
-			process.exit(result.ok ? 0 : 1);
+			process.exit(result.success ? 0 : 1);
 		}
 
 		const fields: Set<SnapshotField> = new Set(['dependencies', 'importedExtensions']);
@@ -566,14 +596,14 @@ const circularDepsCommand = new Command('circular-deps')
 	.addOption(createIncludeOption())
 	.addOption(createExcludeOption())
 	.action(async (extensions: string[], args) => {
-		if (isJsonMode())
+		if (args.reporter === 'json')
 		{
-			const result = await diagApi.circularDeps({
+			const result = await diagJson.circularDeps({
 				extension: extensions.length > 0 ? extensions : undefined,
 				path: extensions.length > 0 ? undefined : args.path,
 			});
 			emitJson(result);
-			process.exit(result.ok ? 0 : 1);
+			process.exit(result.success ? 0 : 1);
 		}
 
 		if (extensions.length === 0)
@@ -746,14 +776,14 @@ const circularImportsCommand = new Command('circular-imports')
 	.addOption(createIncludeOption())
 	.addOption(createExcludeOption())
 	.action(async (extensions: string[], args) => {
-		if (isJsonMode())
+		if (args.reporter === 'json')
 		{
-			const result = await diagApi.circularImports({
+			const result = await diagJson.circularImports({
 				extension: extensions.length > 0 ? extensions : undefined,
 				path: extensions.length > 0 ? undefined : args.path,
 			});
 			emitJson(result);
-			process.exit(result.ok ? 0 : 1);
+			process.exit(result.success ? 0 : 1);
 		}
 
 		if (extensions.length === 0)
@@ -931,6 +961,13 @@ const findUsagesCommand = new Command('find-usages')
 	.argument('<extension>', 'Extension name to search for (e.g. ui.buttons)')
 	.addOption(createPathOption('Search for usages starting from this directory'))
 	.action(async (extensionName: string, args) => {
+		if (args.reporter === 'json')
+		{
+			const result = await diagJson.findUsages({ extension: extensionName, path: args.path });
+			emitJson(result);
+			process.exit(result.success ? 0 : 1);
+		}
+
 		const start = performance.now();
 
 		console.log('');
@@ -1058,6 +1095,13 @@ const unusedCommand = new Command('unused')
 	.addOption(createIncludeOption())
 	.addOption(createExcludeOption())
 	.action(async (args) => {
+		if (args.reporter === 'json')
+		{
+			const result = await diagJson.unused({ path: args.path });
+			emitJson(result);
+			process.exit(result.success ? 0 : 1);
+		}
+
 		const fields: Set<SnapshotField> = new Set(['dependencies']);
 		const { snapshots, duration: collectDuration, scanned } = await collectPackages({
 			startDirectory: args.path,
@@ -1112,6 +1156,18 @@ const depsTreeCommand = new Command('deps-tree')
 	.option('-d, --depth <n>', 'Limit tree depth', parseInt)
 	.option('-w, --why <extension>', 'Find the path to a specific dependency')
 	.action(async (extensionName: string, args) => {
+		if (args.reporter === 'json')
+		{
+			const result = await diagJson.depsTree({
+				extension: extensionName,
+				flat: args.flat,
+				depth: args.depth,
+				why: args.why,
+			});
+			emitJson(result);
+			process.exit(result.success ? 0 : 1);
+		}
+
 		const start = performance.now();
 
 		const extension: BasePackage | null = PackageResolver.resolve(extensionName);
@@ -1192,6 +1248,16 @@ const bundleSizeCommand = new Command('bundle-size')
 	.argument('<extension>', 'Extension name (e.g. ui.buttons)')
 	.option('--with-deps', 'Include all transitive dependencies')
 	.action(async (extensionName: string, args) => {
+		if (args.reporter === 'json')
+		{
+			const result = await diagJson.bundleSize({
+				extension: extensionName,
+				withDeps: args.withDeps,
+			});
+			emitJson(result);
+			process.exit(result.success ? 0 : 1);
+		}
+
 		const start = performance.now();
 
 		const extension: BasePackage | null = PackageResolver.resolve(extensionName);
@@ -1720,20 +1786,28 @@ async function checkSpecificBaseline(extensions: string[], args: { errorsOnly?: 
 
 // endregion
 
-diagCommand
-	.addCommand(topUsedCommand)
-	.addCommand(topDepsCommand)
-	.addCommand(topDepsTreeCommand)
-	.addCommand(topBundleSizeCommand)
-	.addCommand(topTotalSizeCommand)
-	.addCommand(configCommand)
-	.addCommand(unusedDepsCommand)
-	.addCommand(circularImportsCommand)
-	.addCommand(circularDepsCommand)
-	.addCommand(findUsagesCommand)
-	.addCommand(unusedCommand)
-	.addCommand(depsTreeCommand)
-	.addCommand(bundleSizeCommand)
-	.addCommand(baselineCommand);
+const jsonCapableSubcommands: Command[] = [
+	topUsedCommand,
+	topDepsCommand,
+	topDepsTreeCommand,
+	topBundleSizeCommand,
+	topTotalSizeCommand,
+	configCommand,
+	unusedDepsCommand,
+	circularImportsCommand,
+	circularDepsCommand,
+	findUsagesCommand,
+	unusedCommand,
+	depsTreeCommand,
+	bundleSizeCommand,
+];
+
+for (const subcommand of jsonCapableSubcommands)
+{
+	subcommand.addOption(createReporterOption());
+	diagCommand.addCommand(subcommand);
+}
+
+diagCommand.addCommand(baselineCommand);
 
 export { diagCommand };

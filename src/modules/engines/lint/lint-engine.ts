@@ -24,6 +24,7 @@ export class LintEngine
 				getErrorsCount: () => 0,
 				hasWarnings: () => false,
 				getWarningsCount: () => 0,
+				getFixedCount: () => 0,
 			};
 		}
 

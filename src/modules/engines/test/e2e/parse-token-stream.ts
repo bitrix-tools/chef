@@ -56,6 +56,7 @@ export function parseTokenStream(buffer: string): { events: ParsedEvent[]; remai
 				suite: data.suite,
 				duration: data.duration,
 				error: data.error,
+				browser: data.browser,
 			};
 
 			events.push({

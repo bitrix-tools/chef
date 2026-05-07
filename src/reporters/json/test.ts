@@ -1,0 +1,587 @@
+import { CF } from '../../diagnostics/diagnostic-codes';
+import { Environment } from '../../environment/environment';
+import {
+	findPlaywrightConfig,
+	getBrowsersFromConfig,
+} from '../../modules/engines/test/unit/playwright/find-playwright-config';
+
+import { buildMeta } from './meta';
+import { extractFrameFromStack } from './extract-frame';
+import { initializeEnvironment } from './initialize-environment';
+import { toErrorPayload } from './to-error-payload';
+import { resolveTargets, type TargetSelector } from './resolve-targets';
+
+import type {
+	TestResult as EngineTestResult,
+	BrowserType,
+	ConsoleLog,
+} from '../../modules/engines/test/test-types';
+
+const KNOWN_BROWSERS: Record<string, BrowserType> = {
+	chromium: 'chromium',
+	firefox: 'firefox',
+	webkit: 'webkit',
+};
+import type { BasePackage } from '../../modules/packages/base-package';
+import type {
+	JsonInputOptions, JsonErrorPayload, JsonExtensionResult,
+	JsonOperationResult, JsonNotFoundEntry,
+} from './types';
+
+export type TestKind = 'unit' | 'e2e' | 'all';
+
+export type TestOptions = JsonInputOptions & TargetSelector & {
+	kind?: TestKind,
+	headed?: boolean,
+	debug?: boolean,
+	grep?: string,
+	file?: string,
+	project?: string | string[],
+};
+
+export type TestStatus = 'passed' | 'failed' | 'skipped';
+
+export type BrowserTestResult = {
+	status: TestStatus,
+	durationMs?: number,
+	failure?: TestFailure,
+};
+
+export type TestFailure = {
+	message: string,
+	file?: string,
+	line?: number,
+	column?: number,
+	/** Code frame around the failing line — populated when the source file can be read. */
+	frame?: string,
+	/** Diff payload from the assertion library (e.g. assert.deepEqual). */
+	diff?: {
+		actual: unknown,
+		expected: unknown,
+	},
+};
+
+export type TestEntry = {
+	suite: string[],
+	title: string,
+	status: TestStatus,
+	results: Record<string, BrowserTestResult>,   // key: browser name
+};
+
+export type TestKindDetails = {
+	ran: boolean,
+	skipReason?: string,
+	durationMs: number,
+	browsers: string[],
+	passed: number,
+	failed: number,
+	skipped: number,
+	total: number,
+	tests: TestEntry[],
+	consoleLogs: ConsoleLog[],
+};
+
+export type TestDetails = {
+	unit: TestKindDetails,
+	e2e: TestKindDetails,
+};
+
+export type TestExtensionResult = JsonExtensionResult<TestDetails>;
+
+export type TestSummaryExtras = {
+	tests: {
+		total: number,
+		passed: number,
+		failed: number,
+		skipped: number,
+	},
+};
+
+export type TestJsonResult = JsonOperationResult<TestDetails, TestSummaryExtras>;
+
+const UNKNOWN_BROWSER = 'unknown';
+
+export async function test(options: TestOptions = {}): Promise<TestJsonResult>
+{
+	const startedAt = Date.now();
+	const cwd = options.cwd ?? process.cwd();
+	const command = 'test';
+
+	const envError = initializeEnvironment(cwd);
+	if (envError)
+	{
+		return fatalResult(command, cwd, startedAt, envError);
+	}
+
+	const extensions: TestExtensionResult[] = [];
+	let notFound: JsonNotFoundEntry[] = [];
+
+	try
+	{
+		const targets = await resolveTargets(options);
+		if (targets.error)
+		{
+			return fatalResult(command, cwd, startedAt, targets.error);
+		}
+
+		notFound = targets.notFound;
+
+		for (const extensionPackage of targets.found)
+		{
+			extensions.push(await testOne(extensionPackage, options));
+		}
+	}
+	catch (error)
+	{
+		return fatalResult(command, cwd, startedAt, toErrorPayload(error, CF.PACKAGE_READ_ERROR));
+	}
+
+	return {
+		...buildMeta(cwd),
+		success: extensions.every((extension) => extension.success),
+		command,
+		extensions,
+		notFound,
+		summary: aggregateSummary(extensions, startedAt),
+	};
+}
+
+async function testOne(
+	extensionPackage: BasePackage,
+	options: TestOptions,
+): Promise<TestExtensionResult>
+{
+	const taskStart = Date.now();
+	const name = extensionPackage.getName();
+	const path = extensionPackage.getPath();
+	const kind: TestKind = options.kind ?? 'all';
+
+	try
+	{
+		let unit: TestKindDetails;
+		let e2e: TestKindDetails;
+
+		if (kind === 'e2e')
+		{
+			unit = emptyKind('filtered by --kind e2e');
+		}
+		else
+		{
+			unit = await runUnit(extensionPackage, options);
+		}
+
+		if (kind === 'unit')
+		{
+			e2e = emptyKind('filtered by --kind unit');
+		}
+		else
+		{
+			e2e = await runE2E(extensionPackage, options);
+		}
+
+		const errors: JsonErrorPayload[] = [
+			...collectFailures(unit),
+			...collectFailures(e2e),
+		];
+
+		return {
+			name,
+			path,
+			success: unit.failed + e2e.failed === 0,
+			durationMs: Date.now() - taskStart,
+			details: { unit, e2e },
+			errors,
+			warnings: [],
+		};
+	}
+	catch (error)
+	{
+		return {
+			name,
+			path,
+			success: false,
+			durationMs: Date.now() - taskStart,
+			details: {
+				unit: emptyKind(),
+				e2e: emptyKind(),
+			},
+			errors: [toErrorPayload(error, CF.TEST_FAILED)],
+			warnings: [],
+		};
+	}
+}
+
+async function runUnit(extensionPackage: BasePackage, options: TestOptions): Promise<TestKindDetails>
+{
+	const hasUnit = await extensionPackage.hasUnitTests();
+	if (!hasUnit)
+	{
+		return emptyKind('no unit tests');
+	}
+
+	const browsers = await resolveUnitBrowsers(extensionPackage, options);
+	const merger = createMerger();
+	const allLogs: ConsoleLog[] = [];
+	let durationMs = 0;
+
+	for (const browserType of browsers)
+	{
+		const runStart = Date.now();
+		const result = await extensionPackage.runUnitTests({
+			headed: options.headed,
+			debug: options.debug,
+			grep: options.grep,
+			file: options.file,
+			browserType,
+		});
+		merger.absorb(result, browserType);
+		allLogs.push(...result.consoleLogs);
+		durationMs += Date.now() - runStart;
+	}
+
+	return merger.finish(durationMs, allLogs);
+}
+
+async function resolveUnitBrowsers(extensionPackage: BasePackage, options: TestOptions): Promise<BrowserType[]>
+{
+	if (options.project !== undefined)
+	{
+		const projects = Array.isArray(options.project) ? options.project : [options.project];
+		const fromProjects = projects
+			.map((project) => KNOWN_BROWSERS[project])
+			.filter(Boolean);
+		if (fromProjects.length > 0)
+		{
+			return fromProjects;
+		}
+	}
+
+	const config = await findPlaywrightConfig(extensionPackage.getPath(), Environment.getRoot() ?? extensionPackage.getPath());
+	return getBrowsersFromConfig(config);
+}
+
+async function runE2E(extensionPackage: BasePackage, options: TestOptions): Promise<TestKindDetails>
+{
+	const hasE2e = await extensionPackage.hasEndToEndTests();
+	if (!hasE2e)
+	{
+		return emptyKind('no e2e tests');
+	}
+
+	const merger = createMerger();
+	const runStart = Date.now();
+	const result = await extensionPackage.runEndToEndTests({
+		headed: options.headed,
+		debug: options.debug,
+		grep: options.grep,
+		file: options.file,
+		project: options.project,
+	});
+	merger.absorb(result);
+	const durationMs = Date.now() - runStart;
+
+	return merger.finish(durationMs, [...result.consoleLogs]);
+}
+
+type Merger = {
+	absorb(result: EngineTestResult, fallbackBrowser?: string): void,
+	finish(durationMs: number, consoleLogs: ConsoleLog[]): TestKindDetails,
+};
+
+/**
+ * Builds suite-aware test entries from a stream of TestTokens.
+ * Suite path is derived from the SUITE_START/SUITE_END stack — token.suite
+ * isn't reliable across all strategies (mocha-wrapper does not populate it).
+ */
+function createMerger(): Merger
+{
+	const map = new Map<string, TestEntry>();
+	const browsers = new Set<string>();
+
+	const keyOf = (suite: string[], title: string): string => {
+		return JSON.stringify([...suite, title]);
+	};
+
+	const upsert = (suite: string[], title: string): TestEntry => {
+		const key = keyOf(suite, title);
+		const existing = map.get(key);
+		if (existing)
+		{
+			return existing;
+		}
+		const entry: TestEntry = { suite, title, status: 'passed', results: {} };
+		map.set(key, entry);
+		return entry;
+	};
+
+	return {
+		absorb(result, fallbackBrowser)
+		{
+			const stack: string[] = [];
+
+			for (const token of result.report)
+			{
+				if (token.id === 'SUITE_START')
+				{
+					if (!token.root && token.title)
+					{
+						stack.push(token.title);
+					}
+					continue;
+				}
+
+				if (token.id === 'SUITE_END')
+				{
+					if (!token.root && stack.length > 0)
+					{
+						stack.pop();
+					}
+					continue;
+				}
+
+				if (token.id !== 'TEST_PASSED' && token.id !== 'TEST_FAILED' && token.id !== 'TEST_PENDING')
+				{
+					continue;
+				}
+
+				const suite = token.suite && token.suite.length > 0 ? token.suite : [...stack];
+				const title = token.title ?? '';
+				const browser = token.browser ?? fallbackBrowser ?? UNKNOWN_BROWSER;
+
+				browsers.add(browser);
+
+				const entry = upsert(suite, title);
+
+				const status: TestStatus = token.id === 'TEST_PASSED'
+					? 'passed'
+					: token.id === 'TEST_FAILED' ? 'failed' : 'skipped';
+
+				const browserResult: BrowserTestResult = { status };
+				if (typeof token.duration === 'number')
+				{
+					browserResult.durationMs = token.duration;
+				}
+				if (status === 'failed')
+				{
+					browserResult.failure = buildFailure(token);
+				}
+
+				entry.results[browser] = browserResult;
+			}
+		},
+		finish(durationMs, consoleLogs)
+		{
+			const tests: TestEntry[] = [];
+			const browserList = [...browsers];
+			let passed = 0;
+			let failed = 0;
+			let skipped = 0;
+
+			for (const entry of map.values())
+			{
+				const status = aggregateStatus(entry.results, browserList);
+				entry.status = status;
+				if (status === 'failed')
+				{
+					failed++;
+				}
+				else if (status === 'skipped')
+				{
+					skipped++;
+				}
+				else
+				{
+					passed++;
+				}
+				tests.push(entry);
+			}
+
+			return {
+				ran: true,
+				durationMs,
+				browsers: browserList,
+				passed,
+				failed,
+				skipped,
+				total: passed + failed + skipped,
+				tests,
+				consoleLogs,
+			};
+		},
+	};
+}
+
+function buildFailure(token: { error?: { message: string, stack?: string }, showDiff?: boolean, actual?: unknown, expected?: unknown }): TestFailure
+{
+	const failure: TestFailure = {
+		message: token.error?.message ?? 'Unknown error',
+	};
+
+	const location = extractFrameFromStack(token.error?.stack);
+	if (location)
+	{
+		failure.file = location.file;
+		failure.line = location.line;
+		failure.column = location.column;
+		failure.frame = location.frame;
+	}
+
+	if (token.showDiff)
+	{
+		failure.diff = {
+			actual: token.actual,
+			expected: token.expected,
+		};
+	}
+
+	return failure;
+}
+
+function aggregateStatus(results: Record<string, BrowserTestResult>, browsers: string[]): TestStatus
+{
+	let allSkipped = true;
+	for (const browser of browsers)
+	{
+		const result = results[browser];
+		if (!result)
+		{
+			continue;
+		}
+		if (result.status === 'failed')
+		{
+			return 'failed';
+		}
+		if (result.status !== 'skipped')
+		{
+			allSkipped = false;
+		}
+	}
+	return allSkipped ? 'skipped' : 'passed';
+}
+
+function collectFailures(kind: TestKindDetails): JsonErrorPayload[]
+{
+	const failures: JsonErrorPayload[] = [];
+
+	for (const entry of kind.tests)
+	{
+		if (entry.status !== 'failed')
+		{
+			continue;
+		}
+
+		const title = [...entry.suite, entry.title].filter(Boolean).join(' › ');
+
+		for (const [browser, browserResult] of Object.entries(entry.results))
+		{
+			if (browserResult.status !== 'failed' || !browserResult.failure)
+			{
+				continue;
+			}
+
+			const { failure } = browserResult;
+			const payload: JsonErrorPayload = {
+				code: CF.TEST_FAILED,
+				message: `[${browser}] ${title}: ${failure.message}`,
+			};
+			if (failure.file !== undefined)
+			{
+				payload.file = failure.file;
+			}
+			if (failure.line !== undefined)
+			{
+				payload.line = failure.line;
+			}
+			if (failure.column !== undefined)
+			{
+				payload.column = failure.column;
+			}
+			if (failure.frame !== undefined)
+			{
+				payload.frame = failure.frame;
+			}
+			failures.push(payload);
+		}
+	}
+
+	return failures;
+}
+
+function emptyKind(skipReason?: string): TestKindDetails
+{
+	const details: TestKindDetails = {
+		ran: false,
+		durationMs: 0,
+		browsers: [],
+		passed: 0,
+		failed: 0,
+		skipped: 0,
+		total: 0,
+		tests: [],
+		consoleLogs: [],
+	};
+	if (skipReason)
+	{
+		details.skipReason = skipReason;
+	}
+	return details;
+}
+
+function aggregateSummary(extensions: TestExtensionResult[], startedAt: number)
+{
+	const passed = extensions.filter((extension) => extension.success).length;
+	let testsTotal = 0;
+	let testsPassed = 0;
+	let testsFailed = 0;
+	let testsSkipped = 0;
+	let errorCount = 0;
+	let warningCount = 0;
+
+	for (const extension of extensions)
+	{
+		const { unit, e2e } = extension.details;
+		testsTotal += unit.total + e2e.total;
+		testsPassed += unit.passed + e2e.passed;
+		testsFailed += unit.failed + e2e.failed;
+		testsSkipped += unit.skipped + e2e.skipped;
+		errorCount += extension.errors.length;
+		warningCount += extension.warnings.length;
+	}
+
+	return {
+		total: extensions.length,
+		passed,
+		failed: extensions.length - passed,
+		durationMs: Date.now() - startedAt,
+		errorCount,
+		warningCount,
+		tests: {
+			total: testsTotal,
+			passed: testsPassed,
+			failed: testsFailed,
+			skipped: testsSkipped,
+		},
+	};
+}
+
+function fatalResult(command: string, cwd: string, startedAt: number, error: JsonErrorPayload): TestJsonResult
+{
+	return {
+		...buildMeta(cwd),
+		success: false,
+		command,
+		extensions: [],
+		notFound: [],
+		error,
+		summary: {
+			total: 0,
+			passed: 0,
+			failed: 0,
+			durationMs: Date.now() - startedAt,
+			errorCount: 0,
+			warningCount: 0,
+			tests: { total: 0, passed: 0, failed: 0, skipped: 0 },
+		},
+	};
+}
+

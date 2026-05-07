@@ -16,8 +16,9 @@ import { FileFinder } from '../../utils/file-finder';
 import { Environment } from '../../environment/environment';
 import { loadTsConfig } from '../../utils/load-tsconfig';
 import { checkTypes } from '../../modules/engines/build/rollup/plugins/typescript';
-import { typecheck as typecheckApi } from '../../api/typecheck';
-import { emitJson, isJsonMode } from '../../api/json-output';
+import { typecheck as typecheckJson } from '../../reporters/json/typecheck';
+import { emitJson } from '../../reporters/json/emit';
+import { createReporterOption } from '../../shared/options/reporter-option';
 
 import type { BasePackage } from '../../modules/packages/base-package';
 import type { Task, TaskResult, TaskDetail } from '../../modules/task/task-types';
@@ -134,17 +135,18 @@ typecheckCommand
 	.addOption(createPathOption('Search for extensions starting from this directory'))
 	.addOption(new Option('--file <patterns...>', 'Check specific files (paths relative to extension root)'))
 	.addOption(new Option('--exclude <patterns...>', 'Exclude files from type checking (paths relative to extension root)'))
+	.addOption(createReporterOption())
 	.action(async (extensions: string[], args) => {
-		if (isJsonMode())
+		if (args.reporter === 'json')
 		{
-			const result = await typecheckApi({
+			const result = await typecheckJson({
 				extension: extensions.length > 0 ? extensions : undefined,
 				path: extensions.length > 0 ? undefined : args.path,
 				files: args.file,
 				exclude: args.exclude,
 			});
 			emitJson(result);
-			process.exit(result.ok ? 0 : 1);
+			process.exit(result.success ? 0 : 1);
 		}
 
 		const queue = new SequentialQueue();

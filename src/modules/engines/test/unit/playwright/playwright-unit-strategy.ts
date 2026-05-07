@@ -243,6 +243,10 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 					{
 						token.error.stack = mapStack(token.error.stack, tracer);
 					}
+					if (!token.browser)
+					{
+						token.browser = browserType;
+					}
 					report.push(token);
 					options.onToken?.(token);
 				}

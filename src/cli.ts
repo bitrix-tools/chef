@@ -29,7 +29,7 @@ function lazyCommand(name: string, description: string, loader: () => Promise<Re
 		const mod = await loader();
 		const command = Object.values(mod).find((v) => v instanceof Command) as Command;
 
-		const argv = process.argv.slice(process.argv.indexOf(name) + 1).filter((arg) => arg !== '--json');
+		const argv = process.argv.slice(process.argv.indexOf(name) + 1);
 		await command.parseAsync(argv, { from: 'user' });
 	});
 
@@ -75,16 +75,10 @@ function checkCwdPreAction(thisCommand: Command, actionCommand: Command)
 	}
 }
 
-if (process.argv.includes('--json'))
-{
-	process.env.CHEF_JSON = '1';
-}
-
 program
 	.name('chef')
 	.version(getChefVersion())
 	.description('CLI toolkit for building, testing and maintaining Bitrix JS extensions')
-	.option('--json', 'Output structured JSON to stdout instead of human-readable output')
 	.addCommand(lazyCommand('build', 'Build JS extensions for Bitrix', () => import('./commands/build/build-command')))
 	.addCommand(lazyCommand('lint', 'Run linting for Bitrix JS extensions', () => import('./commands/lint/lint-command')))
 	.addCommand(lazyCommand('test', 'Run unit and end-to-end tests for extensions', () => import('./commands/test/test-command')))

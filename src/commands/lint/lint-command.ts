@@ -12,8 +12,9 @@ import { formatInternalError } from '../../diagnostics/format-error';
 import { CF } from '../../diagnostics/diagnostic-codes';
 import { pluralize } from '../../utils/pluralize';
 import { lint } from './internal/lint';
-import { lint as lintApi } from '../../api/lint';
-import { emitJson, isJsonMode } from '../../api/json-output';
+import { lint as lintJson } from '../../reporters/json/lint';
+import { emitJson } from '../../reporters/json/emit';
+import { createReporterOption } from '../../shared/options/reporter-option';
 
 import type { BasePackage } from '../../modules/packages/base-package';
 import type { LintRunResult } from './internal/lint';
@@ -150,10 +151,11 @@ lintCommand
 	.addOption(new Option('--file <patterns...>', 'Lint specific files (glob patterns relative to extension src/)'))
 	.addOption(new Option('--exclude <patterns...>', 'Exclude files from linting (glob patterns relative to extension root)'))
 	.addOption(new Option('--no-cache', 'Disable caching (cache is enabled by default)'))
+	.addOption(createReporterOption())
 	.action(async (extensions: string[], args) => {
-		if (isJsonMode())
+		if (args.reporter === 'json')
 		{
-			const result = await lintApi({
+			const result = await lintJson({
 				extension: extensions.length > 0 ? extensions : undefined,
 				path: extensions.length > 0 ? undefined : args.path,
 				fix: args.fix,
@@ -162,7 +164,7 @@ lintCommand
 				exclude: args.exclude,
 			});
 			emitJson(result);
-			process.exit(result.ok ? 0 : 1);
+			process.exit(result.success ? 0 : 1);
 		}
 
 		const queue = new SequentialQueue();

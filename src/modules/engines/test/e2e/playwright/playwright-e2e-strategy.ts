@@ -119,6 +119,10 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 				}
 				else if (event.type === 'token')
 				{
+					if (event.browser && !event.token.browser)
+					{
+						event.token.browser = event.browser;
+					}
 					report.push(event.token);
 					onToken(event.token, event.browser);
 				}

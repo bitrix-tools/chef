@@ -13,9 +13,9 @@ describe('analyzeHeavyDeps', () => {
 		const results = analyzeHeavyDeps(packages, 10);
 
 		assert.equal(results[0].name, 'a');
-		assert.equal(results[0].count, 3);
+		assert.equal(results[0].directDeps, 3);
 		assert.equal(results[1].name, 'b');
-		assert.equal(results[1].count, 1);
+		assert.equal(results[1].directDeps, 1);
 	});
 
 	it('should filter out packages with no dependencies', () => {

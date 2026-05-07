@@ -17,8 +17,9 @@ import { Environment } from '../../environment/environment';
 import { formatInternalError } from '../../diagnostics/format-error';
 import { CF } from '../../diagnostics/diagnostic-codes';
 import { printSummary } from '../../shared/print-summary';
-import { test as testApi } from '../../api/test';
-import { emitJson, isJsonMode } from '../../api/json-output';
+import { test as testJson } from '../../reporters/json/test';
+import { emitJson } from '../../reporters/json/emit';
+import { createReporterOption } from '../../shared/options/reporter-option';
 
 import type { BasePackage } from '../../modules/packages/base-package';
 import type { Task, TaskGroupResult } from '../../modules/task/task-types';
@@ -157,17 +158,20 @@ async function runTestsJson({ extensions, args, type }: RunTestsOptions): Promis
 	if (args.watch)
 	{
 		emitJson({
-			ok: false,
+			success: false,
 			command: 'test',
-			error: { code: CF.OPTION_DENIED, message: '--watch is not supported with --json' },
+			error: { code: CF.OPTION_DENIED, message: '--watch is not supported with --reporter json' },
 			extensions: [],
-			notFound: [],
-			summary: { total: 0, passed: 0, failed: 0, durationMs: 0 },
+			summary: {
+				total: 0, passed: 0, failed: 0, durationMs: 0,
+				errorCount: 1, warningCount: 0,
+				tests: { total: 0, passed: 0, failed: 0, skipped: 0 },
+			},
 		});
 		process.exit(2);
 	}
 
-	const result = await testApi({
+	const result = await testJson({
 		extension: extensions.length > 0 ? extensions : undefined,
 		path: extensions.length > 0 ? undefined : args.path,
 		kind: type ?? 'all',
@@ -178,12 +182,12 @@ async function runTestsJson({ extensions, args, type }: RunTestsOptions): Promis
 		project: args.project,
 	});
 	emitJson(result);
-	process.exit(result.ok ? 0 : 1);
+	process.exit(result.success ? 0 : 1);
 }
 
 function runTests({ extensions, args, type }: RunTestsOptions): void
 {
-	if (isJsonMode())
+	if (args.reporter === 'json')
 	{
 		void runTestsJson({ extensions, args, type });
 		return;
@@ -339,7 +343,7 @@ const commonOptions = (cmd: Command) => cmd
 	.option('--debug', 'Run tests in debug mode (slower, more logs)')
 	.option('--grep <pattern>', 'Run only tests that match the given pattern')
 	.option('--project <projects...>', 'Run tests in the specified Playwright projects')
-	.option('--reporter <type>', 'Reporter to use: default, teamcity', 'default')
+	.addOption(createReporterOption(['default', 'json', 'teamcity']))
 	.option('--console', 'Print captured browser console output for each extension')
 	.option('--cdp-port <port>', 'Launch browser with Chrome DevTools Protocol on this port', parseInt);
 
