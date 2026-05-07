@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.11.0 <Badge type="tip" text="5/7/2026" />
+
+New --reporter <name> flag for build/lint/test/typecheck/diag commands.
+Available reporters: default (human-readable, default), json (structured JSON
+to stdout), and teamcity (chef test only).
+
+JSON shape:
+- Top-level chefVersion and cwd
+- Unresolved extension names go into a separate notFound field
+- Test failures carry file/line/column/frame and diff (no full stack trace)
+- Test JSON builds the suite path correctly and reports the actual browser
+  name (chromium/firefox/webkit)
+- Lint and typecheck no longer duplicate messages between details and errors
+- bundles[].fileName renamed to bundles[].file
+
 ## v1.10.0 <Badge type="tip" text="5/4/2026" />
 
 - Improved `chef test` bulk run output: extensions without tests are skipped silently, errors and failed tests are aggregated into a single end-of-run summary
