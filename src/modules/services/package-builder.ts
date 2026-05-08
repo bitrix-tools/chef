@@ -5,6 +5,7 @@ import fg from 'fast-glob';
 import { ChefConfigManager } from '../config/project/chef-config-manager';
 import { validateBuildOptions } from '../config/project/chef-config-validator';
 import { DeclarationEmitter } from '../engines/build/declaration-emitter';
+import type { DeclarationDiagnostic } from '../engines/build/declaration/declaration-bundler';
 import { Environment } from '../../environment/environment';
 import { FileFinder } from '../../utils/file-finder';
 import { loadTsConfig } from '../../utils/load-tsconfig';
@@ -37,7 +38,20 @@ export class PackageBuilder
 
 		if (buildResult.errors.length === 0 && buildOptions.emitDeclaration?.enabled && buildOptions.typescript)
 		{
-			await this.#emitDeclaration(buildOptions);
+			const declarationDiagnostics = await this.#emitDeclaration(buildOptions);
+			// Declaration emit issues (e.g. inlined sibling shapes) only affect the .d.ts —
+			// the JS bundle is already produced. Surface them as warnings so the build does
+			// not fail and the user sees what to fix to get a clean .d.ts.
+			for (const diagnostic of declarationDiagnostics)
+			{
+				buildResult.warnings.push({
+					code: diagnostic.code > 0 ? `TS${diagnostic.code}` : 'CHEF_DTS',
+					message: diagnostic.message,
+					loc: diagnostic.file && diagnostic.line !== null && diagnostic.column !== null
+						? { file: diagnostic.file, line: diagnostic.line, column: diagnostic.column }
+						: undefined,
+				});
+			}
 		}
 
 		if (validation && 'warnings' in validation)
@@ -164,7 +178,7 @@ export class PackageBuilder
 		return { warnings: warnings.map((w) => w.message) };
 	}
 
-	async #emitDeclaration(options: BuildOptions): Promise<void>
+	async #emitDeclaration(options: BuildOptions): Promise<DeclarationDiagnostic[]>
 	{
 		const outputPath = options.output.js.replace(/\.js$/, '.d.ts');
 		const emitter = new DeclarationEmitter();
@@ -185,7 +199,7 @@ export class PackageBuilder
 		const extensionName = options.packageName ?? this.#package.getName();
 		const mode = options.emitDeclaration?.mode ?? 'ambient';
 
-		await emitter.emit({
+		return emitter.emit({
 			packageRoot: options.packageRoot,
 			input: options.input,
 			namespace: options.namespace,

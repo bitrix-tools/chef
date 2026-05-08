@@ -23,6 +23,12 @@ export interface DeclarationBundle
 	npmModules: NpmModule[];
 }
 
+export interface DeclarationBundleResult
+{
+	bundle: DeclarationBundle | null;
+	diagnostics: DeclarationDiagnostic[];
+}
+
 export interface DeclarationMember
 {
 	text: string;
@@ -41,15 +47,17 @@ export interface NpmModule
 	body: string;
 }
 
-export async function bundleDeclarations(options: DeclarationBundleOptions): Promise<DeclarationBundle | null>
+export async function bundleDeclarations(options: DeclarationBundleOptions): Promise<DeclarationBundleResult>
 {
 	const { default: tsModule } = await import('typescript');
 
 	const emitted = await emitSourceDeclarations(tsModule, options);
 	if (!emitted)
 	{
-		return null;
+		return { bundle: null, diagnostics: [] };
 	}
+
+	const diagnostics = emitted.diagnostics;
 
 	const entryDtsPath = findEntryDeclarationPath(
 		options.input,
@@ -60,7 +68,7 @@ export async function bundleDeclarations(options: DeclarationBundleOptions): Pro
 
 	if (!entryDtsPath)
 	{
-		return null;
+		return { bundle: null, diagnostics };
 	}
 
 	const dtsProgram = createDtsProgram(tsModule, emitted.declarations, entryDtsPath, emitted.sourceToDts);
@@ -69,7 +77,7 @@ export async function bundleDeclarations(options: DeclarationBundleOptions): Pro
 
 	if (!entryFile)
 	{
-		return null;
+		return { bundle: null, diagnostics };
 	}
 
 	const collector = new SymbolCollector(tsModule, dtsProgram, checker, {
@@ -78,15 +86,35 @@ export async function bundleDeclarations(options: DeclarationBundleOptions): Pro
 		tsconfigPaths: options.compilerOptions?.paths as Record<string, string[]> | undefined,
 		tsconfigBaseUrl: options.compilerOptions?.baseUrl as string | undefined,
 		sourceImports: emitted.sourceImports,
+		sourceToDts: emitted.sourceToDts,
 	});
 	const members = collector.collectFromEntry(entryFile, options.namespace);
 
 	if (members.length === 0)
 	{
-		return null;
+		return { bundle: null, diagnostics };
 	}
 
-	return splitMembers(tsModule, members, collector.getNpmModules());
+	const inlineDetections = collector.detectInlinedSiblingTypes();
+	const inlineDiagnostics = inlineDetections.map((detection): DeclarationDiagnostic => ({
+		code: 0,
+		message: (
+			`Export "${detection.exportName}" inlines the shape of `
+			+ `"${detection.symbolName}" from sibling extension "${detection.siblingName}" `
+			+ `into the .d.ts. Add an explicit type annotation to keep the namespace reference `
+			+ `(e.g. \`: typeof ${detection.symbolName}\`) — otherwise consumers will see the `
+			+ `full structure instead of \`${detection.siblingName}.${detection.symbolName}\`.`
+		),
+		severity: 'warning',
+		file: options.input,
+		line: null,
+		column: null,
+	}));
+
+	return {
+		bundle: splitMembers(tsModule, members, collector.getNpmModules()),
+		diagnostics: [...diagnostics, ...inlineDiagnostics],
+	};
 }
 
 interface CollectedMember
@@ -107,6 +135,7 @@ interface SymbolCollectorOptions
 	tsconfigPaths?: Record<string, string[]>;
 	tsconfigBaseUrl?: string;
 	sourceImports?: Set<string>;
+	sourceToDts?: Map<string, string>;
 }
 
 interface NpmPackageBuffer
@@ -121,6 +150,7 @@ class SymbolCollector
 	readonly #program: ts.Program;
 	readonly #checker: ts.TypeChecker;
 	readonly #seen = new Set<string>();
+	readonly #seenSourceDecls = new Set<ts.Node>();
 	readonly #result: CollectedMember[] = [];
 	readonly #visitingSymbols = new Set<ts.Symbol>();
 	readonly #siblingReplacements = new Map<ts.Symbol, string>();
@@ -186,6 +216,215 @@ class SymbolCollector
 		this.#applyCollectedReplacements(namespace);
 
 		return this.#result;
+	}
+
+	/**
+	 * Detect locations in the emitted .d.ts where a structural object type is actually
+	 * the inlined shape of a value imported from a sibling extension. This happens when
+	 * the user omitted an explicit type annotation on an export and TS expanded the type
+	 * during declaration emit, dropping the link to the sibling import. Each detection
+	 * tells the user where to add an annotation to keep the .d.ts compact and namespaced.
+	 */
+	detectInlinedSiblingTypes(): InlinedSiblingDetection[]
+	{
+		const ts = this.#ts;
+		if (this.#importedSiblings.size === 0) return [];
+
+		// We need to match sibling-owned types via the `.d.ts` files inside our dtsProgram —
+		// the type checker speaks in terms of those files, not the original `.ts` sources.
+		// Map each sibling's emitted `.d.ts` (looked up through `sourceToDts`) back to its
+		// extension name so that we can identify inlined shapes during AST traversal.
+		const siblingDtsToName = new Map<ts.SourceFile, string>();
+		const sourceToDts = this.#options.sourceToDts;
+		for (const [name, sourceFile] of this.#importedSiblings)
+		{
+			if (!sourceFile) continue;
+
+			const dtsPath = sourceToDts?.get(path.normalize(sourceFile.fileName));
+			if (!dtsPath) continue;
+
+			const dtsFile = this.#program.getSourceFile(dtsPath);
+			if (dtsFile) siblingDtsToName.set(dtsFile, name);
+		}
+
+		if (siblingDtsToName.size === 0) return [];
+
+		const detections: InlinedSiblingDetection[] = [];
+		const seenKeys = new Set<string>();
+
+		for (const member of this.#result)
+		{
+			if (!member.sourceDecl) continue;
+
+			const visit = (node: ts.Node): void => {
+				if (ts.isTypeLiteralNode(node))
+				{
+					const detection = this.#matchSiblingShape(node, siblingDtsToName, member.name);
+					if (detection)
+					{
+						const key = `${detection.exportName}:${detection.siblingName}:${detection.symbolName}`;
+						if (!seenKeys.has(key))
+						{
+							seenKeys.add(key);
+							detections.push(detection);
+						}
+
+						return;
+					}
+				}
+
+				ts.forEachChild(node, visit);
+			};
+
+			visit(member.sourceDecl);
+		}
+
+		return detections;
+	}
+
+	#matchSiblingShape(
+		node: ts.TypeLiteralNode,
+		siblingDtsToName: Map<ts.SourceFile, string>,
+		exportName: string | null,
+	): InlinedSiblingDetection | null
+	{
+		const type = this.#checker.getTypeAtLocation(node);
+
+		// Direct symbol match: works when the literal is e.g. `IconClass` (named class
+		// declaration) — the symbol's declarations point at the sibling .d.ts file.
+		const symbol = type.aliasSymbol ?? type.symbol;
+		if (symbol)
+		{
+			const decls = symbol.getDeclarations() ?? [];
+			for (const decl of decls)
+			{
+				const siblingName = siblingDtsToName.get(decl.getSourceFile());
+				if (siblingName)
+				{
+					return {
+						exportName: exportName ?? '<anonymous>',
+						siblingName,
+						symbolName: symbol.name,
+					};
+				}
+			}
+		}
+
+		// Anonymous object types (e.g. `as const` exports like `Outline`) inline into a
+		// new `__type` symbol pointing at our own file, losing the link to the sibling.
+		// Match by structural identity instead: precompute the type of each top-level
+		// export of every imported sibling and compare with TypeChecker.
+		return this.#matchAnonymousAgainstSiblingExports(type, siblingDtsToName, exportName);
+	}
+
+	#siblingExportTypes: Array<{ type: ts.Type; siblingName: string; symbolName: string }> | null = null;
+
+	#getSiblingExportTypes(siblingDtsToName: Map<ts.SourceFile, string>): Array<{ type: ts.Type; siblingName: string; symbolName: string }>
+	{
+		if (this.#siblingExportTypes) return this.#siblingExportTypes;
+
+		const result: Array<{ type: ts.Type; siblingName: string; symbolName: string }> = [];
+		const visited = new Set<ts.SourceFile>();
+		const seenSymbols = new Set<ts.Symbol>();
+
+		const ts = this.#ts;
+
+		const collect = (dtsFile: ts.SourceFile, siblingName: string): void => {
+			if (visited.has(dtsFile)) return;
+			visited.add(dtsFile);
+
+			const moduleSymbol = this.#checker.getSymbolAtLocation(dtsFile);
+			if (moduleSymbol)
+			{
+				const exports = this.#checker.getExportsOfModule(moduleSymbol);
+				for (const exportSymbol of exports)
+				{
+					if (seenSymbols.has(exportSymbol)) continue;
+					seenSymbols.add(exportSymbol);
+
+					const decls = exportSymbol.getDeclarations() ?? [];
+					if (decls.length === 0) continue;
+
+					const type = this.#checker.getTypeOfSymbolAtLocation(exportSymbol, decls[0]);
+					// Skip primitive / trivially-named types — matching them is too prone to
+					// false positives (e.g. `any`, `string`, simple unions).
+					const flags = type.getFlags();
+					if (flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown | ts.TypeFlags.Never)) continue;
+					if (flags & (ts.TypeFlags.String | ts.TypeFlags.Number | ts.TypeFlags.Boolean)) continue;
+
+					result.push({ type, siblingName, symbolName: exportSymbol.name });
+				}
+			}
+
+			for (const stmt of dtsFile.statements)
+			{
+				if (!ts.isExportDeclaration(stmt)) continue;
+				if (stmt.exportClause) continue;
+				if (!stmt.moduleSpecifier || !ts.isStringLiteral(stmt.moduleSpecifier)) continue;
+
+				const transitiveName = stmt.moduleSpecifier.text;
+				if (!isSiblingExtensionName(transitiveName)) continue;
+
+				const transitiveDts = this.#resolveSiblingDtsFile(transitiveName);
+				if (!transitiveDts) continue;
+
+				collect(transitiveDts, transitiveName);
+			}
+		};
+
+		for (const [dtsFile, siblingName] of siblingDtsToName)
+		{
+			collect(dtsFile, siblingName);
+		}
+
+		this.#siblingExportTypes = result;
+
+		return result;
+	}
+
+	#resolveSiblingDtsFile(siblingName: string): ts.SourceFile | null
+	{
+		const sourceFile = this.#resolveSiblingSourceFile(siblingName);
+		if (!sourceFile) return null;
+
+		const dtsPath = this.#options.sourceToDts?.get(path.normalize(sourceFile.fileName));
+		if (!dtsPath) return null;
+
+		return this.#program.getSourceFile(dtsPath) ?? null;
+	}
+
+	#matchAnonymousAgainstSiblingExports(
+		type: ts.Type,
+		siblingDtsToName: Map<ts.SourceFile, string>,
+		exportName: string | null,
+	): InlinedSiblingDetection | null
+	{
+		const candidates = this.#getSiblingExportTypes(siblingDtsToName);
+		if (candidates.length === 0) return null;
+
+		// Mutual assignability is the closest practical approximation of "same type".
+		// Strict identity (`===`) doesn't survive the round-trip through declaration emit
+		// (the literal is reconstructed as a fresh anonymous type), and string comparison
+		// breaks on render differences like `Readonly<{...}>` vs the expanded `{readonly ...}`.
+		const checker = this.#checker as unknown as {
+			isTypeAssignableTo?: (a: ts.Type, b: ts.Type) => boolean;
+		};
+
+		if (typeof checker.isTypeAssignableTo !== 'function') return null;
+
+		for (const candidate of candidates)
+		{
+			if (checker.isTypeAssignableTo(type, candidate.type) && checker.isTypeAssignableTo(candidate.type, type))
+			{
+				return {
+					exportName: exportName ?? '<anonymous>',
+					siblingName: candidate.siblingName,
+					symbolName: candidate.symbolName,
+				};
+			}
+		}
+
+		return null;
 	}
 
 	#registerSiblingsFromSourceImports(): void
@@ -560,11 +799,25 @@ class SymbolCollector
 		for (const decl of declarations)
 		{
 			const member = this.#buildMemberFromDeclaration(decl, publicName, resolved);
-			if (member)
+			if (!member)
 			{
-				this.#result.push(member);
-				this.#collectReferencedSymbols(decl);
+				continue;
 			}
+
+			// Multiple destructuring exports (`export const { a, b, c } = X`) all point at
+			// the same VariableStatement. Rendering it once per declaration would duplicate
+			// the whole statement; dedupe by source declaration node identity.
+			if (member.sourceDecl && this.#seenSourceDecls.has(member.sourceDecl))
+			{
+				continue;
+			}
+			if (member.sourceDecl)
+			{
+				this.#seenSourceDecls.add(member.sourceDecl);
+			}
+
+			this.#result.push(member);
+			this.#collectReferencedSymbols(decl);
 		}
 	}
 
@@ -1506,6 +1759,24 @@ interface EmitResult
 	commonSourceDirectory: string;
 	/** Maps original .ts source file path → emitted .d.ts path inside `declarations`. */
 	sourceToDts: Map<string, string>;
+	diagnostics: DeclarationDiagnostic[];
+}
+
+export interface DeclarationDiagnostic
+{
+	code: number;
+	message: string;
+	severity: 'error' | 'warning';
+	file: string | null;
+	line: number | null;
+	column: number | null;
+}
+
+export interface InlinedSiblingDetection
+{
+	exportName: string;
+	siblingName: string;
+	symbolName: string;
 }
 
 async function emitSourceDeclarations(
@@ -1538,6 +1809,13 @@ async function emitSourceDeclarations(
 		declaration: true,
 		emitDeclarationOnly: true,
 		skipLibCheck: true,
+		// `isolatedDeclarations` is a project-wide policy meant for typecheck/IDE feedback.
+		// For chef's bundle emit it only gets in the way: when the user violates it, TS
+		// skips the declaration for the affected file entirely, so we end up with no .d.ts
+		// for the extension at all. Force it off here so we always get a full (possibly
+		// inferred) declaration to bundle. Diagnostics from the user's typecheck pass are
+		// still surfaced separately as warnings.
+		isolatedDeclarations: false,
 		// No `rootDir`: when an entry imports files outside `packageRoot`
 		// (e.g. `main.core.minimal` pulls `../../src/lib/...` from `main.core`),
 		// fixing rootDir to packageRoot makes TS skip declaration emit for those
@@ -1592,7 +1870,10 @@ async function emitSourceDeclarations(
 	};
 
 	const program = tsModule.createProgram(rootNames, compilerOptions, host);
-	program.emit();
+	const emitResult = program.emit();
+
+	const ownSourceFiles = new Set(rootNames.map((name) => path.normalize(name)));
+	const diagnostics = collectOwnDiagnostics(tsModule, program, emitResult, ownSourceFiles);
 
 	// Collect module specifiers from source files so we know about sibling imports,
 	// even when TS strips them during declaration emit.
@@ -1634,9 +1915,55 @@ async function emitSourceDeclarations(
 		}
 	}
 
-	return declarations.size > 0
-		? { declarations, sourceImports, commonSourceDirectory, sourceToDts }
-		: null;
+	if (declarations.size === 0 && diagnostics.length === 0)
+	{
+		return null;
+	}
+
+	return { declarations, sourceImports, commonSourceDirectory, sourceToDts, diagnostics };
+}
+
+function collectOwnDiagnostics(
+	tsModule: typeof ts,
+	_program: ts.Program,
+	emitResult: ts.EmitResult,
+	ownSourceFiles: Set<string>,
+): DeclarationDiagnostic[]
+{
+	const seen = new Set<string>();
+	const result: DeclarationDiagnostic[] = [];
+
+	// Only emit-time diagnostics — these are the ones that actually affect what TS writes
+	// to the .d.ts (e.g. "exported variable cannot be named", isolatedDeclarations issues).
+	// Pre-emit / typecheck errors are surfaced through `chef typecheck` instead, and
+	// pulling them in here would turn every legacy type error in the project into a build
+	// warning.
+	for (const diagnostic of emitResult.diagnostics)
+	{
+		const file = diagnostic.file;
+		if (!file) continue;
+		if (!ownSourceFiles.has(path.normalize(file.fileName))) continue;
+
+		const start = diagnostic.start ?? 0;
+		const { line, character } = file.getLineAndCharacterOfPosition(start);
+		const message = tsModule.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
+		const severity = diagnostic.category === tsModule.DiagnosticCategory.Error ? 'error' : 'warning';
+
+		const key = `${file.fileName}:${line}:${character}:${diagnostic.code}:${message}`;
+		if (seen.has(key)) continue;
+		seen.add(key);
+
+		result.push({
+			code: diagnostic.code,
+			message,
+			severity,
+			file: file.fileName,
+			line: line + 1,
+			column: character + 1,
+		});
+	}
+
+	return result;
 }
 
 function resolveNpmTypesFallback(tsModule: typeof ts, jsFilePath: string, packageName: string | undefined): string | null
