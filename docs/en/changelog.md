@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.12.0 <Badge type="tip" text="5/8/2026" />
+
+Declaration emit-time diagnostics (e.g. TS4023) now surface as build warnings instead of being silently dropped. A new structural detector warns when a type literal in the .d.ts matches the shape of a value imported from a sibling extension (including transitive re-exports), and suggests adding a `: typeof X` annotation to keep the namespace reference. Fixed duplicate output for destructured exports like `export const { a, b, c } = X` — previously the statement was rendered once per destructured name. Stale .d.ts is now removed when a fresh bundle cannot be produced, so consumers do not work against a phantom API.
+
 ## v1.11.0 <Badge type="tip" text="5/7/2026" />
 
 New `--reporter <name>` flag for build/lint/test/typecheck/diag commands.
