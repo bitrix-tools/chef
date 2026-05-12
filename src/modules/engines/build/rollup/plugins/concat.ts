@@ -2,6 +2,8 @@ import Concat from 'concat-with-sourcemaps';
 import path from 'path';
 import { readFileSync, existsSync } from 'fs';
 
+import { normalizePath } from '../../../../../utils/path/normalize';
+
 import type { OutputBundle, OutputAsset } from 'rollup';
 
 const separator = '\n\n';
@@ -101,7 +103,7 @@ export default function concatPlugin(options: { jsFiles?: Array<string>; cssFile
 								const mapDir = path.dirname(mapPath);
 								mapObj.sources = mapObj.sources.map(src => {
 									const absolute = path.resolve(mapDir, src);
-									return path.relative(outputDir, absolute);
+									return normalizePath(path.relative(outputDir, absolute));
 								});
 								sourceMapContent = JSON.stringify(mapObj);
 							}
@@ -114,7 +116,7 @@ export default function concatPlugin(options: { jsFiles?: Array<string>; cssFile
 								.replace(/\/\*(\s+)?eslint-disable(\s+)?\*\/\n/g, '')
 								.replace(/\/\/# sourceMappingURL=(.*)\.map/g, '');
 
-							const relativeFilePath = path.relative(outputDir, filePath);
+							const relativeFilePath = normalizePath(path.relative(outputDir, filePath));
 							concatenator.add(relativeFilePath, fileContent, sourceMapContent);
 						}
 						catch (error)

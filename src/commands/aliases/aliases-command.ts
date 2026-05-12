@@ -1,3 +1,5 @@
+import { pathToFileURL } from 'node:url';
+
 import { Command } from 'commander';
 import chalk from 'chalk';
 import logSymbols from 'log-symbols';
@@ -67,7 +69,7 @@ async function runFull(options: { aliasGenerator: AliasGenerator; rootPath: stri
 				process.stdout.write('\r\x1B[2K');
 			}
 			console.log(`  ${chalk.green(logSymbols.success)} aliases.tsconfig.json generated with ${aliasesCount} aliases`);
-			console.log(`  ${chalk.dim('→')} file://${filePath}`);
+			console.log(`  ${chalk.dim('→')} ${pathToFileURL(filePath).href}`);
 		}
 	}
 	catch (error)

@@ -1030,8 +1030,9 @@ function groupByArea(
 	return groups;
 }
 
-function classifyPath(relPath: string): string
+function classifyPath(relPathRaw: string): string
 {
+	const relPath = relPathRaw.replaceAll('\\', '/');
 	const parts = relPath.split('/');
 	const moduleName = parts[0];
 

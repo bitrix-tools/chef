@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { Command } from 'commander';
 import chalk from 'chalk';
@@ -140,7 +141,7 @@ const initBuildCommand = new Command('build')
 						process.stdout.write('\r\x1B[2K');
 					}
 					console.log(`  ${chalk.green(logSymbols.success)} aliases.tsconfig.json generated successfully with ${count} aliases`);
-					console.log(`  → file://${aliasesPath}\n`);
+					console.log(`  → ${pathToFileURL(aliasesPath).href}\n`);
 				},
 				onBeforeFileWrite: (fileName) => {
 					if (fileName === 'tsconfig.json')

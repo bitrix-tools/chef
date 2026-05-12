@@ -1,5 +1,7 @@
 import * as path from 'node:path';
 
+import { normalizePath } from '../../../utils/path/normalize';
+
 import type { BasePackage } from '../../../modules/packages/base-package';
 import type { Task, TaskResult, TaskDetail } from '../../../modules/task/task-types';
 import type { BuildDiagnostic } from '../../../modules/engines/build/build-types';
@@ -11,9 +13,9 @@ function shortenPaths(message: string, relativeRoot: string): string
 		return message;
 	}
 
-	const prefix = relativeRoot.endsWith('/') ? relativeRoot : relativeRoot + '/';
+	const prefix = normalizePath(relativeRoot).endsWith('/') ? normalizePath(relativeRoot) : normalizePath(relativeRoot) + '/';
 
-	return message.replaceAll(prefix, '');
+	return normalizePath(message).replaceAll(prefix, '');
 }
 
 function diagnosticToDetail(log: BuildDiagnostic, root: string, relativeRoot: string, severity?: 'error' | 'warning'): TaskDetail

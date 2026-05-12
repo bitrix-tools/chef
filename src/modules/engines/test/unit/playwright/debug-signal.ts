@@ -1,7 +1,8 @@
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 
-const SIGNAL_DIR = '/tmp/chef-debug-signal';
+const SIGNAL_DIR = path.join(os.tmpdir(), 'chef-debug-signal');
 const READY_FILE = 'ready';
 const RUN_FILE = 'run';
 const POLL_INTERVAL = 100;

@@ -1,5 +1,6 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { Command } from 'commander';
 import { confirm } from '@inquirer/prompts';
@@ -51,5 +52,5 @@ createCommand
 		});
 
 		console.log(`${chalk.green('✔')} ${extensionName} created successfully`);
-		console.log(`  file://${result.packagePath}`);
+		console.log(`  ${pathToFileURL(result.packagePath).href}`);
 	});

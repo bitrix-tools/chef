@@ -9,6 +9,7 @@ import type { BuildDiagnostic } from '../../build-types';
 
 import { CF } from '../../../../../diagnostics/diagnostic-codes';
 import { createPathFilter } from '../../../../../utils/create-path-filter';
+import { normalizePath } from '../../../../../utils/path/normalize';
 
 export interface TypeScriptPluginOptions
 {
@@ -89,9 +90,11 @@ export async function checkTypes(options: TypeCheckOptions): Promise<TypeCheckRe
 	const excludePatterns = options.exclude?.map((f) => path.resolve(f)) ?? [];
 	const isExcluded = createPathFilter(excludePatterns);
 
+	const packageRootPosix = normalizePath(packageRoot);
 	const sourceFiles = program.getSourceFiles().filter((file) => {
-		return file.fileName.startsWith(packageRoot)
-			&& !file.fileName.includes('/node_modules/')
+		const fileNamePosix = normalizePath(file.fileName);
+		return fileNamePosix.startsWith(packageRootPosix)
+			&& !fileNamePosix.includes('/node_modules/')
 			&& !isExcluded(file.fileName);
 	});
 
@@ -141,8 +144,8 @@ export default async function typescriptPlugin(options: TypeScriptPluginOptions)
 		compilerOptions,
 		include,
 		exclude = [
-			`${packageRoot}/dist/**`,
-			`${packageRoot}/test/**`,
+			`${normalizePath(packageRoot)}/dist/**`,
+			`${normalizePath(packageRoot)}/test/**`,
 		],
 	} = options;
 

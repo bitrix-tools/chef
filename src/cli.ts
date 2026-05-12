@@ -64,7 +64,8 @@ function checkCwdPreAction(thisCommand: Command, actionCommand: Command)
 	const envType = Environment.getType();
 	const root = Environment.getRoot();
 
-	const isOutsideRoot = envType === 'unknown' || !cwd.startsWith(root);
+	const relativeCwd = path.relative(root, cwd);
+	const isOutsideRoot = envType === 'unknown' || relativeCwd.startsWith('..') || path.isAbsolute(relativeCwd);
 
 	if (isOutsideRoot)
 	{

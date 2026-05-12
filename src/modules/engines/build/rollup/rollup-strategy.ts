@@ -23,6 +23,7 @@ import { BuildStrategy } from '../build-strategy';
 import { CF } from '../../../../diagnostics/diagnostic-codes';
 import { FileFinder } from '../../../../utils/file-finder';
 import { loadTsConfig } from '../../../../utils/load-tsconfig';
+import { normalizePath } from '../../../../utils/path/normalize';
 import concatPlugin from './plugins/concat';
 import stripCommentsPlugin from './plugins/strip-comments';
 import safeNamespacesPlugin from './plugins/safe-namespaces';
@@ -366,8 +367,9 @@ export class RollupBuildStrategy extends BuildStrategy
 				{
 					for (const importer of importers)
 					{
-						const relative = importer.includes('/src/')
-							? importer.slice(importer.indexOf('/src/') + 1)
+						const importerPosix = normalizePath(importer);
+						const relative = importerPosix.includes('/src/')
+							? importerPosix.slice(importerPosix.indexOf('/src/') + 1)
 							: path.basename(importer);
 
 						// Read the file to find exact unused imports and import line
@@ -1097,7 +1099,7 @@ export class RollupBuildStrategy extends BuildStrategy
 			include: overrides?.include,
 			exclude: [
 				...(tsConfig?.raw?.exclude ?? []),
-				`${packageRoot}/dist/**`,
+				`${normalizePath(packageRoot)}/dist/**`,
 			],
 		});
 	}
@@ -1415,7 +1417,7 @@ export class RollupBuildStrategy extends BuildStrategy
 					limit: 0,
 					emitFiles: true,
 					fileName: 'assets/[name][extname]',
-					publicPath: path.join(
+					publicPath: normalizePath(path.join(
 						options.publicPath,
 						path.relative(
 							options.packageRoot,
@@ -1424,7 +1426,7 @@ export class RollupBuildStrategy extends BuildStrategy
 							),
 						),
 						'/',
-					),
+					)),
 				}),
 				concatPlugin({
 					jsFiles: (options.concat?.js ?? []).map(

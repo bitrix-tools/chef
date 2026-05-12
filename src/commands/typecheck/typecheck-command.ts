@@ -19,6 +19,7 @@ import { checkTypes } from '../../modules/engines/build/rollup/plugins/typescrip
 import { typecheck as typecheckJson } from '../../reporters/json/typecheck';
 import { emitJson } from '../../reporters/json/emit';
 import { createReporterOption } from '../../shared/options/reporter-option';
+import { normalizePath } from '../../utils/path/normalize';
 
 import type { BasePackage } from '../../modules/packages/base-package';
 import type { Task, TaskResult, TaskDetail } from '../../modules/task/task-types';
@@ -100,12 +101,12 @@ function createTypecheckTask(extension: BasePackage, options: TypecheckOptions):
 			{
 				const root = extension.getPath();
 				const relativeRoot = path.relative(process.cwd(), root);
-				const pathPrefix = relativeRoot ? relativeRoot + '/' : '';
+				const pathPrefix = relativeRoot ? normalizePath(relativeRoot) + '/' : '';
 
 				const details: TaskDetail[] = result.errors.map((error) => ({
 					type: 'error' as const,
 					code: error.code,
-					message: error.message.replaceAll(pathPrefix, ''),
+					message: normalizePath(error.message).replaceAll(pathPrefix, ''),
 					frame: error.frame,
 					loc: error.loc?.file
 						? { file: error.loc.file, line: error.loc.line, column: error.loc.column, root }

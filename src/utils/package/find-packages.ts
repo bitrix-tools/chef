@@ -35,17 +35,18 @@ export function findPackages({ startDirectory, packageFactory, skipProtected = f
 	const transformStream = new Transform({
 		objectMode: true,
 		transform(chunk: Buffer, encoding: BufferEncoding, callback: () => void) {
-			const extensionDir = path.dirname(
+			const extensionDir = path.normalize(path.dirname(
 				chunk.toString(encoding),
-			);
+			));
+			const normalizedStartDirectory = path.normalize(startDirectory);
 
 			const extension = packageFactory.create({
 				path: extensionDir,
 			});
 
 			// Check if we're in the extension directory
-			const isInExtensionDir = startDirectory === extensionDir ||
-				startDirectory.startsWith(extensionDir + path.sep);
+			const isInExtensionDir = normalizedStartDirectory === extensionDir ||
+				normalizedStartDirectory.startsWith(extensionDir + path.sep);
 
 			// Skip protected extensions unless we're in their directory
 			if (skipProtected && extension.getBundleConfig().get('protected') && !isInExtensionDir)

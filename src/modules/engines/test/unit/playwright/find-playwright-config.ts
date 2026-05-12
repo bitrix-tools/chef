@@ -1,3 +1,5 @@
+import { pathToFileURL } from 'node:url';
+
 import { FileFinder } from '../../../../../utils/file-finder';
 
 import type { PlaywrightTestConfig } from '@playwright/test';
@@ -39,7 +41,7 @@ export async function findPlaywrightConfig(packageRoot: string, projectRoot: str
 		return null;
 	}
 
-	const configModule = await import(configPath);
+	const configModule = await import(pathToFileURL(configPath).href);
 
 	return (
 		configModule.default.default

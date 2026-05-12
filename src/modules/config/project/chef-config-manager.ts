@@ -1,11 +1,17 @@
 import path from 'node:path';
 import fs from 'node:fs';
 
-import { createRequire } from 'module';
+import { createRequire } from 'node:module';
 
 import { Environment } from '../../../environment/environment';
 
 import type { ChefConfig } from './chef-config';
+
+// Mirrors BundleConfigManager: route .ts/.js through tsx's CJS loader so user
+// projects with `"type": "module"` can still expose a chef.config.ts file
+// without ESM resolution from their package.json.
+const chefRequire = createRequire(import.meta.url);
+const tsxRequire: (id: string, fromFile: string) => any = chefRequire('tsx/cjs/api').require;
 
 export class ChefConfigManager
 {
@@ -45,8 +51,7 @@ export class ChefConfigManager
 			const configPath = path.resolve(root, name);
 			if (fs.existsSync(configPath))
 			{
-				const require = createRequire(import.meta.url);
-				const loaded = require(configPath);
+				const loaded = tsxRequire(configPath, configPath);
 				this.#config = loaded?.default ?? loaded;
 
 				return;

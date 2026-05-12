@@ -1,4 +1,5 @@
 import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 import { FileFinder } from './file-finder';
 
@@ -23,10 +24,11 @@ export function getChefVersion(): string
 
 	try
 	{
+		const fromDir = getCurrentDir();
 		const pkgPath = FileFinder.findUpFile({
 			fileName: 'package.json',
-			fromDir: getCurrentDir(),
-			rootDir: '/',
+			fromDir,
+			rootDir: path.parse(fromDir).root,
 		});
 
 		if (pkgPath)

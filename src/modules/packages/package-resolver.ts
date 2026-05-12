@@ -351,7 +351,7 @@ export class PackageResolver
 				objectMode: true,
 				transform(chunk: Buffer, encoding: BufferEncoding, callback: () => void)
 				{
-					const extensionDir = path.dirname(chunk.toString(encoding));
+					const extensionDir = path.normalize(path.dirname(chunk.toString(encoding)));
 
 					if (!seenPaths.has(extensionDir))
 					{

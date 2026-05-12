@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { PackageFactoryProvider } from '../packages/providers/package-factory-provider';
 import { PackageResolver } from '../packages/package-resolver';
 import { findPackages } from '../../utils/package/find-packages';
+import { normalizePath } from '../../utils/path/normalize';
 
 import type { CompilerOptions } from 'typescript';
 import type { BasePackage } from '../packages/base-package';
@@ -59,7 +60,7 @@ export class AliasGenerator
 					if (extension.getBundleConfig().get('alias') === false) return;
 
 					const aliasTarget = extension.getTypesPath() ?? extension.getInputPath();
-					const relativePath = path.relative(rootPath, aliasTarget);
+					const relativePath = normalizePath(path.relative(rootPath, aliasTarget));
 					tsconfig.compilerOptions.paths![extension.getName()] = [`./${relativePath}`];
 
 					aliasesCount++;
@@ -98,7 +99,7 @@ export class AliasGenerator
 			if (extension.getBundleConfig().get('alias') === false) continue;
 
 			const aliasTarget = extension.getTypesPath() ?? extension.getInputPath();
-			const relativePath = path.relative(rootPath, aliasTarget);
+			const relativePath = normalizePath(path.relative(rootPath, aliasTarget));
 			aliases.compilerOptions.paths[name] = [`./${relativePath}`];
 			addedNames.push(name);
 		}
@@ -131,7 +132,7 @@ export class AliasGenerator
 			const aliasesRaw = await fs.readFile(aliasesPath, 'utf8');
 			const aliases = JSON.parse(aliasesRaw);
 			const srcPath = path.join(packagePath, 'src');
-			const relPath = `./${path.relative(rootPath, srcPath)}`;
+			const relPath = `./${normalizePath(path.relative(rootPath, srcPath))}`;
 			aliases.compilerOptions ??= {};
 			aliases.compilerOptions.paths ??= {};
 			aliases.compilerOptions.paths[extensionName] = [relPath];

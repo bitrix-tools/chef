@@ -13,7 +13,7 @@ export class ComponentPackage extends BasePackage
 
 	getModuleName(): string
 	{
-		return this.getPath().split('/').shift();
+		return path.relative(Environment.getRoot(), this.getPath()).split(path.sep).shift() ?? '';
 	}
 
 	getPublicPath(): string

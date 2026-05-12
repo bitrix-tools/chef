@@ -1,5 +1,7 @@
 import picomatch from 'picomatch';
 
+import { normalizePath } from './path/normalize';
+
 export function createPathFilter(patterns: string[]): (filePath: string) => boolean
 {
 	if (patterns.length === 0)
@@ -12,13 +14,14 @@ export function createPathFilter(patterns: string[]): (filePath: string) => bool
 
 	for (const pattern of patterns)
 	{
-		if (/[*?{]/.test(pattern))
+		const normalized = normalizePath(pattern);
+		if (/[*?{]/.test(normalized))
 		{
-			globPatterns.push(pattern);
+			globPatterns.push(normalized);
 		}
 		else
 		{
-			exactPaths.add(pattern);
+			exactPaths.add(normalized);
 		}
 	}
 
@@ -27,12 +30,13 @@ export function createPathFilter(patterns: string[]): (filePath: string) => bool
 		: null;
 
 	return (filePath: string) => {
-		if (exactPaths.has(filePath))
+		const normalized = normalizePath(filePath);
+		if (exactPaths.has(normalized))
 		{
 			return true;
 		}
 
-		if (globMatcher && globMatcher(filePath))
+		if (globMatcher && globMatcher(normalized))
 		{
 			return true;
 		}

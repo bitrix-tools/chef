@@ -91,6 +91,7 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 				...global.process.env,
 				TESTS_DIR: options.testsDirectory,
 			},
+			shell: process.platform === 'win32',
 		});
 
 		const report: TestToken[] = [];

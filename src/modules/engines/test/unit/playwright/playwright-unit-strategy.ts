@@ -41,7 +41,7 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 			: options.testFiles;
 
 		const sourceTestsCode = filteredTests
-			.map((filePath) => `import '${filePath}';`)
+			.map((filePath) => `import ${JSON.stringify(filePath.replaceAll('\\', '/'))};`)
 			.join('\n');
 
 		const buildEngine = await PackageBuilder.getBuildEngine();
@@ -119,11 +119,12 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 			// because Playwright uses its own CDP pipe which conflicts.
 			const chromiumPath = browserLauncher.executablePath();
 			const { spawn } = await import('node:child_process');
+			const os = await import('node:os');
 			const chromiumProcess = spawn(chromiumPath, [
 				`--remote-debugging-port=${cdpPort}`,
 				'--no-first-run',
 				'--no-default-browser-check',
-				`--user-data-dir=${(await import('node:os')).tmpdir()}/chef-debug-${Date.now()}`,
+				`--user-data-dir=${path.join(os.tmpdir(), `chef-debug-${Date.now()}`)}`,
 			], { stdio: 'ignore' });
 
 			// Wait for CDP port to be ready

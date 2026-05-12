@@ -6,6 +6,7 @@ import { TaskRunner } from '../../../modules/task/task-runner';
 import { formatSizeWithDelta } from '../../../utils/format-size';
 import { getFileSize } from '../../../utils/get-file-size';
 import { rebuildTask } from '../tasks/rebuild-task';
+import { normalizePath } from '../../../utils/path/normalize';
 
 import type { BasePackage } from '../../../modules/packages/base-package';
 import type { Task, TaskResult, TaskDetail, TaskGroupResult } from '../../../modules/task/task-types';
@@ -26,7 +27,7 @@ export function plainBuild(extension: BasePackage, args: Record<string, any>): P
 
 			const root = extension.getPath();
 			const relativeRoot = path.relative(process.cwd(), root);
-			const pathPrefix = relativeRoot ? relativeRoot + '/' : '';
+			const pathPrefix = relativeRoot ? normalizePath(relativeRoot) + '/' : '';
 
 			if (result.errors.length > 0)
 			{
@@ -35,7 +36,7 @@ export function plainBuild(extension: BasePackage, args: Record<string, any>): P
 						type: 'error' as const,
 						severity: 'error' as const,
 						code: error.code,
-						message: error.message.replace(/^\[plugin [^\]]+\]\s*/, '').replaceAll(pathPrefix, ''),
+						message: normalizePath(error.message).replace(/^\[plugin [^\]]+\]\s*/, '').replaceAll(pathPrefix, ''),
 						frame: error.frame,
 						loc: error.loc?.file
 							? { file: error.loc.file, line: error.loc.line, column: error.loc.column, root }
@@ -47,7 +48,7 @@ export function plainBuild(extension: BasePackage, args: Record<string, any>): P
 						type: 'error' as const,
 						severity: 'warning' as const,
 						code: warning.code,
-						message: warning.message.replace(/^\[plugin [^\]]+\]\s*/, '').replaceAll(pathPrefix, ''),
+						message: normalizePath(warning.message).replace(/^\[plugin [^\]]+\]\s*/, '').replaceAll(pathPrefix, ''),
 						frame: warning.frame,
 						loc: warning.loc?.file
 							? { file: warning.loc.file, line: warning.loc.line, column: warning.loc.column, root }
@@ -91,7 +92,7 @@ export function plainBuild(extension: BasePackage, args: Record<string, any>): P
 						type: 'error',
 						severity: 'warning',
 						code: warning.code,
-						message: warning.message.replace(/^\[plugin [^\]]+\]\s*/, '').replaceAll(pathPrefix, ''),
+						message: normalizePath(warning.message).replace(/^\[plugin [^\]]+\]\s*/, '').replaceAll(pathPrefix, ''),
 						frame: warning.frame,
 						loc: warning.loc?.file
 							? { file: warning.loc.file, line: warning.loc.line, column: warning.loc.column, root }

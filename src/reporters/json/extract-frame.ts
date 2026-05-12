@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 
-const STACK_LOCATION_RE = /(\/[^\s:()]+):(\d+):(\d+)/;
+const STACK_LOCATION_RE = /((?:[A-Za-z]:)?[/\\][^\s:()]+):(\d+):(\d+)/;
 
 export type FrameLocation = {
 	file: string,

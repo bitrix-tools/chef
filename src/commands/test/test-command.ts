@@ -332,7 +332,10 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 
 		process.on('SIGINT', shutdown);
 		process.on('SIGTERM', shutdown);
-		process.on('SIGTSTP', shutdown);
+		if (process.platform !== 'win32')
+		{
+			process.on('SIGTSTP', shutdown);
+		}
 	}
 }
 

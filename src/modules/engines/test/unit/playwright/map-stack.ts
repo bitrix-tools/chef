@@ -2,6 +2,8 @@ import * as path from 'node:path';
 
 import { originalPositionFor, type TraceMap } from '@jridgewell/trace-mapping';
 
+import { isAbsoluteAnyPlatform } from '../../../../../utils/path/normalize';
+
 // Match bundle frames including the full URL prefix:
 // Chromium: "at fn (<anonymous>:53:13)"
 // Firefox: "@http://host/dev/ui/cli/mocha-wrapper.php:53:13"
@@ -17,7 +19,7 @@ export function mapStack(stack: string, tracer: TraceMap): string
 		const pos = originalPositionFor(tracer, { line, column });
 		if (pos.source)
 		{
-			const source = pos.source.startsWith('/')
+			const source = isAbsoluteAnyPlatform(pos.source)
 				? pos.source
 				: path.resolve(pos.source);
 

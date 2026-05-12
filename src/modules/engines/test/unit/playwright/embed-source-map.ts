@@ -1,16 +1,26 @@
+import { isAbsoluteAnyPlatform, normalizePath } from '../../../../../utils/path/normalize';
+
 import type { SourceMap } from 'rollup';
+
+function toAbsoluteFileUrl(source: string): string | null
+{
+	if (!isAbsoluteAnyPlatform(source))
+	{
+		return null;
+	}
+
+	const posix = normalizePath(source);
+	// POSIX absolute paths already start with "/"; Windows drive-letter paths
+	// need the third slash to form a valid file:/// URL.
+	return posix.startsWith('/') ? `file://${posix}` : `file:///${posix}`;
+}
 
 export function embedSourceMap(code: string, sourceMap: SourceMap): string
 {
 	const mapWithFileUrls = {
 		...sourceMap,
 		sources: (sourceMap.sources ?? []).map((source: string) => {
-			if (source.startsWith('/'))
-			{
-				return `file://${source}`;
-			}
-
-			return source;
+			return toAbsoluteFileUrl(source) ?? source;
 		}),
 	};
 

@@ -17,6 +17,7 @@ export async function hgRename(oldPath: string, newPath: string): Promise<Rename
 		{
 			cwd,
 			stdio: 'pipe',
+			shell: process.platform === 'win32',
 		},
 	);
 
