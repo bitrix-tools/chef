@@ -13,7 +13,9 @@ type ChefResult = {
 };
 
 const chefCli = path.resolve(import.meta.dirname, '../../src/cli.ts');
-const tsxBin = path.resolve(import.meta.dirname, '../../node_modules/.bin/tsx');
+// Use the tsx ESM entry directly via Node — the .bin/tsx shim is an sh script
+// that spawn() cannot launch on Windows.
+const tsxCli = path.resolve(import.meta.dirname, '../../node_modules/tsx/dist/cli.mjs');
 
 function stripAnsi(text: string): string
 {
@@ -29,7 +31,7 @@ export function runChef(args: string[], options?: {
 	const timeout = options?.timeout ?? 30_000;
 
 	return new Promise((resolve) => {
-		const child = spawn(tsxBin, [chefCli, ...args], {
+		const child = spawn(process.execPath, [tsxCli, chefCli, ...args], {
 			cwd,
 			env: {
 				...process.env,

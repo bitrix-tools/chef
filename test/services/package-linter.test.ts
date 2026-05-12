@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+
 import { describe, it, beforeEach, afterEach } from 'mocha';
 import { assert } from 'chai';
 import * as sinon from 'sinon';
@@ -55,7 +57,7 @@ describe('PackageLinter', () => {
 		assert.isTrue(lintStub.calledOnce);
 
 		const options = lintStub.firstCall.args[0];
-		assert.equal(options.sourcePath, `${packagePath}/src`);
+		assert.equal(options.sourcePath, path.join(packagePath, 'src'));
 		assert.equal(options.rootPath, rootPath);
 	});
 

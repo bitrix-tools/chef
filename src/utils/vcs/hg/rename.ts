@@ -21,7 +21,12 @@ export async function hgRename(oldPath: string, newPath: string): Promise<Rename
 		},
 	);
 
-	const stderr = hgProcess.stderr.toString('utf-8');
+	if (hgProcess.error)
+	{
+		return { status: 'fail', stderr: hgProcess.error.message };
+	}
+
+	const stderr = hgProcess.stderr?.toString('utf-8') ?? '';
 
 	return {
 		status: stderr.length === 0 ? 'ok' : 'fail',

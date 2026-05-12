@@ -213,13 +213,17 @@ export function renderCodeFrame(filePath: string, errorLine: number, errorCol: n
 	return result;
 }
 
+// Matches absolute file locations in stack traces on every platform:
+// "/foo/bar.ts:10:5", "C:\\Users\\foo\\bar.ts:10:5", "C:/Users/foo/bar.ts:10:5".
+const STACK_LOCATION_RE = /((?:[A-Za-z]:)?[/\\][^\s:()]+):(\d+):(\d+)/;
+
 export function formatStack(stack: string): string[]
 {
 	const lines = stack.split('\n');
 
 	for (const line of lines)
 	{
-		const fileMatch = line.match(/(\/[^\s:()]+):(\d+):(\d+)/);
+		const fileMatch = line.match(STACK_LOCATION_RE);
 		if (fileMatch)
 		{
 			const [, filePath, lineStr, colStr] = fileMatch;

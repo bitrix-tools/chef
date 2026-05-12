@@ -109,7 +109,7 @@ export async function checkTypes(options: TypeCheckOptions): Promise<TypeCheckRe
 
 	// TS2304: Cannot find name — expected for global variables from external Bitrix extensions (e.g. BX)
 	const ignoredCodes = new Set([2304, ...(options.ignoreCodes ?? [])]);
-	const filterFiles = options.files?.map((f) => path.resolve(f));
+	const filterFiles = options.files?.map((f) => normalizePath(path.resolve(f)));
 
 	const errors = diagnostics.filter((d) => {
 		if (d.category !== ts.DiagnosticCategory.Error || ignoredCodes.has(d.code))
@@ -119,7 +119,8 @@ export async function checkTypes(options: TypeCheckOptions): Promise<TypeCheckRe
 
 		if (filterFiles && d.file)
 		{
-			return filterFiles.some((f) => d.file!.fileName === f);
+			const fileNamePosix = normalizePath(d.file.fileName);
+			return filterFiles.some((f) => fileNamePosix === f);
 		}
 
 		return true;
