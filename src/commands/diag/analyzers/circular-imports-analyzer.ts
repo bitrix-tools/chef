@@ -2,6 +2,8 @@ import * as path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { existsSync, statSync } from 'node:fs';
 
+import { normalizePath } from '../../../utils/path/normalize';
+
 export type CircularImportChain = string[];
 
 export type CircularImportsResult = {
@@ -22,10 +24,14 @@ async function buildGraphAndFindCycles(
 	extensionPath: string,
 ): Promise<CircularImportChain[]>
 {
+	// fast-glob emits POSIX paths on Windows; path.resolve (used during import
+	// resolution) emits native ones. Normalise everything to POSIX so Map
+	// lookups match across the two sources.
+	const normalizedFiles = sourceFiles.map(normalizePath);
 	const graph = new Map<string, Set<string>>();
-	const fileSet = new Set(sourceFiles);
+	const fileSet = new Set(normalizedFiles);
 
-	for (const file of sourceFiles)
+	for (const file of normalizedFiles)
 	{
 		const imports = await extractLocalImports(file);
 		const resolved = new Set<string>();
@@ -42,7 +48,7 @@ async function buildGraphAndFindCycles(
 		graph.set(file, resolved);
 	}
 
-	return detectCycles(graph, extensionPath);
+	return detectCycles(graph, normalizePath(extensionPath));
 }
 
 async function extractLocalImports(filePath: string): Promise<string[]>
@@ -81,7 +87,7 @@ function resolveImportPath(importPath: string, fromDir: string): string | null
 
 	if (existsSync(resolved) && statSync(resolved).isFile())
 	{
-		return resolved;
+		return normalizePath(resolved);
 	}
 
 	for (const ext of ['.ts', '.js', '.tsx', '.jsx'])
@@ -89,7 +95,7 @@ function resolveImportPath(importPath: string, fromDir: string): string | null
 		const withExt = resolved + ext;
 		if (existsSync(withExt))
 		{
-			return withExt;
+			return normalizePath(withExt);
 		}
 	}
 
@@ -98,7 +104,7 @@ function resolveImportPath(importPath: string, fromDir: string): string | null
 		const indexPath = path.join(resolved, `index${ext}`);
 		if (existsSync(indexPath))
 		{
-			return indexPath;
+			return normalizePath(indexPath);
 		}
 	}
 

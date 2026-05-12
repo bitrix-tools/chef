@@ -28,8 +28,11 @@ function cleanDist(tmpRepo: string, fixtureName: string): string
 
 function assertBundleMatchesExpected(extensionDir: string, fixtureName: string, bundleFile: string): void
 {
-	const actual = fs.readFileSync(path.join(extensionDir, 'dist', bundleFile), 'utf-8');
-	const expected = fs.readFileSync(path.join(expectedPath, fixtureName, bundleFile), 'utf-8');
+	// Normalise line endings: if git is configured with core.autocrlf=true on
+	// a Windows checkout, every fixture file gets CRLF on disk while
+	// Rollup-emitted bundles use LF.
+	const actual = fs.readFileSync(path.join(extensionDir, 'dist', bundleFile), 'utf-8').replaceAll('\r\n', '\n');
+	const expected = fs.readFileSync(path.join(expectedPath, fixtureName, bundleFile), 'utf-8').replaceAll('\r\n', '\n');
 
 	assert.equal(actual, expected, `Bundle ${fixtureName}/${bundleFile} differs from expected`);
 }

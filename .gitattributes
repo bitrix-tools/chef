@@ -1,0 +1,17 @@
+# Force LF line endings for source, configuration, scripts and test data.
+# Without this, Windows checkout converts everything to CRLF and byte-exact
+# bundle comparisons in test/cli/build.test.ts diverge from the
+# Rollup-generated (LF) output.
+* text=auto eol=lf
+
+# Binary types we should never touch.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
