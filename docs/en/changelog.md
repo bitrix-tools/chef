@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.12.1 <Badge type="tip" text="5/12/2026" />
+## v1.12.3 <Badge type="tip" text="5/12/2026" />
 
 fix(windows): `chef aliases` now works correctly on Windows — `aliases.tsconfig.json` contains POSIX-only path separators and TypeScript resolves aliases again.
 

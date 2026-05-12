@@ -1,6 +1,6 @@
 # История изменений
 
-## v1.12.1 <Badge type="tip" text="12.05.2026" />
+## v1.12.3 <Badge type="tip" text="12.05.2026" />
 
 fix(windows): команда `chef aliases` теперь корректно работает на Windows — `aliases.tsconfig.json` содержит только POSIX-разделители путей, TypeScript снова резолвит алиасы.
 
