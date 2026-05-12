@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.12.1 <Badge type="tip" text="5/12/2026" />
+
+fix(windows): `chef aliases` now works correctly on Windows — `aliases.tsconfig.json` contains POSIX-only path separators and TypeScript resolves aliases again.
+
+Cross-platform fixes for `chef build`, `chef test`, `chef lint`, `chef diag`, `chef init` and related modules: a single path-normalisation approach via `normalizePath`/`isAbsoluteAnyPlatform`, `shell` flag for `npx`/`hg` spawns on Windows, `pathToFileURL` for dynamic imports and clickable links, `os.tmpdir()` instead of hard-coded `/tmp`, stack-trace regex accepts Windows paths, `chef.config.ts` loads through `tsx/cjs/api`.
+
+ci: a matrix of tests now runs on ubuntu/macos/windows × Node 22/24 before npm publish, so a failure on any platform blocks the release.
+
 ## v1.12.0 <Badge type="tip" text="5/8/2026" />
 
 Declaration emit-time diagnostics (e.g. TS4023) now surface as build warnings instead of being silently dropped. A new structural detector warns when a type literal in the .d.ts matches the shape of a value imported from a sibling extension (including transitive re-exports), and suggests adding a `: typeof X` annotation to keep the namespace reference. Fixed duplicate output for destructured exports like `export const { a, b, c } = X` — previously the statement was rendered once per destructured name. Stale .d.ts is now removed when a fresh bundle cannot be produced, so consumers do not work against a phantom API.
