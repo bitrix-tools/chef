@@ -66,6 +66,12 @@ const sidebarRu = [
     ],
   },
   {
+    text: 'Решение типовых проблем',
+    items: [
+      { text: 'Инлайнинг типов в .d.ts', link: '/guide/dts-inlining' },
+    ],
+  },
+  {
     text: 'Проект',
     items: [
       { text: 'История изменений', link: '/changelog' },
@@ -132,6 +138,12 @@ const sidebarEn = [
       { text: 'bundle.config', link: '/en/config/bundle-config' },
       { text: 'chef.config', link: '/en/config/chef-config' },
       { text: 'Browserslist', link: '/en/config/browserslist' },
+    ],
+  },
+  {
+    text: 'Troubleshooting',
+    items: [
+      { text: '.d.ts type inlining', link: '/en/guide/dts-inlining' },
     ],
   },
   {

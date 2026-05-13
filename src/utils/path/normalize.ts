@@ -30,6 +30,19 @@ export function normalizePath(value: string): string
 }
 
 /**
+ * Same as `normalizePath`, but for free-form text (diagnostic messages, stack traces,
+ * etc.) that may contain both filesystem paths AND URLs. Plain `normalizePath` collapses
+ * `https://...` to `https:/...` via `path.posix.normalize`. This variant only converts
+ * Windows-style backslashes — duplicate forward slashes (URL `//`, UNC paths) are left
+ * untouched, since collapsing them changes the meaning of the surrounding text.
+ */
+export function normalizeMessagePaths(message: string): string
+{
+	if (!message.includes('\\')) return message;
+	return message.replaceAll('\\', '/');
+}
+
+/**
  * Returns true if `value` is an absolute path on any platform — that is, a
  * POSIX absolute ("/foo") *or* a Windows absolute ("C:\\foo" / "C:/foo").
  *

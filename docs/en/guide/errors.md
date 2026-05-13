@@ -353,6 +353,14 @@ Failed to generate TypeScript aliases during `chef init build`.
 
 Unexpected error during the build process.
 
+## CHEF_* — Extended Diagnostics {#chef}
+
+Additional warnings without a numeric code. Each message pinpoints a specific source line and ships with a ready-to-apply fix recipe.
+
+### CHEF_DTS — .d.ts Type Inlining {#CHEF_DTS}
+
+The public `.d.ts` of your extension contains the expanded shape of a type from a sibling extension instead of a reference to the original symbol. Full breakdown and per-idiom recipes are on the [.d.ts Type Inlining](/en/guide/dts-inlining) page.
+
 ---
 
 **If you get a CF9xxx error** — this is a Chef bug. Please [create an issue](https://github.com/bitrix-tools/chef/issues) with the full error text and reproduction steps.

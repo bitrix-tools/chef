@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { normalizePath } from '../../../utils/path/normalize';
+import { normalizePath, normalizeMessagePaths } from '../../../utils/path/normalize';
 
 import type { BasePackage } from '../../../modules/packages/base-package';
 import type { Task, TaskResult, TaskDetail } from '../../../modules/task/task-types';
@@ -15,7 +15,7 @@ function shortenPaths(message: string, relativeRoot: string): string
 
 	const prefix = normalizePath(relativeRoot).endsWith('/') ? normalizePath(relativeRoot) : normalizePath(relativeRoot) + '/';
 
-	return normalizePath(message).replaceAll(prefix, '');
+	return normalizeMessagePaths(message).replaceAll(prefix, '');
 }
 
 function diagnosticToDetail(log: BuildDiagnostic, root: string, relativeRoot: string, severity?: 'error' | 'warning'): TaskDetail
@@ -31,6 +31,7 @@ function diagnosticToDetail(log: BuildDiagnostic, root: string, relativeRoot: st
 		code: log.code,
 		severity,
 		message: shortenPaths(rawMessage, relativeRoot),
+		details: log.details,
 		frame: log.frame,
 		loc,
 		risk: log.risk,

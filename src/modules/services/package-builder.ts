@@ -47,6 +47,7 @@ export class PackageBuilder
 				buildResult.warnings.push({
 					code: diagnostic.code > 0 ? `TS${diagnostic.code}` : 'CHEF_DTS',
 					message: diagnostic.message,
+					details: diagnostic.details,
 					loc: diagnostic.file && diagnostic.line !== null && diagnostic.column !== null
 						? { file: diagnostic.file, line: diagnostic.line, column: diagnostic.column }
 						: undefined,

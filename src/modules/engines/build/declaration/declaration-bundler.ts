@@ -87,6 +87,7 @@ export async function bundleDeclarations(options: DeclarationBundleOptions): Pro
 		tsconfigBaseUrl: options.compilerOptions?.baseUrl as string | undefined,
 		sourceImports: emitted.sourceImports,
 		sourceToDts: emitted.sourceToDts,
+		entrySourcePath: options.input,
 	});
 	const members = collector.collectFromEntry(entryFile, options.namespace);
 
@@ -96,25 +97,95 @@ export async function bundleDeclarations(options: DeclarationBundleOptions): Pro
 	}
 
 	const inlineDetections = collector.detectInlinedSiblingTypes();
-	const inlineDiagnostics = inlineDetections.map((detection): DeclarationDiagnostic => ({
-		code: 0,
-		message: (
-			`Export "${detection.exportName}" inlines the shape of `
-			+ `"${detection.symbolName}" from sibling extension "${detection.siblingName}" `
-			+ `into the .d.ts. Add an explicit type annotation to keep the namespace reference `
-			+ `(e.g. \`: typeof ${detection.symbolName}\`) — otherwise consumers will see the `
-			+ `full structure instead of \`${detection.siblingName}.${detection.symbolName}\`.`
-		),
-		severity: 'warning',
-		file: options.input,
-		line: null,
-		column: null,
-	}));
+	const inlineDiagnostics = inlineDetections.map((detection): DeclarationDiagnostic => {
+		const rendered = formatInlinedSiblingMessage(detection);
+		return {
+			code: 0,
+			message: rendered.heading,
+			details: rendered.details,
+			severity: 'warning',
+			file: detection.sourceFile ?? options.input,
+			line: detection.line,
+			column: detection.column,
+		};
+	});
 
 	return {
 		bundle: splitMembers(tsModule, members, collector.getNpmModules()),
 		diagnostics: [...diagnostics, ...inlineDiagnostics],
 	};
+}
+
+const DTS_INLINING_DOCS_URL = 'https://bitrix-tools.github.io/chef/guide/dts-inlining';
+
+/**
+ * Higher rank = more specific recipe. Used to prefer e.g. a Vue-components classification
+ * over a generic one when multiple references to the same symbol exist in one export.
+ */
+function rankInlineKind(kind: InlinedSiblingKind): number
+{
+	switch (kind)
+	{
+		case 'vue-components': return 3;
+		case 'computed-arrow': return 2;
+		case 'export-const': return 1;
+		default: return 0;
+	}
+}
+
+function formatInlinedSiblingMessage(detection: InlinedSiblingDetection): { heading: string; details: string }
+{
+	const { siblingName, symbolName, exportName, kind, propertyName } = detection;
+
+	const heading = `"${symbolName}" from ${siblingName} is being inlined into the public .d.ts of "${exportName}".`;
+	const fix = formatInlineFixRecipe(symbolName, kind, propertyName);
+	const why = (
+		`Why: every consumer of this extension would get the full ${symbolName} shape duplicated `
+		+ `into their .d.ts. When ${symbolName} changes upstream, the inlined copy goes stale until rebuilt.`
+	);
+	const docs = `Docs: ${DTS_INLINING_DOCS_URL}`;
+
+	return { heading, details: `${fix}\n\n${why}\n\n${docs}` };
+}
+
+function formatInlineFixRecipe(symbolName: string, kind: InlinedSiblingKind, propertyName: string | null): string
+{
+	const prop = propertyName ?? symbolName;
+
+	switch (kind)
+	{
+		case 'vue-components':
+		{
+			return (
+				`Fix: pin the type on the \`components\` map so TypeScript keeps the namespace reference.\n`
+				+ `    components: { ${prop} } as { ${prop}: typeof ${prop} },`
+			);
+		}
+		case 'computed-arrow':
+		{
+			return (
+				`Fix: turn the arrow into a regular computed method with an explicit return type.\n`
+				+ `    ${prop}(): typeof ${prop}\n`
+				+ `    {\n`
+				+ `        return ${prop};\n`
+				+ `    },`
+			);
+		}
+		case 'export-const':
+		{
+			return (
+				`Fix: annotate the export with the original type to preserve the namespace reference.\n`
+				+ `    export const ${prop}: typeof ${symbolName} = ...;`
+			);
+		}
+		default:
+		{
+			return (
+				`Fix: add an explicit type annotation that names ${symbolName} (e.g. \`: typeof ${symbolName}\`) `
+				+ `at the location above, so TypeScript writes a namespace reference instead of inlining the shape.`
+			);
+		}
+	}
 }
 
 interface CollectedMember
@@ -136,6 +207,8 @@ interface SymbolCollectorOptions
 	tsconfigBaseUrl?: string;
 	sourceImports?: Set<string>;
 	sourceToDts?: Map<string, string>;
+	/** Absolute path of the original entry .ts file. Used to locate inline warnings in source. */
+	entrySourcePath?: string;
 }
 
 interface NpmPackageBuffer
@@ -259,10 +332,22 @@ class SymbolCollector
 			const visit = (node: ts.Node): void => {
 				if (ts.isTypeLiteralNode(node))
 				{
-					const detection = this.#matchSiblingShape(node, siblingDtsToName, member.name);
-					if (detection)
+					const match = this.#matchSiblingShape(node, siblingDtsToName);
+					if (match)
 					{
-						const key = `${detection.exportName}:${detection.siblingName}:${detection.symbolName}`;
+						const exportName = member.name ?? '<anonymous>';
+						const located = this.#locateInOriginalSource(exportName, match.symbolName);
+						const detection: InlinedSiblingDetection = {
+							exportName,
+							siblingName: match.siblingName,
+							symbolName: match.symbolName,
+							kind: located?.kind ?? 'generic',
+							propertyName: located?.propertyName ?? null,
+							sourceFile: located?.sourceFile ?? null,
+							line: located?.line ?? null,
+							column: located?.column ?? null,
+						};
+						const key = `${detection.exportName}:${detection.siblingName}:${detection.symbolName}:${detection.kind}:${detection.propertyName ?? ''}`;
 						if (!seenKeys.has(key))
 						{
 							seenKeys.add(key);
@@ -282,11 +367,184 @@ class SymbolCollector
 		return detections;
 	}
 
+	#entrySourceFile: ts.SourceFile | null | undefined = undefined;
+
+	#getEntrySourceFile(): ts.SourceFile | null
+	{
+		if (this.#entrySourceFile !== undefined) return this.#entrySourceFile;
+
+		const entryPath = this.#options.entrySourcePath;
+		if (!entryPath || !fs.existsSync(entryPath))
+		{
+			this.#entrySourceFile = null;
+			return null;
+		}
+
+		const text = fs.readFileSync(entryPath, 'utf-8');
+		this.#entrySourceFile = this.#ts.createSourceFile(entryPath, text, this.#ts.ScriptTarget.Latest, true);
+		return this.#entrySourceFile;
+	}
+
+	/**
+	 * Locate where the inlined sibling shape sits in the **original .ts source** (not the
+	 * emitted .d.ts). Returns precise file/line/column and an inline-kind classification
+	 * that drives the fix recipe in the warning.
+	 *
+	 * Strategy:
+	 * - Open entry .ts and find the `export` declaration matching `exportName`.
+	 * - Walk its AST looking for an identifier reference to `symbolName`.
+	 * - The first match wins. If we land inside `components: {...}` of `defineComponent`,
+	 *   it's `vue-components`. Inside `computed: {...}` with an arrow returning the symbol,
+	 *   it's `computed-arrow`. Bare top-level export without annotation — `export-const`.
+	 */
+	#locateInOriginalSource(exportName: string, symbolName: string): {
+		kind: InlinedSiblingKind;
+		propertyName: string | null;
+		sourceFile: string;
+		line: number;
+		column: number;
+	} | null
+	{
+		const ts = this.#ts;
+		const entryFile = this.#getEntrySourceFile();
+		if (!entryFile) return null;
+
+		const exportDecl = this.#findExportDeclaration(entryFile, exportName);
+		if (!exportDecl) return null;
+
+		// First pass — try to find a reference to symbolName via the most informative idioms.
+		let bestMatch: { node: ts.Node; kind: InlinedSiblingKind; propertyName: string | null } | null = null;
+
+		const visit = (node: ts.Node): void => {
+			if (bestMatch && bestMatch.kind !== 'generic') return;
+
+			if (ts.isIdentifier(node) && node.text === symbolName)
+			{
+				const context = this.#classifyOriginalContext(node, symbolName);
+				if (context)
+				{
+					if (!bestMatch || rankInlineKind(context.kind) > rankInlineKind(bestMatch.kind))
+					{
+						bestMatch = { node, kind: context.kind, propertyName: context.propertyName };
+					}
+				}
+			}
+
+			ts.forEachChild(node, visit);
+		};
+
+		visit(exportDecl);
+
+		// Fall back to the export declaration position itself — better than nothing.
+		const anchor = (bestMatch as null | { node: ts.Node; kind: InlinedSiblingKind; propertyName: string | null })?.node ?? exportDecl;
+		const { line, character } = entryFile.getLineAndCharacterOfPosition(anchor.getStart(entryFile));
+
+		return {
+			kind: (bestMatch as null | { node: ts.Node; kind: InlinedSiblingKind; propertyName: string | null })?.kind ?? 'export-const',
+			propertyName: (bestMatch as null | { node: ts.Node; kind: InlinedSiblingKind; propertyName: string | null })?.propertyName ?? null,
+			sourceFile: entryFile.fileName,
+			line: line + 1,
+			column: character + 1,
+		};
+	}
+
+	#findExportDeclaration(file: ts.SourceFile, exportName: string): ts.Node | null
+	{
+		const ts = this.#ts;
+
+		for (const stmt of file.statements)
+		{
+			if (ts.isVariableStatement(stmt) && stmt.modifiers?.some((mod) => mod.kind === ts.SyntaxKind.ExportKeyword))
+			{
+				for (const decl of stmt.declarationList.declarations)
+				{
+					if (ts.isIdentifier(decl.name) && decl.name.text === exportName) return stmt;
+				}
+			}
+
+			if (
+				(ts.isFunctionDeclaration(stmt) || ts.isClassDeclaration(stmt))
+				&& stmt.modifiers?.some((mod) => mod.kind === ts.SyntaxKind.ExportKeyword)
+				&& stmt.name
+				&& stmt.name.text === exportName
+			)
+			{
+				return stmt;
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Given an identifier reference inside the original entry source, figure out which
+	 * idiom is wrapping it. Returns null if the identifier is in a position that doesn't
+	 * cause inline (e.g. inside an `import`/comment).
+	 */
+	#classifyOriginalContext(idNode: ts.Identifier, symbolName: string): { kind: InlinedSiblingKind; propertyName: string | null } | null
+	{
+		const ts = this.#ts;
+		let propertyName: string | null = null;
+
+		for (let cursor: ts.Node | undefined = idNode; cursor; cursor = cursor.parent)
+		{
+			// Imports / type-only references don't contribute to inline, skip identifiers
+			// reached through them.
+			if (ts.isImportDeclaration(cursor) || ts.isImportSpecifier(cursor)) return null;
+			if (ts.isTypeReferenceNode(cursor) || ts.isTypeQueryNode(cursor)) return null;
+
+			if (ts.isShorthandPropertyAssignment(cursor) || ts.isPropertyAssignment(cursor))
+			{
+				const name = cursor.name;
+				if (propertyName === null && (ts.isIdentifier(name) || ts.isStringLiteral(name)))
+				{
+					propertyName = name.text;
+				}
+
+				const container = this.#findEnclosingObjectProperty(cursor.parent);
+				if (container === 'components') return { kind: 'vue-components', propertyName: propertyName ?? symbolName };
+				if (container === 'computed') return { kind: 'computed-arrow', propertyName: propertyName ?? symbolName };
+				if (container === 'methods') return { kind: 'generic', propertyName: propertyName ?? symbolName };
+			}
+
+			if (ts.isVariableDeclaration(cursor))
+			{
+				const isExportedConst = cursor.parent
+					&& ts.isVariableDeclarationList(cursor.parent)
+					&& cursor.parent.parent
+					&& ts.isVariableStatement(cursor.parent.parent)
+					&& cursor.parent.parent.modifiers?.some((mod) => mod.kind === ts.SyntaxKind.ExportKeyword);
+				if (isExportedConst && !cursor.type)
+				{
+					return { kind: 'export-const', propertyName: ts.isIdentifier(cursor.name) ? cursor.name.text : propertyName };
+				}
+			}
+		}
+
+		return { kind: 'generic', propertyName };
+	}
+
+	/**
+	 * Looks for the property assignment (e.g. `components: { ... }`) that contains a given
+	 * object-literal expression. Returns the property name or `null` if the literal is not
+	 * a direct child of one.
+	 */
+	#findEnclosingObjectProperty(node: ts.Node): string | null
+	{
+		const ts = this.#ts;
+		if (!ts.isObjectLiteralExpression(node)) return null;
+		const parent = node.parent;
+		if (!parent) return null;
+		if (!ts.isPropertyAssignment(parent)) return null;
+		const name = parent.name;
+		if (ts.isIdentifier(name) || ts.isStringLiteral(name)) return name.text;
+		return null;
+	}
+
 	#matchSiblingShape(
 		node: ts.TypeLiteralNode,
 		siblingDtsToName: Map<ts.SourceFile, string>,
-		exportName: string | null,
-	): InlinedSiblingDetection | null
+	): InlinedSiblingMatch | null
 	{
 		const type = this.#checker.getTypeAtLocation(node);
 
@@ -301,11 +559,7 @@ class SymbolCollector
 				const siblingName = siblingDtsToName.get(decl.getSourceFile());
 				if (siblingName)
 				{
-					return {
-						exportName: exportName ?? '<anonymous>',
-						siblingName,
-						symbolName: symbol.name,
-					};
+					return { siblingName, symbolName: symbol.name };
 				}
 			}
 		}
@@ -314,7 +568,7 @@ class SymbolCollector
 		// new `__type` symbol pointing at our own file, losing the link to the sibling.
 		// Match by structural identity instead: precompute the type of each top-level
 		// export of every imported sibling and compare with TypeChecker.
-		return this.#matchAnonymousAgainstSiblingExports(type, siblingDtsToName, exportName);
+		return this.#matchAnonymousAgainstSiblingExports(type, siblingDtsToName);
 	}
 
 	#siblingExportTypes: Array<{ type: ts.Type; siblingName: string; symbolName: string }> | null = null;
@@ -438,8 +692,7 @@ class SymbolCollector
 	#matchAnonymousAgainstSiblingExports(
 		type: ts.Type,
 		siblingDtsToName: Map<ts.SourceFile, string>,
-		exportName: string | null,
-	): InlinedSiblingDetection | null
+	): InlinedSiblingMatch | null
 	{
 		// Empty `{}` literals appear all over emitted declarations (slots/exposed/etc. inside
 		// Vue's `DefineComponent<...>`) and are mutually assignable to any other empty shape.
@@ -464,11 +717,7 @@ class SymbolCollector
 		{
 			if (checker.isTypeAssignableTo(type, candidate.type) && checker.isTypeAssignableTo(candidate.type, type))
 			{
-				return {
-					exportName: exportName ?? '<anonymous>',
-					siblingName: candidate.siblingName,
-					symbolName: candidate.symbolName,
-				};
+				return { siblingName: candidate.siblingName, symbolName: candidate.symbolName };
 			}
 		}
 
@@ -1814,15 +2063,42 @@ export interface DeclarationDiagnostic
 {
 	code: number;
 	message: string;
+	/** Long-form text (fix recipe, rationale, links) rendered after the code frame. */
+	details?: string;
 	severity: 'error' | 'warning';
 	file: string | null;
 	line: number | null;
 	column: number | null;
 }
 
+export type InlinedSiblingKind =
+	/** Inside `components: { Foo, Bar }` of `defineComponent({...})`. */
+	| 'vue-components'
+	/** Computed arrow `Foo: (): typeof Foo => Foo` inside `computed: { ... }`. */
+	| 'computed-arrow'
+	/** Top-level `export const Foo = ...` with no annotation. */
+	| 'export-const'
+	/** Anything else — fall back to the generic recipe. */
+	| 'generic';
+
 export interface InlinedSiblingDetection
 {
 	exportName: string;
+	siblingName: string;
+	symbolName: string;
+	kind: InlinedSiblingKind;
+	/** Property name carrying the inlined value (e.g. "BIcon" inside `components`). */
+	propertyName: string | null;
+	/** Absolute path of the original .ts source where the inline sits. */
+	sourceFile: string | null;
+	/** 1-based line number inside `sourceFile`. */
+	line: number | null;
+	/** 1-based column number inside `sourceFile`. */
+	column: number | null;
+}
+
+interface InlinedSiblingMatch
+{
 	siblingName: string;
 	symbolName: string;
 }

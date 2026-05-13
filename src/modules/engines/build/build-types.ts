@@ -5,6 +5,11 @@ import type { RemapTarget } from '../../config/bundle/strategies/standalone-stra
 export interface BuildDiagnostic {
 	code?: string;
 	message: string;
+	/**
+	 * Long-form explanation rendered **after** the code frame and `at file:line:col` line.
+	 * Useful for fix recipes and context that would clutter the headline message.
+	 */
+	details?: string;
 	frame?: string;
 	loc?: { file: string; line: number; column: number };
 	risk?: 'low' | 'medium' | 'high';

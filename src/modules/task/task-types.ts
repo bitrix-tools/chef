@@ -3,7 +3,7 @@ type TaskStatus = 'passed' | 'failed' | 'warning' | 'skipped';
 type TaskDetail =
 	| { type: 'item'; text: string }
 	| { type: 'block'; text: string; color?: string }
-	| { type: 'error'; severity?: 'error' | 'warning'; code?: string; message: string; stack?: string; frame?: string; loc?: { file: string; line: number; column: number; root?: string }; risk?: string; gapInfo?: string };
+	| { type: 'error'; severity?: 'error' | 'warning'; code?: string; message: string; details?: string; stack?: string; frame?: string; loc?: { file: string; line: number; column: number; root?: string }; risk?: string; gapInfo?: string };
 
 type TaskFailure = {
 	suitePath: string;

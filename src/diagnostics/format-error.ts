@@ -19,6 +19,11 @@ export interface ErrorInfo
 	code?: string;
 	severity?: 'error' | 'warning';
 	message: string;
+	/**
+	 * Optional long-form text rendered after the code frame and `at file:line:col` line.
+	 * Each line is indented to align with the message block (no left-edge drift).
+	 */
+	details?: string;
 	stack?: string;
 	frame?: string;
 	loc?: { file: string; line: number; column: number };
@@ -92,6 +97,22 @@ export function formatError(error: ErrorInfo, indent = ''): string[]
 		}
 
 		lines.push(...styleErrorMessage(stripAnsi(error.frame)));
+	}
+
+	if (error.details)
+	{
+		if (lines.length > 0)
+		{
+			lines.push('');
+		}
+
+		// Indent each line to align with the message block. The reporter prepends its own
+		// `indent` (3–5 spaces) below; combined, that lands us at the same column as
+		// "[CODE] message...". Blank lines stay blank so paragraphs read clean.
+		for (const line of error.details.split('\n'))
+		{
+			lines.push(line === '' ? '' : `  ${line}`);
+		}
 	}
 
 	if (error.showDiff && error.actual !== undefined && error.expected !== undefined)

@@ -222,10 +222,65 @@ describe('DeclarationEmitter — warnings & diagnostics', () => {
 
 			const inlineWarnings = diagnostics.filter((d) => d.severity === 'warning' && d.code === 0);
 			assert.isAtLeast(inlineWarnings.length, 1, `Expected inline warning, got ${JSON.stringify(diagnostics)}`);
-			const message = inlineWarnings[0].message;
+			const warning = inlineWarnings[0];
+			const message = warning.message;
+			const details = warning.details ?? '';
 			assert.include(message, 'Outline');
 			assert.include(message, 'ui.icons');
-			assert.include(message, 'typeof Outline');
+			assert.include(details, 'typeof Outline');
+
+			// Long-form details now carry the docs link.
+			assert.include(details, 'https://bitrix-tools.github.io/chef/guide/dts-inlining');
+			assert.match(warning.file ?? '', /\.ts$/, 'Diagnostic should point at the original .ts source, not the emitted .d.ts');
+			assert.isNumber(warning.line, 'Diagnostic should carry a source line number');
+			assert.isNumber(warning.column, 'Diagnostic should carry a source column number');
+		});
+
+		it('should produce a vue-components fix recipe for `components: { X }`', async () => {
+			// Mirrors the real-world Vue idiom: `defineComponent({ components: { BIcon } })`.
+			// Source-side classification must pick the `vue-components` kind and the message
+			// must show the exact `as { BIcon: typeof BIcon }` replacement.
+			createSiblingExtension({
+				moduleName: 'ui',
+				extensionName: 'ui.icons-vue',
+				namespace: 'BX.UI.IconsVue',
+				files: {
+					'src/index.ts': `
+						export const BIcon = {
+							props: { name: { type: String, required: true } },
+							template: '<i />',
+						};
+					`,
+				},
+			});
+
+			const consumer = createSiblingExtension({
+				moduleName: 'ui',
+				extensionName: 'ui.vue-consumer',
+				namespace: 'BX.UI.VueConsumer',
+				files: {
+					'src/index.ts': `
+						import { BIcon } from 'ui.icons-vue';
+
+						function defineComponent<T>(options: T): T { return options; }
+
+						export const MyButton = defineComponent({
+							name: 'MyButton',
+							components: { BIcon },
+						});
+					`,
+				},
+			});
+
+			const { diagnostics } = await emitConsumer(consumer, 'BX.UI.VueConsumer', {
+				paths: buildSiblingPaths([{ extensionName: 'ui.icons-vue', moduleName: 'ui' }]),
+			});
+
+			const inlineWarnings = diagnostics.filter((d) => d.severity === 'warning' && d.code === 0);
+			assert.isAtLeast(inlineWarnings.length, 1, `Expected inline warning, got ${JSON.stringify(diagnostics)}`);
+			const details = inlineWarnings[0].details ?? '';
+			assert.include(details, 'components: { BIcon } as { BIcon: typeof BIcon }');
+			assert.include(details, 'Fix: pin the type on the `components` map');
 		});
 
 		it('should warn on inlined named class from sibling', async () => {
