@@ -352,6 +352,12 @@ class SymbolCollector
 					if (flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown | ts.TypeFlags.Never)) continue;
 					if (flags & (ts.TypeFlags.String | ts.TypeFlags.Number | ts.TypeFlags.Boolean)) continue;
 
+					// Skip structurally empty exports (e.g. `Object.freeze({} as const)` →
+					// `Readonly<{}>`). They are mutually assignable to every `{}` produced by
+					// declaration emit (empty slot bags inside `DefineComponent<...>` and so on),
+					// causing a flood of false-positive matches.
+					if (this.#isStructurallyEmpty(type)) continue;
+
 					result.push({ type, siblingName, symbolName: exportSymbol.name });
 				}
 			}
@@ -382,6 +388,42 @@ class SymbolCollector
 		return result;
 	}
 
+	/**
+	 * A type is "structurally empty" when it carries no observable members — no properties,
+	 * no call/construct signatures, no index signatures. Such types (`{}`, `Readonly<{}>`,
+	 * `Record<string, never>` and friends) are mutually assignable to one another and to any
+	 * other empty shape, so comparing them via `isTypeAssignableTo` produces meaningless
+	 * matches.
+	 */
+	#isStructurallyEmpty(type: ts.Type): boolean
+	{
+		const ts = this.#ts;
+
+		if (type.isUnionOrIntersection())
+		{
+			return type.types.every((part) => this.#isStructurallyEmpty(part));
+		}
+
+		if (this.#checker.getPropertiesOfType(type).length > 0) return false;
+		if (type.getCallSignatures().length > 0) return false;
+		if (type.getConstructSignatures().length > 0) return false;
+
+		const checker = this.#checker as unknown as {
+			getIndexInfosOfType?: (type: ts.Type) => ReadonlyArray<unknown>;
+		};
+		if (typeof checker.getIndexInfosOfType === 'function')
+		{
+			if (checker.getIndexInfosOfType(type).length > 0) return false;
+		}
+		else
+		{
+			if (this.#checker.getIndexTypeOfType(type, ts.IndexKind.String)) return false;
+			if (this.#checker.getIndexTypeOfType(type, ts.IndexKind.Number)) return false;
+		}
+
+		return true;
+	}
+
 	#resolveSiblingDtsFile(siblingName: string): ts.SourceFile | null
 	{
 		const sourceFile = this.#resolveSiblingSourceFile(siblingName);
@@ -399,6 +441,12 @@ class SymbolCollector
 		exportName: string | null,
 	): InlinedSiblingDetection | null
 	{
+		// Empty `{}` literals appear all over emitted declarations (slots/exposed/etc. inside
+		// Vue's `DefineComponent<...>`) and are mutually assignable to any other empty shape.
+		// Without this guard they trigger false-positive matches against sibling exports like
+		// `Object.freeze({} as const)`.
+		if (this.#isStructurallyEmpty(type)) return null;
+
 		const candidates = this.#getSiblingExportTypes(siblingDtsToName);
 		if (candidates.length === 0) return null;
 

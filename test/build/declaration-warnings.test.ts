@@ -375,6 +375,57 @@ describe('DeclarationEmitter — warnings & diagnostics', () => {
 			);
 			assert.include(inlineWarnings[0].message, 'Outline');
 		});
+
+		it('should ignore structurally empty sibling exports (Object.freeze({} as const))', async () => {
+			// Mirrors `ui.icon-set.api.core` `Special = Object.freeze({} as const)` which used
+			// to flood every Vue component's `DefineComponent<..., {}, {}, ...>` with phantom
+			// "inlines the shape of Special" warnings via mutual assignability.
+			createSiblingExtension({
+				moduleName: 'ui',
+				extensionName: 'ui.empty',
+				namespace: 'BX.UI.Empty',
+				files: {
+					'src/index.ts': `
+						export const Special = Object.freeze({} as const);
+						export const Outline = {
+							HOME: 'o-home',
+						} as const;
+					`,
+				},
+			});
+
+			const consumer = createSiblingExtension({
+				moduleName: 'ui',
+				extensionName: 'ui.empty-consumer',
+				namespace: 'BX.UI.EmptyConsumer',
+				files: {
+					'src/index.ts': `
+						import { Outline } from 'ui.empty';
+
+						export const noise: { a: {}; b: {}; c: Readonly<{}> } = {
+							a: {},
+							b: {},
+							c: Object.freeze({}),
+						};
+
+						export function getOutline(): typeof Outline {
+							return Outline;
+						}
+					`,
+				},
+			});
+
+			const { diagnostics } = await emitConsumer(consumer, 'BX.UI.EmptyConsumer', {
+				paths: buildSiblingPaths([{ extensionName: 'ui.empty', moduleName: 'ui' }]),
+			});
+
+			const inlineWarnings = diagnostics.filter((d) => d.severity === 'warning' && d.code === 0);
+			assert.equal(
+				inlineWarnings.length,
+				0,
+				`Empty sibling exports must not match arbitrary {} shapes. Got: ${JSON.stringify(inlineWarnings)}`,
+			);
+		});
 	});
 
 	describe('stale d.ts cleanup', () => {
