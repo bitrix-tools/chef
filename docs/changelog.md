@@ -1,5 +1,12 @@
 # История изменений
 
+## v1.12.5 <Badge type="tip" text="13.05.2026" />
+
+- diag: расширенное предупреждение CHEF_DTS с готовым рецептом исправления для каждого вида инлайна (vue-components, computed-arrow, export-const, generic) — заголовок, фрагмент кода, точная позиция и сниппет с фиксом
+- diag: убраны ложные предупреждения CHEF_DTS на структурно пустых sibling-экспортах вроде Object.freeze({} as const) (например, Special из ui.icon-set.api.core)
+- docs: новая страница «Troubleshooting» с разделом про DTS-инлайнинг (RU + EN)
+- ci: релизные тесты теперь идут на одной версии Node (22) на каждой ОС
+
 ## v1.12.4 <Badge type="tip" text="12.05.2026" />
 
 fix(windows): команда `chef aliases` теперь корректно работает на Windows — `aliases.tsconfig.json` содержит только POSIX-разделители путей, TypeScript снова резолвит алиасы.

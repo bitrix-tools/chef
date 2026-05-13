@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.12.5 <Badge type="tip" text="5/13/2026" />
+
+- diag: richer CHEF_DTS warning with a per-kind fix recipe (vue-components, computed-arrow, export-const, generic) — heading, code frame, at-location, and a ready-to-paste fix snippet
+- diag: drop phantom CHEF_DTS warnings on structurally empty sibling exports like Object.freeze({} as const) (e.g. Special from ui.icon-set.api.core)
+- docs: new "Troubleshooting" page with a section on DTS inlining (RU + EN)
+- ci: release tests now run on a single Node version (22) per OS
+
 ## v1.12.4 <Badge type="tip" text="5/12/2026" />
 
 fix(windows): `chef aliases` now works correctly on Windows — `aliases.tsconfig.json` contains POSIX-only path separators and TypeScript resolves aliases again.
