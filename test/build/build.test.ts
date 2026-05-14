@@ -2067,7 +2067,8 @@ export class SimpleComponent {
 				const warning = circular[0];
 				assert.include(warning.message, '→', 'Message should describe the cycle with arrows');
 				assert.isDefined(warning.loc, 'Direct cycle warning must carry a loc for the code frame');
-				assert.match(warning.loc!.file, /\/src\/[ab]\.js$/, 'loc should point at one of the source files');
+				// Use [\\/] so the regex works on Windows where paths are backslash-separated.
+				assert.match(warning.loc!.file, /[\\/]src[\\/][ab]\.js$/, 'loc should point at one of the source files');
 				assert.equal(warning.loc!.line, 1, 'loc should land on the `import` line');
 			}
 			finally
