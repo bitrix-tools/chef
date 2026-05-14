@@ -11,6 +11,8 @@ import { FileFinder } from '../../utils/file-finder';
 import { loadTsConfig } from '../../utils/load-tsconfig';
 import { emitDeclarationStrategy } from '../config/bundle/strategies/emit-declaration-strategy';
 import { findReExports } from '../../utils/ast/find-re-exports';
+import { findImportLocation } from '../../utils/ast/find-import-location';
+import { findCircularDependencies } from '../../utils/package/find-circular-dependencies';
 import { PackageResolver } from '../packages/package-resolver';
 import { CF } from '../../diagnostics/diagnostic-codes';
 import type { BasePackage } from '../packages/base-package';
@@ -65,7 +67,7 @@ export class PackageBuilder
 
 		if (buildResult.errors.length === 0)
 		{
-			// Diagnostic only — failure here must not affect the produced JS bundle.
+			// Diagnostics only — failures here must not affect the produced JS bundle.
 			try
 			{
 				const reExportWarnings = await this.#detectRiskyReExports();
@@ -74,6 +76,16 @@ export class PackageBuilder
 			catch
 			{
 				// Swallow: re-export diagnostics are best-effort.
+			}
+
+			try
+			{
+				const circularWarnings = await this.#detectCircularDependencies();
+				buildResult.warnings.push(...circularWarnings);
+			}
+			catch
+			{
+				// Swallow: circular-deps diagnostics are best-effort.
 			}
 		}
 
@@ -290,6 +302,49 @@ export class PackageBuilder
 				message: headline,
 				details,
 				loc: { file: path.join(packageRoot, entry.file), line: entry.line, column: 1 },
+			});
+		}
+
+		return warnings;
+	}
+
+	/**
+	 * Surface direct circular dependencies declared in `config.php rel` (A → A self-dep,
+	 * A → B → A mutual). Longer chains are not reported — they indicate tight coupling but
+	 * rarely break at load time, so we leave them to `chef diag circular-deps`.
+	 */
+	async #detectCircularDependencies(): Promise<BuildDiagnostic[]>
+	{
+		const cycles = await findCircularDependencies({ target: this.#package });
+		if (cycles.length === 0)
+		{
+			return [];
+		}
+
+		const details = [
+			'Mutual dependencies cause load-order issues — one extension may initialise before',
+			'the other is ready. To break the cycle:',
+			'  • extract the shared code into a third extension, or',
+			'  • invert one direction with event-based / late binding, or',
+			'  • defer the import via `Runtime.loadExtension(\'partner.name\')` so the dependency',
+			'    is fetched lazily at the moment of use instead of at module load time.',
+		].join('\n');
+
+		// Try to locate the offending import in JS sources of this package.
+		// The cycle is declared in config.php (`rel`), but the actionable spot for the developer
+		// is usually `import ... from 'partner'`. If the dependency exists only in config.php
+		// without a matching JS import, leave the diagnostic without `loc`.
+		const warnings: BuildDiagnostic[] = [];
+		for (const cycle of cycles)
+		{
+			const partner = cycle[1];
+			const location = await findImportLocation(this.#package, partner);
+
+			warnings.push({
+				code: CF.CIRCULAR_DEPENDENCY,
+				message: `Circular dependency between extensions: ${cycle.join(' → ')}`,
+				details,
+				loc: location ?? undefined,
 			});
 		}
 

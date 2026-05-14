@@ -231,6 +231,54 @@ export class RollupBuildStrategy extends BuildStrategy
 		PLUGIN_WARNING: CF.PLUGIN_WARNING,
 	};
 
+	/**
+	 * Resolve a Rollup CIRCULAR_DEPENDENCY warning (which carries `ids: string[]` — the full chain
+	 * of resolved absolute paths) into a BuildDiagnostic with a code frame pointing at the
+	 * `import` line in the first file of the chain. Only called for direct cycles (already
+	 * filtered in onWarning).
+	 */
+	static async #resolveCircularWarning(ids: string[]): Promise<BuildDiagnostic>
+	{
+		const { findRelativeImportLocation } = await import('../../../../utils/ast/find-import-location');
+
+		const relIds = ids.map((id) => RollupBuildStrategy.#shortenIdForMessage(id));
+		const message = `Circular import: ${relIds.join(' → ')}`;
+
+		const details = [
+			'Modules in this cycle reference each other at load time, so one of them sees the',
+			'other as `undefined` until both have finished evaluating. Code that uses such an',
+			'import at module top level (vs. inside a function called later) may crash or',
+			'silently get the wrong value.',
+			'',
+			'To break the cycle:',
+			'  • extract the shared symbols into a third module that both can import, or',
+			'  • move top-level usage inside a function so the binding is read lazily, or',
+			'  • invert one direction so the dependency only flows one way.',
+		].join('\n');
+
+		const location = ids.length >= 2
+			? await findRelativeImportLocation(ids[0], ids[1])
+			: null;
+
+		return {
+			code: CF.CIRCULAR_DEPENDENCY,
+			message,
+			details,
+			loc: location ?? undefined,
+		};
+	}
+
+	static #shortenIdForMessage(id: string): string
+	{
+		const cwd = process.cwd();
+		if (id.startsWith(cwd))
+		{
+			return path.relative(cwd, id) || id;
+		}
+
+		return id;
+	}
+
 	static #findImportedNames(filePath: string, exporter: string, unusedNames: Set<string>): string[]
 	{
 		try
@@ -284,12 +332,14 @@ export class RollupBuildStrategy extends BuildStrategy
 		warningsRef: BuildDiagnostic[],
 		errorsRef: BuildDiagnostic[],
 		dependenciesRef: string[],
+		pendingCircularRef: string[][],
 		onWarning: WarningHandlerWithDefault,
 	}
 	{
 		const warningsRef: Array<BuildDiagnostic> = [];
 		const errorsRef: Array<BuildDiagnostic> = [];
 		const dependenciesRef: Array<string> = [];
+		const pendingCircularRef: string[][] = [];
 		const onWarning = (warning: RollupLog): void => {
 			if (warning.code === 'EMPTY_BUNDLE')
 			{
@@ -352,6 +402,20 @@ export class RollupBuildStrategy extends BuildStrategy
 				else
 				{
 					warningsRef.push(entry);
+				}
+
+				return;
+			}
+
+			if (warning.code === 'CIRCULAR_DEPENDENCY')
+			{
+				const ids = (warning as { ids?: string[] }).ids ?? [];
+				// Keep only direct cycles: A → A (length 2) and A → B → A (length 3).
+				// Longer chains (A → B → C → A) point to tight coupling but rarely break at runtime;
+				// surfacing them on every build adds noise. `chef diag circular-imports` covers them.
+				if (ids.length > 0 && ids.length <= 3)
+				{
+					pendingCircularRef.push(ids);
 				}
 
 				return;
@@ -422,6 +486,7 @@ export class RollupBuildStrategy extends BuildStrategy
 			warningsRef,
 			errorsRef,
 			dependenciesRef,
+			pendingCircularRef,
 			onWarning,
 		};
 	}
@@ -901,7 +966,7 @@ export class RollupBuildStrategy extends BuildStrategy
 			}
 		}
 
-		const { onWarning, warningsRef, errorsRef, dependenciesRef } = RollupBuildStrategy.createOnWarningHandler();
+		const { onWarning, warningsRef, errorsRef, dependenciesRef, pendingCircularRef } = RollupBuildStrategy.createOnWarningHandler();
 		const inputOptions: InputOptions = await this.#buildRollupInputOptions(options, onWarning, dependenciesRef);
 
 		let bundle: RollupBuild;
@@ -943,6 +1008,11 @@ export class RollupBuildStrategy extends BuildStrategy
 
 		RollupBuildStrategy.#removeEmptyChunks(result.output, options.output.js);
 
+		for (const ids of pendingCircularRef)
+		{
+			warningsRef.push(await RollupBuildStrategy.#resolveCircularWarning(ids));
+		}
+
 		const bundlesSize = RollupBuildStrategy.calculateBundlesSize(result.output);
 		const sortedDependencies = RollupBuildStrategy.sortDependencies(dependenciesRef)
 
@@ -957,7 +1027,7 @@ export class RollupBuildStrategy extends BuildStrategy
 
 	async buildCode(options: BuildCodeOptions): Promise<BuildCodeResult>
 	{
-		const { onWarning, warningsRef, errorsRef, dependenciesRef } = RollupBuildStrategy.createOnWarningHandler();
+		const { onWarning, warningsRef, errorsRef, dependenciesRef, pendingCircularRef } = RollupBuildStrategy.createOnWarningHandler();
 		const rollupInputOptions: InputOptions = await this.#buildRollupBuildCodeInputOptions(
 			options,
 			onWarning,
@@ -983,6 +1053,11 @@ export class RollupBuildStrategy extends BuildStrategy
 		});
 
 		await bundle.close();
+
+		for (const ids of pendingCircularRef)
+		{
+			warningsRef.push(await RollupBuildStrategy.#resolveCircularWarning(ids));
+		}
 
 		const outputEntry = result.output.at(0) as OutputChunk;
 		const cssAsset = result.output.find(
@@ -1016,7 +1091,7 @@ export class RollupBuildStrategy extends BuildStrategy
 			}
 		}
 
-		const { onWarning, warningsRef, errorsRef, dependenciesRef } = RollupBuildStrategy.createOnWarningHandler();
+		const { onWarning, warningsRef, errorsRef, dependenciesRef, pendingCircularRef } = RollupBuildStrategy.createOnWarningHandler();
 		const inputOptions: InputOptions = await this.#buildRollupInputOptions(options, onWarning, dependenciesRef);
 
 		let bundle: RollupBuild;
@@ -1057,6 +1132,11 @@ export class RollupBuildStrategy extends BuildStrategy
 		await bundle.close();
 
 		RollupBuildStrategy.#removeEmptyChunks(result.output, options.output.js);
+
+		for (const ids of pendingCircularRef)
+		{
+			warningsRef.push(await RollupBuildStrategy.#resolveCircularWarning(ids));
+		}
 
 		const bundlesSize = RollupBuildStrategy.calculateBundlesSize(result.output);
 		const sortedDependencies = RollupBuildStrategy.sortDependencies(dependenciesRef)

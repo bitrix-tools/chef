@@ -346,4 +346,214 @@ describe('PackageBuilder', () => {
 			assert.isTrue(phpConfig.save.calledOnce, 'Should save config.php');
 		});
 	});
+
+	describe('circular dependency diagnostics', () => {
+		const extensionPath = path.join(fixturesPath, 'basic-extension');
+
+		afterEach(() => {
+			const distPath = path.join(extensionPath, 'dist');
+			if (fs.existsSync(distPath))
+			{
+				fs.rmSync(distPath, { recursive: true });
+			}
+		});
+
+		it('emits CF1006 when the extension lists itself in rel (self-dep)', async () => {
+			const bundleConfig = new BundleConfigManager();
+			bundleConfig.loadFromFile(path.join(extensionPath, 'bundle.config.js'));
+
+			const phpConfigData: Record<string, any> = { rel: [] };
+			const phpConfig = {
+				get: (key: string) => phpConfigData[key] ?? null,
+				set: sinon.stub().callsFake((key: string, value: any) => {
+					phpConfigData[key] = value;
+				}),
+				save: sinon.stub().resolves(),
+			};
+
+			const mockPackage = {
+				getName: () => 'test.basic',
+				getPath: () => extensionPath,
+				getPublicPath: () => '/test/',
+				getTargets: () => 'defaults',
+				getInputPath: () => path.join(extensionPath, bundleConfig.get('input')),
+				getOutputJsPath: () => path.join(extensionPath, bundleConfig.get('output').js),
+				getOutputCssPath: () => path.join(extensionPath, bundleConfig.get('output').css),
+				isTypeScriptMode: () => false,
+				getBundleConfig: () => bundleConfig,
+				getPhpConfig: () => phpConfig,
+				getPhpConfigFilePath: () => path.join(extensionPath, 'config.php'),
+				shouldUpdatePhpConfig: () => false,
+				getDependencies: async () => [{ name: 'test.basic' }],
+				getSourceFiles: () => [],
+			} as any;
+
+			const builder = new PackageBuilder(mockPackage);
+			const result = await builder.build();
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+
+			const circular = result.warnings.filter((w) => w.code === 'CF1006');
+			assert.equal(circular.length, 1, 'Should emit exactly one CF1006 warning');
+			assert.include(circular[0].message, 'test.basic → test.basic', 'Should describe the cycle');
+		});
+
+		it('emits CF1006 for a mutual cycle A → B → A', async () => {
+			const bundleConfig = new BundleConfigManager();
+			bundleConfig.loadFromFile(path.join(extensionPath, 'bundle.config.js'));
+
+			const phpConfigData: Record<string, any> = { rel: [] };
+			const phpConfig = {
+				get: (key: string) => phpConfigData[key] ?? null,
+				set: sinon.stub().callsFake((key: string, value: any) => {
+					phpConfigData[key] = value;
+				}),
+				save: sinon.stub().resolves(),
+			};
+
+			const mockPackage = {
+				getName: () => 'ext.aa',
+				getPath: () => extensionPath,
+				getPublicPath: () => '/test/',
+				getTargets: () => 'defaults',
+				getInputPath: () => path.join(extensionPath, bundleConfig.get('input')),
+				getOutputJsPath: () => path.join(extensionPath, bundleConfig.get('output').js),
+				getOutputCssPath: () => path.join(extensionPath, bundleConfig.get('output').css),
+				isTypeScriptMode: () => false,
+				getBundleConfig: () => bundleConfig,
+				getPhpConfig: () => phpConfig,
+				getPhpConfigFilePath: () => path.join(extensionPath, 'config.php'),
+				shouldUpdatePhpConfig: () => false,
+				getDependencies: async () => [{ name: 'ext.bb' }],
+				getSourceFiles: () => [],
+			} as any;
+
+			const otherPackage = {
+				getName: () => 'ext.bb',
+				getDependencies: async () => [{ name: 'ext.aa' }],
+			};
+
+			const { PackageResolver } = await import('../../src/modules/packages/package-resolver');
+			sandbox.stub(PackageResolver, 'resolve').withArgs('ext.bb').returns(otherPackage as any);
+
+			const builder = new PackageBuilder(mockPackage);
+			const result = await builder.build();
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+
+			const circular = result.warnings.filter((w) => w.code === 'CF1006');
+			assert.equal(circular.length, 1, 'Should emit exactly one CF1006 warning');
+			assert.include(circular[0].message, 'ext.aa → ext.bb → ext.aa', 'Should describe the cycle');
+		});
+
+		it('emits no CF1006 when dependencies do not loop back', async () => {
+			const bundleConfig = new BundleConfigManager();
+			bundleConfig.loadFromFile(path.join(extensionPath, 'bundle.config.js'));
+
+			const phpConfigData: Record<string, any> = { rel: [] };
+			const phpConfig = {
+				get: (key: string) => phpConfigData[key] ?? null,
+				set: sinon.stub().callsFake((key: string, value: any) => {
+					phpConfigData[key] = value;
+				}),
+				save: sinon.stub().resolves(),
+			};
+
+			const mockPackage = {
+				getName: () => 'ext.aa',
+				getPath: () => extensionPath,
+				getPublicPath: () => '/test/',
+				getTargets: () => 'defaults',
+				getInputPath: () => path.join(extensionPath, bundleConfig.get('input')),
+				getOutputJsPath: () => path.join(extensionPath, bundleConfig.get('output').js),
+				getOutputCssPath: () => path.join(extensionPath, bundleConfig.get('output').css),
+				isTypeScriptMode: () => false,
+				getBundleConfig: () => bundleConfig,
+				getPhpConfig: () => phpConfig,
+				getPhpConfigFilePath: () => path.join(extensionPath, 'config.php'),
+				shouldUpdatePhpConfig: () => false,
+				getDependencies: async () => [{ name: 'ext.bb' }],
+				getSourceFiles: () => [],
+			} as any;
+
+			const otherPackage = {
+				getName: () => 'ext.bb',
+				getDependencies: async () => [{ name: 'ext.cc' }],
+			};
+
+			const { PackageResolver } = await import('../../src/modules/packages/package-resolver');
+			sandbox.stub(PackageResolver, 'resolve').withArgs('ext.bb').returns(otherPackage as any);
+
+			const builder = new PackageBuilder(mockPackage);
+			const result = await builder.build();
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+
+			const circular = result.warnings.filter((w) => w.code === 'CF1006');
+			assert.equal(circular.length, 0, 'Should not emit any CF1006 warnings');
+		});
+
+		it('points loc to the JS import of the partner extension', async () => {
+			const bundleConfig = new BundleConfigManager();
+			bundleConfig.loadFromFile(path.join(extensionPath, 'bundle.config.js'));
+
+			const phpConfigData: Record<string, any> = { rel: [] };
+			const phpConfig = {
+				get: (key: string) => phpConfigData[key] ?? null,
+				set: sinon.stub().callsFake((key: string, value: any) => {
+					phpConfigData[key] = value;
+				}),
+				save: sinon.stub().resolves(),
+			};
+
+			// Write a temp source file that imports the partner — this is what the loc should point at.
+			const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'chef-builder-circ-'));
+			const sourceFile = path.join(tmpDir, 'src/consumer.js');
+			await fsp.mkdir(path.dirname(sourceFile), { recursive: true });
+			await fsp.writeFile(
+				sourceFile,
+				'// line 1\n// line 2\nimport { Foo } from "ext.bb";\nconsole.log(Foo);\n',
+				'utf-8',
+			);
+
+			const mockPackage = {
+				getName: () => 'ext.aa',
+				getPath: () => extensionPath,
+				getPublicPath: () => '/test/',
+				getTargets: () => 'defaults',
+				getInputPath: () => path.join(extensionPath, bundleConfig.get('input')),
+				getOutputJsPath: () => path.join(extensionPath, bundleConfig.get('output').js),
+				getOutputCssPath: () => path.join(extensionPath, bundleConfig.get('output').css),
+				isTypeScriptMode: () => false,
+				getBundleConfig: () => bundleConfig,
+				getPhpConfig: () => phpConfig,
+				getPhpConfigFilePath: () => path.join(extensionPath, 'config.php'),
+				shouldUpdatePhpConfig: () => false,
+				getDependencies: async () => [{ name: 'ext.bb' }],
+				getSourceFiles: () => [sourceFile],
+			} as any;
+
+			const otherPackage = {
+				getName: () => 'ext.bb',
+				getDependencies: async () => [{ name: 'ext.aa' }],
+			};
+
+			const { PackageResolver } = await import('../../src/modules/packages/package-resolver');
+			sandbox.stub(PackageResolver, 'resolve').withArgs('ext.bb').returns(otherPackage as any);
+
+			try
+			{
+				const builder = new PackageBuilder(mockPackage);
+				const result = await builder.build();
+
+				const circular = result.warnings.filter((w) => w.code === 'CF1006');
+				assert.equal(circular.length, 1);
+				assert.deepEqual(circular[0].loc, { file: sourceFile, line: 3, column: 1 });
+			}
+			finally
+			{
+				await fsp.rm(tmpDir, { recursive: true, force: true });
+			}
+		});
+	});
 });

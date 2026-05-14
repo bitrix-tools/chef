@@ -2020,8 +2020,8 @@ export class SimpleComponent {
 			assert.include(result.errors[0].message, 'TS', 'Should contain TS error code in message');
 		});
 
-		it('should return CF1006 for circular dependencies', async () => {
-			const extensionPath = path.join(fixturesPath, 'circular-dependency');
+		it('should return CF1006 for circular dependencies with a code frame pointing at the offending import', async () => {
+			const extensionPath = path.join(fixturesPath, 'circular-imports');
 
 			cleanDist(extensionPath);
 
@@ -2031,10 +2031,38 @@ export class SimpleComponent {
 				const options = getBuildOptions(extensionPath, bundleConfig);
 				const result = await buildService.build(options);
 
-				assert.isNotEmpty(result.warnings, 'Should have warnings');
+				const circular = result.warnings.filter((w) => w.code === 'CF1006');
+				assert.isNotEmpty(circular, 'Should have CF1006 circular dependency warning');
 
-				const circularWarning = result.warnings.find(w => w.code === 'CF1006');
-				assert.isDefined(circularWarning, 'Should have CF1006 circular dependency warning');
+				const warning = circular[0];
+				assert.include(warning.message, '→', 'Message should describe the cycle with arrows');
+				assert.isDefined(warning.loc, 'Direct cycle warning must carry a loc for the code frame');
+				assert.match(warning.loc!.file, /\/src\/[ab]\.js$/, 'loc should point at one of the source files');
+				assert.equal(warning.loc!.line, 1, 'loc should land on the `import` line');
+			}
+			finally
+			{
+				cleanDist(extensionPath);
+			}
+		});
+
+		it('should filter out long (>3 ids) circular import chains', async () => {
+			const extensionPath = path.join(fixturesPath, 'long-circular-imports');
+
+			cleanDist(extensionPath);
+
+			try
+			{
+				const bundleConfig = loadBundleConfig(extensionPath);
+				const options = getBuildOptions(extensionPath, bundleConfig);
+				const result = await buildService.build(options);
+
+				const circular = result.warnings.filter((w) => w.code === 'CF1006');
+				assert.isEmpty(
+					circular,
+					'A → B → C → A cycle is transitive and should not be reported during build. '
+					+ '`chef diag circular-imports` covers these.',
+				);
 			}
 			finally
 			{

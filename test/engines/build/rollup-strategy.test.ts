@@ -161,11 +161,12 @@ describe('RollupBuildStrategy', () => {
 		it('should collect non-dependency warnings', () => {
 			const { onWarning, dependenciesRef, warningsRef } = TestableRollupStrategy.testCreateOnWarningHandler();
 
-			onWarning({ code: 'CIRCULAR_DEPENDENCY', message: 'Circular' } as RollupLog, () => {});
+			// THIS_IS_UNDEFINED routes through the generic fallback into warningsRef.
+			onWarning({ code: 'THIS_IS_UNDEFINED', message: 'this rewritten' } as RollupLog, () => {});
 
 			assert.isEmpty(dependenciesRef);
 			assert.lengthOf(warningsRef, 1);
-			assert.equal(warningsRef[0].message, 'Circular');
+			assert.equal(warningsRef[0].message, 'this rewritten');
 		});
 
 		it('should not treat relative imports as dependencies', () => {
@@ -179,12 +180,37 @@ describe('RollupBuildStrategy', () => {
 			assert.isEmpty(dependenciesRef);
 		});
 
-		it('should map CIRCULAR_DEPENDENCY to CF1006', () => {
-			const { onWarning, warningsRef } = TestableRollupStrategy.testCreateOnWarningHandler();
+		it('should queue direct CIRCULAR_DEPENDENCY warnings for post-build resolution', () => {
+			// CIRCULAR_DEPENDENCY does not go into warningsRef synchronously anymore — we need to
+			// open the source file and locate the offending `import` line, which is async. The
+			// handler stashes the chain in pendingCircularRef and build()/generate() resolve it
+			// into a BuildDiagnostic with a code frame afterwards.
+			const { onWarning, warningsRef, pendingCircularRef } = TestableRollupStrategy.testCreateOnWarningHandler();
 
-			onWarning({ code: 'CIRCULAR_DEPENDENCY', message: 'A -> B -> A' } as RollupLog, () => {});
+			onWarning(
+				{ code: 'CIRCULAR_DEPENDENCY', message: 'a -> b -> a', ids: ['/x/a.js', '/x/b.js', '/x/a.js'] } as RollupLog,
+				() => {},
+			);
 
-			assert.equal(warningsRef[0].code, CF.CIRCULAR_DEPENDENCY);
+			assert.isEmpty(warningsRef, 'CIRCULAR_DEPENDENCY no longer lands in warningsRef synchronously');
+			assert.lengthOf(pendingCircularRef, 1);
+			assert.deepEqual(pendingCircularRef[0], ['/x/a.js', '/x/b.js', '/x/a.js']);
+		});
+
+		it('should drop long (>3 ids) CIRCULAR_DEPENDENCY chains', () => {
+			const { onWarning, warningsRef, pendingCircularRef } = TestableRollupStrategy.testCreateOnWarningHandler();
+
+			onWarning(
+				{
+					code: 'CIRCULAR_DEPENDENCY',
+					message: 'a -> b -> c -> a',
+					ids: ['/x/a.js', '/x/b.js', '/x/c.js', '/x/a.js'],
+				} as RollupLog,
+				() => {},
+			);
+
+			assert.isEmpty(warningsRef);
+			assert.isEmpty(pendingCircularRef, 'Transitive cycles must be filtered out');
 		});
 
 		it('should map MISSING_EXPORT to CF1007', () => {
