@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.13.0 <Badge type="tip" text="5/14/2026" />
+
+- build: re-exports from external extensions now compile to plain assignments (exports.Foo = dep.Foo) instead of live-binding getters via Object.defineProperty — fixes the runtime "Maximum call stack size exceeded" crash when two extensions share a namespace
+- diag: new `chef diag re-exports` command — finds extensions that re-export symbols from other extensions, flags critical cases (shared namespace, self-reference) and wildcard re-exports
+- build: warnings during build for same-namespace re-exports (CF1015) and inter-extension circular dependencies (CF1006) — both with a code frame on the actual `import` line and concrete fix hints, including Runtime.loadExtension() for deferred loading
+- build: in-bundle file circular imports are now filtered — only direct cycles (A → B → A) are reported, longer chains are left to `chef diag circular-imports`; rich `details` explain the TDZ failure mode and how to fix
+- build: TypeScript directory imports auto-index — `import './lib'` and `import './lib/'` correctly resolve to `./lib/index.{ts,tsx,mts,cts}` (Vite-like behaviour)
+
 ## v1.12.5 <Badge type="tip" text="5/13/2026" />
 
 - diag: richer CHEF_DTS warning with a per-kind fix recipe (vue-components, computed-arrow, export-const, generic) — heading, code frame, at-location, and a ready-to-paste fix snippet
