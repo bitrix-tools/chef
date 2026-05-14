@@ -8,9 +8,9 @@ import { assert } from 'chai';
 import * as sinon from 'sinon';
 
 import { PackageBuilder } from '../../src/modules/services/package-builder';
-import { BuildEngine } from '../../src/modules/engines/build/build-engine';
 import { ChefConfigManager } from '../../src/modules/config/project/chef-config-manager';
 import { BundleConfigManager } from '../../src/modules/config/bundle/bundle-config-manager';
+import { PackageResolver } from '../../src/modules/packages/package-resolver';
 
 
 import type { BuildResult, BuildOptions } from '../../src/modules/engines/build/build-types';
@@ -47,7 +47,13 @@ describe('PackageBuilder', () => {
 	describe('getBuildEngine', () => {
 		it('should return a BuildEngine instance', async () => {
 			const engine = await PackageBuilder.getBuildEngine();
-			assert.instanceOf(engine, BuildEngine);
+			// `assert.instanceOf` is unreliable here: PackageBuilder.getBuildEngine() loads
+			// BuildEngine via `await import(...)`, and under some loaders (tsx/esm on macOS CI)
+			// the dynamic and static imports of the same file end up as separate module records,
+			// so `instanceof` fails despite the object being the right class. Duck-check the API
+			// surface instead — that's what we actually care about.
+			assert.equal(engine.constructor.name, 'BuildEngine');
+			assert.isFunction((engine as unknown as { build?: unknown }).build);
 		});
 
 		it('should cache the build engine instance', async () => {
@@ -433,7 +439,6 @@ describe('PackageBuilder', () => {
 				getDependencies: async () => [{ name: 'ext.aa' }],
 			};
 
-			const { PackageResolver } = await import('../../src/modules/packages/package-resolver');
 			sandbox.stub(PackageResolver, 'resolve').withArgs('ext.bb').returns(otherPackage as any);
 
 			const builder = new PackageBuilder(mockPackage);
@@ -481,7 +486,6 @@ describe('PackageBuilder', () => {
 				getDependencies: async () => [{ name: 'ext.cc' }],
 			};
 
-			const { PackageResolver } = await import('../../src/modules/packages/package-resolver');
 			sandbox.stub(PackageResolver, 'resolve').withArgs('ext.bb').returns(otherPackage as any);
 
 			const builder = new PackageBuilder(mockPackage);
@@ -538,7 +542,6 @@ describe('PackageBuilder', () => {
 				getDependencies: async () => [{ name: 'ext.aa' }],
 			};
 
-			const { PackageResolver } = await import('../../src/modules/packages/package-resolver');
 			sandbox.stub(PackageResolver, 'resolve').withArgs('ext.bb').returns(otherPackage as any);
 
 			try
