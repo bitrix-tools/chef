@@ -261,6 +261,36 @@ describe('build', () => {
 		});
 	});
 
+	describe('typescript directory auto-index', () => {
+		const extensionPath = path.join(fixturesPath, 'ts-auto-index');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('resolves directory imports via /index.ts (bare and with trailing slash)', async () => {
+			// src/index.ts uses both `import './lib'` and `import './lib/'` where ./lib is
+			// a directory containing index.ts — the resolver must pick that up like Vite does.
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			options.typescript = true;
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+
+			const jsOutput = path.join(extensionPath, 'dist', 'bundle.js');
+			assert.isTrue(fs.existsSync(jsOutput), 'JS bundle should exist');
+
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+			assert.include(content, 'greet', 'Bundle should pull symbols from ./lib (auto-indexed)');
+			assert.include(content, 'hello, ', 'Bundle should contain the inlined string from ./lib');
+		});
+	});
+
 	describe('typescript with CSS', () => {
 		const extensionPath = path.join(fixturesPath, 'ts-with-css');
 

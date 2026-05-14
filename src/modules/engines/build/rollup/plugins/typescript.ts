@@ -39,6 +39,18 @@ const tsExtensions = ['.ts', '.tsx', '.mts', '.cts'];
  * TypeScript transpileModule outputs 4-space indentation by default.
  * Normalize to 2-space so the tab-indent plugin converts correctly (2 spaces → 1 tab).
  */
+function isDirectory(filePath: string): boolean
+{
+	try
+	{
+		return fs.statSync(filePath).isDirectory();
+	}
+	catch
+	{
+		return false;
+	}
+}
+
 function normalizeIndent(code: string): string
 {
 	return code.replace(/^( {4})+/gm, (match) => {
@@ -174,20 +186,53 @@ export default async function typescriptPlugin(options: TypeScriptPluginOptions)
 
 		resolveId(source, importer)
 		{
-			if (!importer || path.extname(source))
+			if (!importer)
+			{
+				return null;
+			}
+
+			// Bare specifiers (`main.core`, `react`) are handled elsewhere (npm-remap, node-resolve,
+			// external dependency markers). We only deal with relative paths here.
+			if (!source.startsWith('.'))
 			{
 				return null;
 			}
 
 			const importerDir = path.dirname(importer);
 			const resolved = path.resolve(importerDir, source);
+			const hasTrailingSlash = source.endsWith('/') || source.endsWith('\\');
 
-			for (const ext of tsExtensions)
+			// Already a fully qualified file path with extension — let other plugins handle it
+			// (e.g. resolving `.js` → `.ts` is a separate concern we don't implement yet).
+			if (!hasTrailingSlash && path.extname(source))
 			{
-				const candidate = resolved + ext;
-				if (fs.existsSync(candidate))
+				return null;
+			}
+
+			// 1) ./lib   → ./lib.ts | ./lib.tsx | ./lib.mts | ./lib.cts
+			if (!hasTrailingSlash)
+			{
+				for (const ext of tsExtensions)
 				{
-					return candidate;
+					const candidate = resolved + ext;
+					if (fs.existsSync(candidate))
+					{
+						return candidate;
+					}
+				}
+			}
+
+			// 2) ./lib   → ./lib/index.ts | …   (only if `./lib` is an actual directory)
+			//    ./lib/  → ./lib/index.ts | …   (trailing slash forces directory lookup)
+			if (hasTrailingSlash || isDirectory(resolved))
+			{
+				for (const ext of tsExtensions)
+				{
+					const candidate = path.join(resolved, `index${ext}`);
+					if (fs.existsSync(candidate))
+					{
+						return candidate;
+					}
 				}
 			}
 
