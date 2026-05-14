@@ -1456,6 +1456,13 @@ export class RollupBuildStrategy extends BuildStrategy
 			banner: '/* eslint-disable */',
 			extend: true,
 			sourcemap: options?.sourceMaps ?? true,
+			// Bitrix extensions are loaded as IIFE scripts into a shared BX.* namespace.
+			// Rollup's default live-binding getters (`Object.defineProperty(exports, "X", { get })`)
+			// become self-referential when both bundles share a namespace, causing runtime
+			// "Maximum call stack size exceeded". Static assignments match the old pre-Rollup
+			// build behaviour and are safe here: dependencies load sequentially via `rel`,
+			// so values are already in place by the time the current bundle runs.
+			externalLiveBindings: false,
 			...(options.standalone ? {
 				intro: 'var __originalExports__ = exports;',
 			} : {}),

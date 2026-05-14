@@ -2160,4 +2160,46 @@ export class SimpleComponent {
 			assert.include(content, 'registerHandler', 'Registration call should be preserved');
 		});
 	});
+
+	// Guards against accidental removal of `externalLiveBindings: false`. Without that flag, Rollup
+	// generates `Object.defineProperty(exports, "X", { get })` for re-exports from external modules.
+	// In Bitrix IIFE bundles that share a namespace, those getters become self-referential and crash
+	// at runtime with "Maximum call stack size exceeded".
+	describe('external live bindings', () => {
+		const extensionPath = path.join(fixturesPath, 're-export-extension');
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('compiles re-exports from external extensions as plain assignments, not live-binding getters', async () => {
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = getBuildOptions(extensionPath, bundleConfig);
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors, 'Should have no errors');
+
+			const jsOutput = path.join(extensionPath, 'dist', 'extension.bundle.js');
+			assert.isTrue(fs.existsSync(jsOutput), 'JS bundle should exist');
+
+			const content = fs.readFileSync(jsOutput, 'utf-8');
+
+			assert.notInclude(
+				content,
+				'Object.defineProperty(exports',
+				'Bundle must not contain live-binding getters — they cause runtime crashes when '
+				+ 'two extensions share a namespace. Did `externalLiveBindings: false` get removed?',
+			);
+
+			assert.include(
+				content,
+				'exports.Foo =',
+				'Re-exported `Foo` must reach the namespace via plain assignment',
+			);
+		});
+	});
 });

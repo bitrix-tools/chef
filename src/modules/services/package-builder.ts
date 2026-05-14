@@ -10,9 +10,12 @@ import { Environment } from '../../environment/environment';
 import { FileFinder } from '../../utils/file-finder';
 import { loadTsConfig } from '../../utils/load-tsconfig';
 import { emitDeclarationStrategy } from '../config/bundle/strategies/emit-declaration-strategy';
+import { findReExports } from '../../utils/ast/find-re-exports';
+import { PackageResolver } from '../packages/package-resolver';
+import { CF } from '../../diagnostics/diagnostic-codes';
 import type { BasePackage } from '../packages/base-package';
 import type { BuildEngine } from '../engines/build/build-engine';
-import type { BuildOptions, BuildResult } from '../engines/build/build-types';
+import type { BuildOptions, BuildResult, BuildDiagnostic } from '../engines/build/build-types';
 
 export class PackageBuilder
 {
@@ -58,6 +61,20 @@ export class PackageBuilder
 		if (validation && 'warnings' in validation)
 		{
 			buildResult.warnings.push(...validation.warnings.map((message) => ({ message })));
+		}
+
+		if (buildResult.errors.length === 0)
+		{
+			// Diagnostic only — failure here must not affect the produced JS bundle.
+			try
+			{
+				const reExportWarnings = await this.#detectRiskyReExports();
+				buildResult.warnings.push(...reExportWarnings);
+			}
+			catch
+			{
+				// Swallow: re-export diagnostics are best-effort.
+			}
 		}
 
 		const phpConfig = this.#package.getPhpConfig();
@@ -215,6 +232,68 @@ export class PackageBuilder
 	#hasVueFiles(): boolean
 	{
 		return fg.sync('src/**/*.vue', { cwd: this.#package.getPath() }).length > 0;
+	}
+
+	/**
+	 * Surface re-exports of symbols from sibling extensions that share this package's namespace.
+	 * In IIFE bundles these would historically produce a self-referential live-binding getter and
+	 * crash at runtime; `output.externalLiveBindings: false` now compiles them to plain assignments,
+	 * which is safe but still indicates an architectural smell — the consumer ends up "shadowing"
+	 * names that already exist in the source extension under the same global namespace.
+	 */
+	async #detectRiskyReExports(): Promise<BuildDiagnostic[]>
+	{
+		const ownNamespace = this.#package.getBundleConfig().get('namespace') ?? '';
+		const dependencies = await this.#package.getDependencies();
+
+		const knownExtensions = new Set<string>(dependencies.map((d) => d.name));
+		knownExtensions.add(this.#package.getName());
+
+		const entries = await findReExports(this.#package, knownExtensions);
+		if (entries.length === 0)
+		{
+			return [];
+		}
+
+		const ownName = this.#package.getName();
+		const packageRoot = this.#package.getPath();
+		const warnings: BuildDiagnostic[] = [];
+
+		for (const entry of entries)
+		{
+			const isSelfReference = entry.source === ownName;
+			const sourceNamespace = isSelfReference
+				? ownNamespace
+				: PackageResolver.resolve(entry.source)?.getBundleConfig().get('namespace') ?? '';
+
+			const sameNamespace = Boolean(ownNamespace) && sourceNamespace === ownNamespace;
+			if (!isSelfReference && !sameNamespace)
+			{
+				continue;
+			}
+
+			const symbolList = entry.symbols.join(', ');
+			const kind = isSelfReference ? 'self-reference' : 'shared namespace';
+			const headline = entry.wildcard
+				? `wildcard re-export from "${entry.source}" — ${kind}`
+				: `re-export of ${symbolList} from "${entry.source}" — ${kind}`;
+
+			const details = [
+				`The current extension and "${entry.source}" share the namespace ${ownNamespace || '(none)'}.`,
+				`Re-exporting from the same namespace shadows names that already exist on the global`,
+				`object. Build no longer crashes at runtime (live bindings are compiled to assignments),`,
+				`but the indirection is unnecessary — consumers can import directly from "${entry.source}".`,
+			].join('\n');
+
+			warnings.push({
+				code: CF.RE_EXPORT_SHADOWING,
+				message: headline,
+				details,
+				loc: { file: path.join(packageRoot, entry.file), line: entry.line, column: 1 },
+			});
+		}
+
+		return warnings;
 	}
 
 	static #buildEngine: Promise<BuildEngine> | null = null;
