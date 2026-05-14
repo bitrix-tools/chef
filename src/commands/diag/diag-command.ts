@@ -24,6 +24,7 @@ import { findCircularDependencies } from '../../utils/package/find-circular-depe
 import { findUsages, groupByType, getTypeLabel, relativePath } from './analyzers/find-usages-analyzer';
 import { analyzeOrphans } from './analyzers/orphan-analyzer';
 import { findCircularImports } from './analyzers/circular-imports-analyzer';
+import { analyzeReExports } from './analyzers/re-exports-analyzer';
 import { ExtensionPackage } from '../../modules/packages/package/extension-package';
 import { createIncludeOption, createExcludeOption, createNameFilter } from './options/name-filter-option';
 import { CF } from '../../diagnostics/diagnostic-codes';
@@ -1787,6 +1788,228 @@ async function checkSpecificBaseline(extensions: string[], args: { errorsOnly?: 
 
 // endregion
 
+// region: re-exports
+
+const RE_EXPORTS_HOW_IT_WORKS = [
+	dim(`Scans source files for ${hi('ES re-exports')} of symbols from ${hi('other extensions')}.`),
+	dim(`Detects two forms:`),
+	'',
+	dim(`  ${hi("export { Foo } from 'ext.name'")}      (direct re-export)`),
+	dim(`  ${hi("export * from 'ext.name'")}            (wildcard re-export)`),
+	dim(`  ${hi("import { Foo } from 'ext'; export { Foo };")}`),
+	dim(`                                       (indirect — same effect)`),
+	'',
+	dim(`Re-exports into the ${hi('same namespace')} as the source extension`),
+	dim(`are flagged: in IIFE bundles with ${hi('extend: true')} this produces`),
+	dim(`a self-referential getter and crashes with ${hi('Maximum call stack size exceeded')}.`),
+];
+
+const reExportsCommand = new Command('re-exports')
+	.description('Find extensions that re-export symbols from other extensions')
+	.addHelpText('after', '\nHow it works:\n  ' + RE_EXPORTS_HOW_IT_WORKS.join('\n  ')
+		+ '\n\nExamples:\n  $ chef diag re-exports\n  $ chef diag re-exports calendar.*\n  $ chef diag re-exports im.v2.** ui.text-editor\n')
+	.argument('[extensions...]', 'Extensions to check (all if omitted)')
+	.addOption(createPathOption('Scan for extensions starting from this directory'))
+	.addOption(createLimitOption())
+	.addOption(createIncludeOption())
+	.addOption(createExcludeOption())
+	.action(async (extensions: string[], args) => {
+		const positionalPatterns = extensions.length > 0 ? extensions : undefined;
+
+		const fields: Set<SnapshotField> = new Set();
+		const { snapshots, duration, scanned } = await collectPackages({
+			startDirectory: args.path,
+			fields,
+			title: 'Extensions with re-exports from other extensions',
+			howItWorks: RE_EXPORTS_HOW_IT_WORKS,
+			includePatterns: positionalPatterns,
+		});
+
+		const filtered = filterByName(snapshots, args);
+
+		const analyzeStart = performance.now();
+		const analyzeSpinner = createSpinner(`Analyzing re-exports... 0/${filtered.length}`);
+		const results = await analyzeReExports(
+			filtered,
+			(name) => PackageResolver.resolve(name),
+			(current, total, name) => {
+				analyzeSpinner.update(`Analyzing re-exports... ${current}/${total} ${chalk.dim(name)}`);
+			},
+		);
+		analyzeSpinner.stop();
+		const analyzeDuration = performance.now() - analyzeStart;
+
+		const namespaceByName = new Map<string, string>();
+		for (const snapshot of snapshots)
+		{
+			namespaceByName.set(snapshot.name, snapshot.namespace ?? '');
+		}
+
+		type Severity = 'critical' | 'wildcard' | 'cross';
+
+		type ClassifiedEntry = {
+			source: string;
+			sourceNamespace: string;
+			symbols: string[];
+			wildcard: boolean;
+			file: string;
+			line: number;
+			severity: Severity;
+			selfReference: boolean;
+		};
+
+		type ClassifiedResult = {
+			name: string;
+			namespace: string;
+			entries: ClassifiedEntry[];
+			topSeverity: Severity;
+			hasSelfReference: boolean;
+		};
+
+		const severityRank: Record<Severity, number> = { critical: 0, wildcard: 1, cross: 2 };
+
+		const classified: ClassifiedResult[] = results.map((result) => {
+			const entries: ClassifiedEntry[] = result.entries.map((entry) => {
+				const sourceNamespace = namespaceByName.get(entry.source) ?? '';
+				const sameNamespace = Boolean(result.namespace) && sourceNamespace === result.namespace;
+				const selfReference = entry.source === result.name;
+
+				let severity: Severity;
+				if (selfReference || (sameNamespace && !entry.wildcard))
+				{
+					severity = 'critical';
+				}
+				else if (sameNamespace && entry.wildcard)
+				{
+					severity = 'wildcard';
+				}
+				else
+				{
+					severity = 'cross';
+				}
+
+				return {
+					source: entry.source,
+					sourceNamespace,
+					symbols: entry.symbols,
+					wildcard: entry.wildcard,
+					file: entry.file,
+					line: entry.line,
+					severity,
+					selfReference,
+				};
+			});
+
+			const topSeverity: Severity = entries.reduce<Severity>(
+				(acc, entry) => (severityRank[entry.severity] < severityRank[acc] ? entry.severity : acc),
+				'cross',
+			);
+
+			return {
+				name: result.name,
+				namespace: result.namespace,
+				entries,
+				topSeverity,
+				hasSelfReference: entries.some((e) => e.selfReference),
+			};
+		});
+
+		classified.sort((a, b) => {
+			if (severityRank[a.topSeverity] !== severityRank[b.topSeverity])
+			{
+				return severityRank[a.topSeverity] - severityRank[b.topSeverity];
+			}
+
+			if (a.entries.length !== b.entries.length)
+			{
+				return b.entries.length - a.entries.length;
+			}
+
+			return a.name.localeCompare(b.name);
+		});
+
+		const totalCritical = classified.filter((r) => r.topSeverity === 'critical').length;
+		const totalWildcard = classified.filter((r) => r.topSeverity === 'wildcard').length;
+		const totalCross = classified.filter((r) => r.topSeverity === 'cross').length;
+		const totalDuration = (duration + analyzeDuration) / 1000;
+
+		console.log('');
+
+		if (classified.length === 0)
+		{
+			console.log(` ${chalk.dim(`Scanned ${scanned} extension${scanned === 1 ? '' : 's'}, no re-exports between extensions found in ${totalDuration.toFixed(2)}s`)}`);
+			console.log('');
+
+			return;
+		}
+
+		const limited = classified.slice(0, args.limit);
+
+		for (const result of limited)
+		{
+			const marker = result.topSeverity === 'critical'
+				? chalk.red('✗')
+				: result.topSeverity === 'wildcard' ? chalk.yellow('⚠') : chalk.dim('•');
+
+			const summaryLabel = (() => {
+				if (result.hasSelfReference)
+				{
+					return chalk.red('self-reference');
+				}
+				if (result.topSeverity === 'critical')
+				{
+					return chalk.red('same-namespace');
+				}
+				if (result.topSeverity === 'wildcard')
+				{
+					return chalk.yellow('same-namespace wildcard');
+				}
+
+				return chalk.dim('cross-namespace');
+			})();
+
+			const count = result.entries.length;
+			const countLabel = chalk.dim(`${count} re-export${count === 1 ? '' : 's'},`);
+			console.log(` ${marker} ${chalk.bold(result.name)} ${chalk.dim(`[${result.namespace || 'no namespace'}]`)} ${countLabel} ${summaryLabel}`);
+
+			for (const entry of result.entries)
+			{
+				const arrow = chalk.cyan('←');
+				const sourceLabel = entry.selfReference
+					? `${entry.source} ${chalk.red('(self)')}`
+					: entry.source;
+				const symbolList = entry.symbols.length > 6
+					? `${entry.symbols.slice(0, 6).join(', ')}, …(+${entry.symbols.length - 6})`
+					: entry.symbols.join(', ');
+
+				console.log(`   ${arrow} ${sourceLabel} ${chalk.dim(`[${entry.sourceNamespace || 'no namespace'}]`)}`);
+				console.log(`     ${chalk.dim(`${entry.file}:${entry.line}`)}  ${symbolList}`);
+			}
+
+			console.log('');
+		}
+
+		const summaryParts: string[] = [];
+		if (totalCritical > 0)
+		{
+			summaryParts.push(chalk.red(`${totalCritical} critical`));
+		}
+		if (totalWildcard > 0)
+		{
+			summaryParts.push(chalk.yellow(`${totalWildcard} wildcard`));
+		}
+		if (totalCross > 0)
+		{
+			summaryParts.push(chalk.dim(`${totalCross} cross-namespace`));
+		}
+
+		const summary = summaryParts.length > 0 ? `found ${summaryParts.join(' / ')}` : 'no re-exports';
+		console.log(` ${chalk.dim(`Scanned ${scanned} extension${scanned === 1 ? '' : 's'}, ${summary} in ${totalDuration.toFixed(2)}s`)}`);
+		console.log('');
+	});
+
+// endregion
+
 const jsonCapableSubcommands: Command[] = [
 	topUsedCommand,
 	topDepsCommand,
@@ -1809,6 +2032,7 @@ for (const subcommand of jsonCapableSubcommands)
 	diagCommand.addCommand(subcommand);
 }
 
+diagCommand.addCommand(reExportsCommand);
 diagCommand.addCommand(baselineCommand);
 
 export { diagCommand };

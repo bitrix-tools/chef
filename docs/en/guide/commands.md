@@ -154,6 +154,7 @@ chef diag <subcommand> [options]
 | `circular-imports` | Check for circular imports between source files |
 | `find-usages` | Find where an extension is used across JS, TS and PHP files |
 | `unused` | Extensions that are never referenced anywhere |
+| `re-exports` | Extensions that re-export symbols from other extensions |
 | `baseline` | Check for web features not supported by target browsers |
 
 ### Common options
@@ -195,6 +196,9 @@ chef diag config --key namespace               # Extensions with namespace in co
 chef diag config --key minification --missing  # Extensions without minification
 chef diag config --key input --except          # Extensions with params other than input
 chef diag unused                               # Unused extensions
+chef diag re-exports                           # Re-exports of symbols from other extensions
+chef diag re-exports 'calendar.*'              # Only within calendar.*
+chef diag re-exports 'im.v2.**' ui.text-editor # Multiple patterns at once
 chef diag baseline                             # Overview of unsupported features across all extensions
 chef diag baseline ui.buttons                  # Check a specific extension
 ```

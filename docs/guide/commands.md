@@ -154,6 +154,7 @@ chef diag <subcommand> [options]
 | `circular-imports` | Проверка на циклические импорты между файлами |
 | `find-usages` | Поиск использований расширения в JS, TS и PHP файлах |
 | `unused` | Расширения, на которые никто не ссылается |
+| `re-exports` | Расширения, которые ре-экспортируют символы из других расширений |
 | `baseline` | Проверка использования веб-фич, не поддерживаемых целевыми браузерами |
 
 ### Общие параметры
@@ -195,6 +196,9 @@ chef diag config --key namespace               # Расширения с namespa
 chef diag config --key minification --missing  # Расширения без минификации
 chef diag config --key input --except          # Расширения с параметрами кроме input
 chef diag unused                               # Неиспользуемые расширения
+chef diag re-exports                           # Ре-экспорты символов из других расширений
+chef diag re-exports 'calendar.*'              # Только в calendar.*
+chef diag re-exports 'im.v2.**' ui.text-editor # Несколько паттернов сразу
 chef diag baseline                             # Обзор несовместимых фич по всем расширениям
 chef diag baseline ui.buttons                  # Проверить конкретное расширение
 ```
