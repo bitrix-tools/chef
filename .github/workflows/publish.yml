@@ -77,7 +77,7 @@ jobs:
 
   changelog:
     needs: publish
-    if: ${{ !cancelled() }}
+    if: ${{ needs.publish.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
