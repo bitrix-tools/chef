@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.14.0 <Badge type="tip" text="5/18/2026" />
+
+The `baseline-check` module — which detects JavaScript and CSS features unsupported by target browsers during `chef build` and `chef diag baseline` — has been completely rewritten.
+
+**Before:** the API matcher relied on hardcoded lists (`staticMethods`, `globalApis`, `instanceMethodOwners`), so every new JavaScript API slipped past the check until someone added it to the list manually. As a result, `RegExp.escape`, `Promise.try`, `Object.groupBy`, `Iterator.from` and other modern APIs went undetected even with outdated `.browserslistrc` targets.
+
+**After:** the check is built automatically from two sources:
+
+- **`@mdn/browser-compat-data`** — the same data MDN uses to render its compatibility tables. Every static method, constructor, global function, and instance method is indexed up front. Static vs instance is resolved through the TC39 `spec_url` (the formal source of truth) with a runtime introspection fallback.
+
+- **AST via `@babel/parser`** — replaces the line-based regex scan. Handles JS / TS / TSX / JSX / Flow, ignores API names inside string literals and comments, and respects local shadowing (`const Promise = bluebird`, `import { Promise } from 'bluebird'`, etc.).
+
+- **Syntax features** (`?.`, `??`, `??=`, `||=`, `&&=`, `**`, `...`) are now checked against `bcd.javascript.operators` via a declarative AST-node-to-BCD-key bridge.
+
+**Additionally:**
+
+- The checker was extracted to a standalone `src/modules/baseline/` module shared by the rollup plugin and the `chef diag baseline` command. The command now forces baseline checks via `extension.generate()` even when the bundle config does not opt in.
+
+- For instance methods (e.g. `.some()` exists on Array since ES5 and on Iterator since Chrome 122+), a warning is reported only when the method is unsupported on every owner — otherwise common iteration methods like `.map()` and `.filter()` would falsely trigger on modern bundles.
+
+**Test coverage:** 212 new tests added under `test/baseline/` (`bcd-index`, `ast-walker`, `syntax-map`, `ignore`, `api-coverage`, `css-coverage`, `e2e`). The existing 58 tests were migrated to the new module API and 13 regression cases were added. End-to-end tests spawn `chef diag baseline` and `chef build` against a fresh fixture repo to lock down the actual user-facing behaviour.
+
 ## v1.13.1 <Badge type="tip" text="5/14/2026" />
 
 - build: re-exports from external extensions now compile to plain assignments (exports.Foo = dep.Foo) instead of live-binding getters via Object.defineProperty — fixes the runtime "Maximum call stack size exceeded" crash when two extensions share a namespace
