@@ -1554,7 +1554,7 @@ async function checkAllBaseline(args: { path: string; include?: string[]; exclud
 
 		try
 		{
-			const buildResult = await extension.generate();
+			const buildResult = await extension.generate({ baseline: true });
 			const allIssues = [...buildResult.errors, ...buildResult.warnings]
 				.filter((e) => e.code && BASELINE_CODES.has(e.code));
 			const issues = args.errorsOnly
@@ -1682,7 +1682,7 @@ async function checkSpecificBaseline(extensions: string[], args: { errorsOnly?: 
 
 		try
 		{
-			const buildResult = await extension.generate();
+			const buildResult = await extension.generate({ baseline: true });
 			spinner.stop();
 			const allIssues = [...buildResult.errors, ...buildResult.warnings]
 				.filter((e) => e.code && BASELINE_CODES.has(e.code));

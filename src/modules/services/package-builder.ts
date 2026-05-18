@@ -105,10 +105,10 @@ export class PackageBuilder
 		return buildResult;
 	}
 
-	async generate(): Promise<BuildResult>
+	async generate(overrides: Partial<BuildOptions> = {}): Promise<BuildResult>
 	{
 		const buildEngine = await PackageBuilder.getBuildEngine();
-		const buildOptions = this.#getBuildOptions();
+		const buildOptions: BuildOptions = { ...this.#getBuildOptions(), ...overrides };
 
 		const validation = await this.#validateBuildOptions(buildOptions);
 		if (validation && 'denied' in validation)

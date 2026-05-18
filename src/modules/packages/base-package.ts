@@ -13,7 +13,7 @@ import { Environment } from '../../environment/environment';
 import { PackageSizeCalculator } from '../services/package-size-calculator';
 
 import type { LintResult } from '../engines/lint/lint-types';
-import type { BuildResult } from '../engines/build/build-types';
+import type { BuildOptions, BuildResult } from '../engines/build/build-types';
 import type { DependencyNode } from './types/dependency-node';
 
 type BasePackageOptions = {
@@ -479,10 +479,10 @@ export abstract class BasePackage
 		return new PackageBuilder(this).build(options);
 	}
 
-	async generate(): Promise<BuildResult>
+	async generate(overrides: Partial<BuildOptions> = {}): Promise<BuildResult>
 	{
 		const { PackageBuilder } = await import('../services/package-builder');
-		return new PackageBuilder(this).generate();
+		return new PackageBuilder(this).generate(overrides);
 	}
 
 	async lint(options: { fix?: boolean; files?: string[]; cache?: boolean; exclude?: string[] } = {}): Promise<LintResult>

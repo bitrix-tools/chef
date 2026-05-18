@@ -623,4 +623,112 @@ describe('baseline-check', () => {
 			assert.include(warnings[0].message, 'Firefox');
 		});
 	});
+
+	// These cases used to slip through the old hardcoded whitelist. The
+	// BCD-driven checker must catch them automatically.
+	describe('without whitelist (BCD-driven)', () => {
+		const oldTargets = ['chrome 109', 'firefox 115', 'safari 16.4'];
+
+		it('should detect RegExp.escape (added Chrome 136)', () => {
+			const { warnings, transform } = createPlugin(oldTargets);
+			transform('const re = RegExp.escape(input);', '/src/app.js');
+
+			assert.isAbove(warnings.length, 0);
+			assert.include(warnings[0].message, 'RegExp.escape');
+		});
+
+		it('should detect Promise.try (added Chrome 128)', () => {
+			const { warnings, transform } = createPlugin(['chrome 120', 'firefox 120']);
+			transform('Promise.try(fn);', '/src/app.js');
+
+			assert.isAbove(warnings.length, 0);
+			assert.include(warnings[0].message, 'Promise.try');
+		});
+
+		it('should detect new WeakRef on Safari 13', () => {
+			const { warnings, transform } = createPlugin(['safari 13']);
+			transform('const ref = new WeakRef(obj);', '/src/app.js');
+
+			assert.isAbove(warnings.length, 0);
+			assert.include(warnings[0].message, 'WeakRef');
+		});
+
+		it('should detect new AggregateError on Safari 13', () => {
+			const { warnings, transform } = createPlugin(['safari 13']);
+			transform('throw new AggregateError([e1, e2], "msg");', '/src/app.js');
+
+			assert.isAbove(warnings.length, 0);
+			assert.include(warnings[0].message, 'AggregateError');
+		});
+
+		it('should detect new FinalizationRegistry on Safari 13', () => {
+			const { warnings, transform } = createPlugin(['safari 13']);
+			transform('const reg = new FinalizationRegistry(cb);', '/src/app.js');
+
+			assert.isAbove(warnings.length, 0);
+			assert.include(warnings[0].message, 'FinalizationRegistry');
+		});
+
+		it('should detect Iterator.from on Chrome 120', () => {
+			const { warnings, transform } = createPlugin(['chrome 120']);
+			transform('Iterator.from(arr);', '/src/app.js');
+
+			assert.isAbove(warnings.length, 0);
+			assert.include(warnings[0].message, 'Iterator.from');
+		});
+
+		it('should detect Array.prototype.toSorted on Safari 14', () => {
+			const { warnings, transform } = createPlugin(['safari 14']);
+			transform('arr.toSorted();', '/src/app.js');
+
+			assert.isAbove(warnings.length, 0);
+			assert.include(warnings[0].message, 'toSorted');
+		});
+
+		it('should NOT detect shadowed Promise.allSettled (let Promise = bluebird)', () => {
+			const { warnings, transform } = createPlugin(['chrome 60']);
+			transform('const Promise = bluebird; Promise.allSettled([]);', '/src/app.js');
+
+			assert.isEmpty(warnings);
+		});
+
+		it('should NOT detect API names that appear inside string literals', () => {
+			const { warnings, transform } = createPlugin(['chrome 60']);
+			transform('const s = "RegExp.escape and structuredClone";', '/src/app.js');
+
+			assert.isEmpty(warnings);
+		});
+
+		it('should detect optional chaining on legacy targets', () => {
+			const { warnings, transform } = createPlugin(['chrome 70', 'firefox 70', 'safari 12']);
+			transform('const v = obj?.prop;', '/src/app.js');
+
+			assert.isAbove(warnings.length, 0);
+			assert.include(warnings[0].message.toLowerCase(), 'optional chaining');
+		});
+
+		it('should detect nullish coalescing on legacy targets', () => {
+			const { warnings, transform } = createPlugin(['chrome 70', 'firefox 70', 'safari 12']);
+			transform('const v = a ?? b;', '/src/app.js');
+
+			assert.isAbove(warnings.length, 0);
+			assert.include(warnings[0].message.toLowerCase(), 'nullish coalescing');
+		});
+
+		it('should detect nullish coalescing assignment on legacy targets', () => {
+			const { warnings, transform } = createPlugin(['chrome 80', 'firefox 80', 'safari 13']);
+			transform('a ??= b;', '/src/app.js');
+
+			assert.isAbove(warnings.length, 0);
+			assert.include(warnings[0].message.toLowerCase(), 'nullish');
+		});
+
+		it('should detect Object.groupBy on Safari 16', () => {
+			const { warnings, transform } = createPlugin(['safari 16']);
+			transform('const grouped = Object.groupBy(arr, key);', '/src/app.js');
+
+			assert.isAbove(warnings.length, 0);
+			assert.include(warnings[0].message, 'Object.groupBy');
+		});
+	});
 });

@@ -1,16 +1,11 @@
 import type { Plugin } from 'rollup';
 
-import {
-	resolveTargetMins,
-	loadBcd,
-	buildInstanceMethodMap,
-	checkJavaScript,
-	checkCss,
-} from './baseline-checker';
+import { checkCode, resolveTargetMins } from '../../../../baseline/checker';
 
-import type { BaselineWarning } from './baseline-checker';
+import type { BaselineWarning } from '../../../../baseline/types';
 
-interface BaselineCheckOptions {
+interface BaselineCheckOptions
+{
 	targets: string[];
 	packageRoot: string;
 }
@@ -24,35 +19,24 @@ export default function baselineCheckPlugin(options: BaselineCheckOptions): Plug
 		return { name: 'baseline-check' };
 	}
 
-	const bcd = loadBcd();
-	const instanceMethodMap = buildInstanceMethodMap(bcd);
-
 	return {
 		name: 'baseline-check',
 
 		transform(code, id)
 		{
-			const warnings: BaselineWarning[] = [];
-
-			if (id.endsWith('.css'))
-			{
-				checkCss(code, bcd, targetMins, warnings);
-			}
-			else if (!id.includes('node_modules'))
-			{
-				const extensions = ['.js', '.jsx', '.ts', '.tsx', '.mjs'];
-				if (extensions.some((ext) => id.endsWith(ext)))
-				{
-					checkJavaScript(code, bcd, targetMins, instanceMethodMap, warnings);
-				}
-			}
+			const warnings: BaselineWarning[] = checkCode({ code, id, targets: targetMins });
 
 			for (const warning of warnings)
 			{
 				this.warn({
 					message: warning.message,
 					loc: { line: warning.line, column: warning.column, file: id },
-					meta: { severity: warning.severity, risk: warning.risk, unsupportedIn: warning.unsupportedIn, gapInfo: warning.gapInfo },
+					meta: {
+						severity: warning.severity,
+						risk: warning.risk,
+						unsupportedIn: warning.unsupportedIn,
+						gapInfo: warning.gapInfo,
+					},
 				});
 			}
 
