@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.15.0 <Badge type="tip" text="5/20/2026" />
+
+- fix(build): preserve config.php when the build fails. Previously, a type-check or Rollup error would rewrite rel with an empty array, and PhpConfigManager's fallback would turn it into ['main.polyfill.core'] with skip_core: true. The bundle on disk stayed intact while the manifest was silently corrupted.
+- feat(diag): find-usages was reworked on top of AST and split into two commands — find-usages (consumer lookup) and find-loaders (loader lookup).
+
 ## v1.14.0 <Badge type="tip" text="5/18/2026" />
 
 The `baseline-check` module — which detects JavaScript and CSS features unsupported by target browsers during `chef build` and `chef diag baseline` — has been completely rewritten.
