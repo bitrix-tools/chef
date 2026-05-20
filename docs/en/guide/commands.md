@@ -152,7 +152,8 @@ chef diag <subcommand> [options]
 | `unused-deps` | Extensions with unused dependencies |
 | `circular-deps` | Check for circular dependencies |
 | `circular-imports` | Check for circular imports between source files |
-| `find-usages` | Find where an extension is used across JS, TS and PHP files |
+| `find-usages` | Find where an extension's JS code is used (imports, namespace access, inheritance) |
+| `find-loaders` | Find PHP loaders for an extension (`Extension::load`, `CJSCore::Init`, `config.php rel`) |
 | `unused` | Extensions that are never referenced anywhere |
 | `re-exports` | Extensions that re-export symbols from other extensions |
 | `baseline` | Check for web features not supported by target browsers |
@@ -191,7 +192,12 @@ chef diag bundle-size crm.timeline --with-deps # Including all dependencies
 chef diag circular-deps                        # All circular dependencies
 chef diag circular-deps main.core              # Check a specific extension
 chef diag unused-deps                          # Unused dependencies
-chef diag find-usages ui.buttons               # Where ui.buttons is used
+chef diag find-usages ui.buttons               # Summary of ui.buttons usages (JS)
+chef diag find-usages ui.notification --list   # Full list of locations
+chef diag find-usages ui.notification --imports UI                       # Only files importing { UI }
+chef diag find-usages ui.notification --namespace BX.UI.Notification.Center
+chef diag find-usages ui.notification --kind extends                     # Only subclasses
+chef diag find-loaders ui.notification         # Where the extension is loaded from PHP
 chef diag config --key namespace               # Extensions with namespace in config
 chef diag config --key minification --missing  # Extensions without minification
 chef diag config --key input --except          # Extensions with params other than input

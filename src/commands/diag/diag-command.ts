@@ -1,7 +1,7 @@
 import path from 'node:path';
 import chalk from 'chalk';
 import table from 'text-table';
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 
 import { createPathOption } from '../../shared/options/path-option';
 import { createLimitOption } from './options/limit-option';
@@ -21,7 +21,8 @@ import { analyzeConfig, analyzeConfigExcept, analyzeConfigMissing } from './anal
 import { analyzeUnusedDeps } from './analyzers/unused-deps-analyzer';
 import { PackageResolver } from '../../modules/packages/package-resolver';
 import { findCircularDependencies } from '../../utils/package/find-circular-dependencies';
-import { findUsages, groupByType, getTypeLabel, relativePath } from './analyzers/find-usages-analyzer';
+import { findUsages, findLoaders, groupByType, getTypeLabel, relativePath } from './analyzers/find-usages-analyzer';
+import { summarizeUsages, filterUsages } from './analyzers/find-usages-summary';
 import { analyzeOrphans } from './analyzers/orphan-analyzer';
 import { findCircularImports } from './analyzers/circular-imports-analyzer';
 import { analyzeReExports } from './analyzers/re-exports-analyzer';
@@ -48,7 +49,8 @@ import { formatTree } from './formatters/tree-formatter';
 import { findDependencyPath } from './analyzers/deps-path-analyzer';
 import { flattenTree } from '../../utils/flatten-tree';
 
-import type { UsageLocation } from './analyzers/find-usages-analyzer';
+import type { UsageLocation, UsageType } from './analyzers/find-usages-analyzer';
+import type { FindUsagesSummary, CountedItem } from './analyzers/find-usages-summary';
 import type { SnapshotField } from './package-snapshot';
 import type { BasePackage } from '../../modules/packages/base-package';
 
@@ -945,26 +947,65 @@ async function checkSpecificCircularImports(extensions: string[]): Promise<void>
 // region: find-usages
 
 const FIND_USAGES_HOW_IT_WORKS = [
-	dim(`Searches ${hi('JS')}, ${hi('TS')} and ${hi('PHP')} files. Comments are ignored.`),
+	dim(`Searches ${hi('JS')} and ${hi('TS')} files, plus inline ${hi('<script>')} blocks inside PHP. Comments are ignored.`),
 	dim(`Skips node_modules, vendor, lang, db, images, test, meta, updates, routes.`),
 	'',
-	dim(`${hi('JS/TS')}  import 'ext', import { } from 'ext', BX.loadExtension('ext'),`),
-	dim(`       BX.loadExt('ext'), Runtime.loadExtension('ext'),`),
-	dim(`       BX.Namespace.Something (via bundle.config namespace)`),
-	dim(`${hi('PHP')}    Extension::load('ext'), CJSCore::Init(['ext']), config.php rel,`),
-	dim(`       BX.Namespace.Something in inline <script> tags`),
+	dim(`Detects:`),
+	dim(`  ESM imports:`),
+	dim(`    ${hi('import { X } from \'ext\'')}     — named import`),
+	dim(`    ${hi('import X from \'ext\'')}         — default import`),
+	dim(`    ${hi('import * as X from \'ext\'')}    — namespace import`),
+	dim(`    ${hi('import \'ext\'')}                — side-effect import (no bindings)`),
+	dim(`    ${hi('import(\'ext\')')}               — dynamic import`),
+	dim(`    ${hi('export { X } from \'ext\'')}     — re-export`),
+	dim(`    ${hi('export * from \'ext\'')}         — wildcard re-export`),
+	dim(`  Dynamic load: ${hi('Runtime.loadExtension')}, ${hi('BX.loadExtension')}, ${hi('BX.loadExt')}`),
+	dim(`  Namespace access: ${hi('BX.UI.Something')} (the chain declared via bundle.config namespace)`),
+	dim(`  Inheritance: ${hi('class X extends Y')}, where Y is either:`),
+	dim(`    a binding imported from the extension (${hi('import { Balloon } from \'ui.notification\'')}, then ${hi('extends Balloon')}), or`),
+	dim(`    a BX.Namespace chain owned by the extension (${hi('extends BX.UI.Notification.Balloon')}).`),
+	'',
+	dim(`For PHP loaders (Extension::load, CJSCore::Init, config.php rel) see ${hi('chef diag find-loaders')}.`),
 ];
 
+const KIND_ALIASES: Record<string, UsageType[]> = {
+	import: ['js-import'],
+	'import-dynamic': ['js-import-dynamic'],
+	load: ['js-load-extension'],
+	namespace: ['js-namespace'],
+	extends: ['js-inheritance'],
+	inheritance: ['js-inheritance'],
+};
+
 const findUsagesCommand = new Command('find-usages')
-	.description('Find where an extension is used across JS, TS and PHP files')
+	.description("Find where an extension's JS code is used (imports, loaders, namespace access, inheritance)")
 	.addHelpText('after', '\nHow it works:\n  ' + FIND_USAGES_HOW_IT_WORKS.join('\n  ')
-		+ '\n\nExamples:\n  $ chef diag find-usages main.core\n  $ chef diag find-usages ui.buttons\n')
+		+ '\n\nExamples:'
+		+ '\n  $ chef diag find-usages ui.notification              # summary (default)'
+		+ '\n  $ chef diag find-usages ui.notification --list       # full list of locations'
+		+ '\n  $ chef diag find-usages ui.notification --imports UI # only files importing { UI }'
+		+ '\n  $ chef diag find-usages ui.notification --namespace BX.UI.Notification.Center'
+		+ '\n  $ chef diag find-usages ui.notification --kind extends'
+		+ '\n  $ chef diag find-usages ui.notification --kind import,load\n')
 	.argument('<extension>', 'Extension name to search for (e.g. ui.buttons)')
 	.addOption(createPathOption('Search for usages starting from this directory'))
+	.option('-l, --list', 'Print full list of locations instead of a summary')
+	.option('--imports <name>', 'Show only files that import this binding (e.g. UI, default, *, "(side-effect)")')
+	.option('--namespace <chain>', 'Show only files that access this namespace (or a child of it)')
+	.addOption(new Option('--kind <kinds>', 'Comma-separated usage kinds: import, import-dynamic, load, namespace, extends'))
 	.action(async (extensionName: string, args) => {
+		const filter = parseFindUsagesFilter(args);
+
 		if (args.reporter === 'json')
 		{
-			const result = await diagJson.findUsages({ extension: extensionName, path: args.path });
+			const result = await diagJson.findUsages({
+				extension: extensionName,
+				path: args.path,
+				imports: filter.imports,
+				namespace: filter.namespace,
+				kinds: filter.kinds,
+				list: Boolean(args.list),
+			});
 			emitJson(result);
 			process.exit(result.success ? 0 : 1);
 		}
@@ -978,39 +1019,167 @@ const findUsagesCommand = new Command('find-usages')
 
 		const extension: BasePackage | null = PackageResolver.resolve(extensionName);
 		const globals = extension ? await findExportedGlobals(extension) : new Set<string>();
-		const usages = await findUsages(extensionName, extension, globals, args.path);
-		const groups = groupByType(usages);
+		const allUsages = await findUsages(extensionName, extension, globals, args.path);
+		const usages = filterUsages(allUsages, filter);
 		const duration = ((performance.now() - start) / 1000).toFixed(2);
+
+		const showList = Boolean(args.list) || filter.imports !== undefined || filter.namespace !== undefined || filter.kinds !== undefined;
 
 		if (usages.length === 0)
 		{
 			console.log(chalk.dim('  No usages found'));
 		}
+		else if (showList)
+		{
+			printUsagesList(usages, args.path);
+		}
 		else
 		{
-			for (const [type, locations] of groups)
-			{
-				console.log(` ${chalk.bold(getTypeLabel(type))} ${chalk.dim(`(${locations.length})`)}`);
-
-				const areaGroups = groupByArea(locations, args.path);
-
-				for (const [area, locs] of areaGroups)
-				{
-					console.log(`  ${chalk.cyan(area)}`);
-
-					for (const loc of locs)
-					{
-						console.log(`    at ${loc.file}:${loc.line}`);
-					}
-				}
-
-				console.log('');
-			}
+			printUsagesSummary(summarizeUsages(usages));
 		}
 
 		console.log(` ${chalk.dim(`Found ${usages.length} ${usages.length === 1 ? 'usage' : 'usages'} in ${duration}s`)}`);
 		console.log('');
 	});
+
+type FindUsagesFilter = {
+	imports?: string;
+	namespace?: string;
+	kinds?: UsageType[];
+};
+
+function parseFindUsagesFilter(args: any): FindUsagesFilter
+{
+	const filter: FindUsagesFilter = {};
+
+	if (typeof args.imports === 'string' && args.imports.length > 0)
+	{
+		filter.imports = args.imports;
+	}
+
+	if (typeof args.namespace === 'string' && args.namespace.length > 0)
+	{
+		filter.namespace = args.namespace;
+	}
+
+	if (typeof args.kind === 'string' && args.kind.length > 0)
+	{
+		const tokens = args.kind.split(',').map((t: string) => t.trim()).filter(Boolean);
+		const resolved = new Set<UsageType>();
+		for (const token of tokens)
+		{
+			const expanded = KIND_ALIASES[token];
+			if (!expanded)
+			{
+				console.error(chalk.red(`Unknown --kind value: ${token}`));
+				console.error(chalk.dim(`Allowed: ${Object.keys(KIND_ALIASES).sort().join(', ')}`));
+				process.exit(1);
+			}
+
+			for (const t of expanded)
+			{
+				resolved.add(t);
+			}
+		}
+
+		filter.kinds = [...resolved];
+	}
+
+	return filter;
+}
+
+function printUsagesList(usages: UsageLocation[], startDirectory: string): void
+{
+	const groups = groupByType(usages);
+
+	for (const [type, locations] of groups)
+	{
+		console.log(` ${chalk.bold(getTypeLabel(type))} ${chalk.dim(`(${locations.length})`)}`);
+
+		const areaGroups = groupByArea(locations, startDirectory);
+
+		for (const [area, locs] of areaGroups)
+		{
+			console.log(`  ${chalk.cyan(area)}`);
+
+			for (const loc of locs)
+			{
+				console.log(`    at ${loc.file}:${loc.line}`);
+			}
+		}
+
+		console.log('');
+	}
+}
+
+function printUsagesSummary(summary: FindUsagesSummary): void
+{
+	const fileWord = summary.totalFiles === 1 ? 'file' : 'files';
+	const moduleWord = summary.totalModules === 1 ? 'module' : 'modules';
+	console.log(` ${chalk.bold(`${summary.totalFiles} ${fileWord}`)} across ${chalk.bold(summary.totalModules)} ${moduleWord}`);
+	console.log('');
+
+	const typeOrder: UsageType[] = [
+		'js-import',
+		'js-import-dynamic',
+		'js-load-extension',
+		'js-namespace',
+		'js-inheritance',
+		'php-extension-load',
+		'php-cjscore',
+		'config-rel',
+	];
+
+	console.log(` ${chalk.bold('How')}`);
+	for (const type of typeOrder)
+	{
+		const count = summary.byType[type];
+		if (!count)
+		{
+			continue;
+		}
+
+		console.log(`   ${getTypeLabel(type)} ${chalk.dim(`(${count})`)}`);
+
+		if (type === 'js-import')
+		{
+			printCountedBreakdown(summary.imports);
+		}
+		else if (type === 'js-namespace')
+		{
+			printCountedBreakdown(summary.namespaces);
+		}
+		else if (type === 'js-inheritance')
+		{
+			printCountedBreakdown(summary.inheritance);
+		}
+		else
+		{
+			// Types without a sub-breakdown (load-extension, dynamic import):
+			// print locations directly under the heading.
+			const locs = summary.locationsByType[type] ?? [];
+			for (const loc of locs)
+			{
+				console.log(`     at ${loc.file}:${loc.line}`);
+			}
+		}
+	}
+
+	console.log('');
+}
+
+function printCountedBreakdown(items: CountedItem[]): void
+{
+	for (const item of items)
+	{
+		console.log(`     ${chalk.cyan(item.name)} ${chalk.dim(`(${item.files})`)}`);
+
+		for (const loc of item.locations)
+		{
+			console.log(`       at ${loc.file}:${loc.line}`);
+		}
+	}
+}
 
 function groupByArea(
 	locations: UsageLocation[],
@@ -1071,6 +1240,126 @@ function classifyPath(relPathRaw: string): string
 	}
 
 	return moduleName;
+}
+
+// endregion
+
+// region: find-loaders
+
+const FIND_LOADERS_HOW_IT_WORKS = [
+	dim(`Searches ${hi('PHP')} files only. Reports extension loaders:`),
+	dim(`  ${hi('Extension::load(\'ext\')')} — Bitrix Main UI Extension loader`),
+	dim(`  ${hi('CJSCore::Init([\'ext\'])')} — legacy CJSCore loader`),
+	dim(`  ${hi('config.php rel array')} — dependency declarations`),
+];
+
+const LOADER_TYPES = ['php-extension-load', 'php-cjscore', 'config-rel'] as const;
+
+const findLoadersCommand = new Command('find-loaders')
+	.description('Find where an extension is loaded from PHP (Extension::load, CJSCore::Init, config.php rel)')
+	.addHelpText('after', '\nHow it works:\n  ' + FIND_LOADERS_HOW_IT_WORKS.join('\n  ')
+		+ '\n\nExamples:'
+		+ '\n  $ chef diag find-loaders ui.notification              # summary'
+		+ '\n  $ chef diag find-loaders ui.notification --list       # full list'
+		+ '\n  $ chef diag find-loaders ui.notification --kind config-rel\n')
+	.argument('<extension>', 'Extension name (e.g. ui.notification)')
+	.addOption(createPathOption('Search for loaders starting from this directory'))
+	.option('-l, --list', 'Print full list of locations instead of a summary')
+	.addOption(new Option('--kind <kinds>', 'Comma-separated loader kinds: php-extension-load, php-cjscore, config-rel'))
+	.action(async (extensionName: string, args) => {
+		const kinds = parseLoaderKinds(args.kind);
+
+		if (args.reporter === 'json')
+		{
+			const result = await diagJson.findLoaders({ extension: extensionName, path: args.path });
+			emitJson(result);
+			process.exit(result.success ? 0 : 1);
+		}
+
+		const start = performance.now();
+
+		console.log('');
+		console.log(` ${chalk.bold(`Loaders for ${extensionName}`)}`);
+		printHowItWorks(FIND_LOADERS_HOW_IT_WORKS);
+		console.log('');
+
+		const allLoaders = await findLoaders(extensionName, args.path);
+		const loaders = kinds ? allLoaders.filter((l) => kinds.includes(l.type)) : allLoaders;
+		const duration = ((performance.now() - start) / 1000).toFixed(2);
+
+		const showList = Boolean(args.list) || kinds !== undefined;
+
+		if (loaders.length === 0)
+		{
+			console.log(chalk.dim('  No loaders found'));
+		}
+		else if (showList)
+		{
+			printUsagesList(loaders, args.path);
+		}
+		else
+		{
+			printLoadersSummary(loaders);
+		}
+
+		console.log(` ${chalk.dim(`Found ${loaders.length} ${loaders.length === 1 ? 'loader' : 'loaders'} in ${duration}s`)}`);
+		console.log('');
+	});
+
+function parseLoaderKinds(raw: string | undefined): UsageType[] | undefined
+{
+	if (typeof raw !== 'string' || raw.length === 0)
+	{
+		return undefined;
+	}
+
+	const tokens = raw.split(',').map((t) => t.trim()).filter(Boolean);
+	const allowed: ReadonlySet<UsageType> = new Set(LOADER_TYPES);
+	const resolved: UsageType[] = [];
+
+	for (const token of tokens)
+	{
+		if (!allowed.has(token as UsageType))
+		{
+			console.error(chalk.red(`Unknown --kind value: ${token}`));
+			console.error(chalk.dim(`Allowed: ${LOADER_TYPES.join(', ')}`));
+			process.exit(1);
+		}
+
+		resolved.push(token as UsageType);
+	}
+
+	return resolved;
+}
+
+function printLoadersSummary(loaders: UsageLocation[]): void
+{
+	const summary = summarizeUsages(loaders);
+	const fileWord = summary.totalFiles === 1 ? 'file' : 'files';
+	const moduleWord = summary.totalModules === 1 ? 'module' : 'modules';
+
+	console.log(` ${chalk.bold(`${summary.totalFiles} ${fileWord}`)} across ${chalk.bold(summary.totalModules)} ${moduleWord}`);
+	console.log('');
+
+	console.log(` ${chalk.bold('How')}`);
+	for (const type of LOADER_TYPES)
+	{
+		const count = summary.byType[type];
+		if (!count)
+		{
+			continue;
+		}
+
+		console.log(`   ${getTypeLabel(type)} ${chalk.dim(`(${count})`)}`);
+
+		const locs = summary.locationsByType[type] ?? [];
+		for (const loc of locs)
+		{
+			console.log(`     at ${loc.file}:${loc.line}`);
+		}
+	}
+
+	console.log('');
 }
 
 // endregion
@@ -2021,6 +2310,7 @@ const jsonCapableSubcommands: Command[] = [
 	circularImportsCommand,
 	circularDepsCommand,
 	findUsagesCommand,
+	findLoadersCommand,
 	unusedCommand,
 	depsTreeCommand,
 	bundleSizeCommand,

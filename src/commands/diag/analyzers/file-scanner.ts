@@ -35,16 +35,14 @@ type ScanResult = {
 	phpCount: number;
 };
 
-export async function scanJsAndPhpFiles(
+export async function scanJsFiles(
 	startDirectory: string,
-	onJsFile: (file: string, content: string) => void,
-	onPhpFile: (file: string, content: string) => void,
-): Promise<ScanResult>
+	onFile: (file: string, content: string) => void,
+): Promise<number>
 {
 	const spinner = createSpinner('Searching JS/TS files...');
 
 	let jsCount = 0;
-	let phpCount = 0;
 
 	await scanFiles(
 		JS_PATTERNS,
@@ -53,11 +51,23 @@ export async function scanJsAndPhpFiles(
 		(file, content) => {
 			jsCount++;
 			spinner.update(`JS/TS: ${jsCount} files`);
-			onJsFile(file, content);
+			onFile(file, content);
 		},
 	);
 
-	spinner.update(`JS/TS: ${jsCount} files, searching PHP...`);
+	spinner.stop();
+
+	return jsCount;
+}
+
+export async function scanPhpFiles(
+	startDirectory: string,
+	onFile: (file: string, content: string) => void,
+): Promise<number>
+{
+	const spinner = createSpinner('Searching PHP files...');
+
+	let phpCount = 0;
 
 	await scanFiles(
 		PHP_PATTERNS,
@@ -65,12 +75,24 @@ export async function scanJsAndPhpFiles(
 		startDirectory,
 		(file, content) => {
 			phpCount++;
-			spinner.update(`JS/TS: ${jsCount} files, PHP: ${phpCount} files`);
-			onPhpFile(file, content);
+			spinner.update(`PHP: ${phpCount} files`);
+			onFile(file, content);
 		},
 	);
 
 	spinner.stop();
+
+	return phpCount;
+}
+
+export async function scanJsAndPhpFiles(
+	startDirectory: string,
+	onJsFile: (file: string, content: string) => void,
+	onPhpFile: (file: string, content: string) => void,
+): Promise<ScanResult>
+{
+	const jsCount = await scanJsFiles(startDirectory, onJsFile);
+	const phpCount = await scanPhpFiles(startDirectory, onPhpFile);
 
 	return { jsCount, phpCount };
 }

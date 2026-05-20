@@ -152,7 +152,8 @@ chef diag <subcommand> [options]
 | `unused-deps` | Расширения с неиспользуемыми зависимостями |
 | `circular-deps` | Проверка на циклические зависимости |
 | `circular-imports` | Проверка на циклические импорты между файлами |
-| `find-usages` | Поиск использований расширения в JS, TS и PHP файлах |
+| `find-usages` | Поиск использований JS-кода расширения (импорты, namespace, наследование) |
+| `find-loaders` | Поиск PHP-подключений расширения (`Extension::load`, `CJSCore::Init`, `config.php rel`) |
 | `unused` | Расширения, на которые никто не ссылается |
 | `re-exports` | Расширения, которые ре-экспортируют символы из других расширений |
 | `baseline` | Проверка использования веб-фич, не поддерживаемых целевыми браузерами |
@@ -191,7 +192,12 @@ chef diag bundle-size crm.timeline --with-deps # С размером всех з
 chef diag circular-deps                        # Все циклические зависимости
 chef diag circular-deps main.core              # Проверить конкретное расширение
 chef diag unused-deps                          # Неиспользуемые зависимости
-chef diag find-usages ui.buttons               # Где используется ui.buttons
+chef diag find-usages ui.buttons               # Сводка использований ui.buttons (JS)
+chef diag find-usages ui.notification --list   # Полный список локаций
+chef diag find-usages ui.notification --imports UI                       # Только файлы с import { UI }
+chef diag find-usages ui.notification --namespace BX.UI.Notification.Center
+chef diag find-usages ui.notification --kind extends                     # Только наследники
+chef diag find-loaders ui.notification         # Где extension подключают из PHP
 chef diag config --key namespace               # Расширения с namespace в конфиге
 chef diag config --key minification --missing  # Расширения без минификации
 chef diag config --key input --except          # Расширения с параметрами кроме input

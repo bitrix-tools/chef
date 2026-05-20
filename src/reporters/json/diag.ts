@@ -13,7 +13,8 @@ import { analyzeUnusedDeps } from '../../commands/diag/analyzers/unused-deps-ana
 import { analyzeOrphans } from '../../commands/diag/analyzers/orphan-analyzer';
 import { analyzeConfig, analyzeConfigExcept, analyzeConfigMissing } from '../../commands/diag/analyzers/config-analyzer';
 import { findCircularImports } from '../../commands/diag/analyzers/circular-imports-analyzer';
-import { findUsages } from '../../commands/diag/analyzers/find-usages-analyzer';
+import { findUsages, findLoaders } from '../../commands/diag/analyzers/find-usages-analyzer';
+import { summarizeUsages, filterUsages } from '../../commands/diag/analyzers/find-usages-summary';
 import { findDependencyPath } from '../../commands/diag/analyzers/deps-path-analyzer';
 import { flattenTree } from '../../utils/flatten-tree';
 
@@ -32,7 +33,8 @@ import type { HeavyBundlesResult, HeavyBundlesSortKey } from '../../commands/dia
 import type { HeavyTotalResult, HeavyTotalSortKey } from '../../commands/diag/analyzers/heavy-total-analyzer';
 import type { UnusedDepsResult } from '../../commands/diag/analyzers/unused-deps-analyzer';
 import type { ConfigResult, ConfigExceptResult, ConfigMissingResult } from '../../commands/diag/analyzers/config-analyzer';
-import type { UsageLocation } from '../../commands/diag/analyzers/find-usages-analyzer';
+import type { UsageLocation, UsageType, UsageDetails } from '../../commands/diag/analyzers/find-usages-analyzer';
+import type { FindUsagesSummary } from '../../commands/diag/analyzers/find-usages-summary';
 import type { JsonInputOptions, JsonReportResult } from './types';
 
 export type DiagBaseOptions = JsonInputOptions & TargetSelector;
@@ -342,21 +344,41 @@ export function unused(options: UnusedOptions = {}): Promise<JsonReportResult<Un
 export type FindUsagesOptions = JsonInputOptions & {
 	extension: string,
 	path?: string,
+	imports?: string,
+	namespace?: string,
+	kinds?: UsageType[],
+	list?: boolean,
 };
 
 export type FindUsagesItem = {
-	type: UsageLocation['type'],
+	type: UsageType,
 	file: string,
 	line: number,
 	content: string,
+	details?: UsageDetails,
 };
 
 export type FindUsagesData = {
 	extension: string,
+	summary: FindUsagesSummary,
 	usages: FindUsagesItem[],
 };
 
-const emptyFindUsages = (extension: string): FindUsagesData => ({ extension, usages: [] });
+const emptyFindUsages = (extension: string): FindUsagesData => ({
+	extension,
+	summary: {
+		totalUsages: 0,
+		totalFiles: 0,
+		totalModules: 0,
+		byType: {},
+		locationsByType: {},
+		imports: [],
+		namespaces: [],
+		inheritance: [],
+		topModules: [],
+	},
+	usages: [],
+});
 
 export function findUsagesApi(options: FindUsagesOptions): Promise<JsonReportResult<FindUsagesData>>
 {
@@ -365,15 +387,83 @@ export function findUsagesApi(options: FindUsagesOptions): Promise<JsonReportRes
 		const startDirectory = options.path ?? Environment.getRoot() ?? process.cwd();
 		const extension: BasePackage | null = PackageResolver.resolve(options.extension);
 		const globals = extension ? await findExportedGlobals(extension) : new Set<string>();
-		const usages = await findUsages(options.extension, extension, globals, startDirectory);
+		const allUsages = await findUsages(options.extension, extension, globals, startDirectory);
+
+		const usages = filterUsages(allUsages, {
+			imports: options.imports,
+			namespace: options.namespace,
+			kinds: options.kinds,
+		});
+
+		const summary = summarizeUsages(usages);
 
 		return {
 			extension: options.extension,
-			usages: usages.map((usage) => ({
+			summary,
+			usages: usages.map((usage: UsageLocation) => ({
 				type: usage.type,
 				file: usage.file,
 				line: usage.line,
 				content: usage.content,
+				...(usage.details ? { details: usage.details } : {}),
+			})),
+		};
+	});
+}
+
+// endregion
+
+// region: find-loaders
+
+export type FindLoadersOptions = JsonInputOptions & {
+	extension: string,
+	path?: string,
+};
+
+export type FindLoadersItem = {
+	type: 'php-extension-load' | 'php-cjscore' | 'config-rel',
+	file: string,
+	line: number,
+	content: string,
+};
+
+export type FindLoadersData = {
+	extension: string,
+	totalLoaders: number,
+	totalFiles: number,
+	totalModules: number,
+	byType: Partial<Record<FindLoadersItem['type'], number>>,
+	loaders: FindLoadersItem[],
+};
+
+const emptyFindLoaders = (extension: string): FindLoadersData => ({
+	extension,
+	totalLoaders: 0,
+	totalFiles: 0,
+	totalModules: 0,
+	byType: {},
+	loaders: [],
+});
+
+export function findLoadersApi(options: FindLoadersOptions): Promise<JsonReportResult<FindLoadersData>>
+{
+	const empty = emptyFindLoaders(options.extension);
+	return withEnvironment(options, 'diag.find-loaders', empty, async () => {
+		const startDirectory = options.path ?? Environment.getRoot() ?? process.cwd();
+		const usages = await findLoaders(options.extension, startDirectory);
+		const summary = summarizeUsages(usages);
+
+		return {
+			extension: options.extension,
+			totalLoaders: usages.length,
+			totalFiles: summary.totalFiles,
+			totalModules: summary.totalModules,
+			byType: summary.byType as FindLoadersData['byType'],
+			loaders: usages.map((u: UsageLocation) => ({
+				type: u.type as FindLoadersItem['type'],
+				file: u.file,
+				line: u.line,
+				content: u.content,
 			})),
 		};
 	});
@@ -616,6 +706,7 @@ export const diag = {
 	circularDeps,
 	circularImports,
 	findUsages: findUsagesApi,
+	findLoaders: findLoadersApi,
 	depsTree,
 	bundleSize,
 	config,

@@ -40,6 +40,7 @@ chef diag circular-deps --reporter json
 | `chef diag circular-deps`        | ✓                 |
 | `chef diag circular-imports`     | ✓                 |
 | `chef diag find-usages`          | ✓                 |
+| `chef diag find-loaders`         | ✓                 |
 | `chef diag deps-tree`            | ✓                 |
 | `chef diag bundle-size`          | ✓                 |
 | `chef diag baseline`             | not yet           |

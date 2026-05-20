@@ -1,7 +1,5 @@
-import * as path from 'node:path';
-import { existsSync, statSync } from 'node:fs';
-
 import { stripComments } from './analyzers/file-scanner';
+import { parseJsFile, traverseShallow } from '../../utils/ast/parse-babel';
 
 import type { BasePackage } from '../../modules/packages/base-package';
 
@@ -106,66 +104,30 @@ export async function findExportedGlobals(extension: BasePackage): Promise<Set<s
 	}
 
 	const { readFile } = await import('node:fs/promises');
-	const entryPoint = extension.getInputPath();
 	const exportNames = new Set<string>();
-	const visited = new Set<string>();
 
-	async function collectExports(filePath: string): Promise<void>
+	for (const file of extension.getSourceFiles())
 	{
-		const resolved = resolveFilePath(filePath);
-		if (!resolved || visited.has(resolved))
-		{
-			return;
-		}
-
-		visited.add(resolved);
-
 		let content: string;
 		try
 		{
-			content = await readFile(resolved, 'utf-8');
+			content = await readFile(file, 'utf-8');
 		}
 		catch
 		{
-			return;
+			continue;
 		}
 
-		// export class ClassName / export function funcName / export const varName
-		const directPattern = /export\s+(?:class|function|const|let|var)\s+([A-Z][A-Za-z0-9_]*)/g;
-		for (const match of content.matchAll(directPattern))
-		{
-			exportNames.add(match[1]);
-		}
-
-		// export { Name1, Name2 as Alias }
-		const namedPattern = /export\s*\{([^}]+)\}/g;
-		for (const match of content.matchAll(namedPattern))
-		{
-			const names = match[1].split(',');
-			for (const name of names)
-			{
-				const trimmed = name.trim();
-				// "Name as Alias" → take Alias; "Name" → take Name
-				const asMatch = trimmed.match(/\w+\s+as\s+(\w+)/);
-				const exportName = asMatch ? asMatch[1] : trimmed.split(/\s/)[0];
-				if (exportName && /^[A-Z]/.test(exportName))
-				{
-					exportNames.add(exportName);
-				}
-			}
-		}
-
-		// export * from './local-file' — follow re-exports from local files only
-		const reExportPattern = /export\s*\*\s*from\s*['"](\.[^'"]+)['"]/g;
-		for (const match of content.matchAll(reExportPattern))
-		{
-			const reExportPath = path.resolve(path.dirname(resolved), match[1]);
-			await collectExports(reExportPath);
-		}
+		collectExportsFromAst(content, file, namespace, exportNames);
 	}
 
-	await collectExports(entryPoint);
-
+	// Note: the namespace object itself (e.g. `BX.UI`) is intentionally NOT added
+	// here. Many Bitrix extensions share the same root namespace (`ui.buttons`,
+	// `ui.notification`, `ui.viewer` all live under `BX.UI`); adding it as a
+	// global would make every BX.UI.SomethingElse usage from a different
+	// extension look like a usage of this one. Direct references to the bare
+	// namespace via `Reflection.getClass('<namespace>')` are handled separately
+	// by the analyzer using the extension's own namespace string.
 	const globals = new Set<string>();
 	for (const name of exportNames)
 	{
@@ -175,31 +137,265 @@ export async function findExportedGlobals(extension: BasePackage): Promise<Set<s
 	return globals;
 }
 
-function resolveFilePath(filePath: string): string | null
+/**
+ * Extract names that become accessible on the extension's namespace at runtime.
+ * Covers:
+ *   - `export class/function/const/let/var Name`
+ *   - `export { Foo, Bar as Baz }`
+ *   - `Object.defineProperty(NS, 'X', ...)` — common lazy-singleton pattern
+ *   - `NS.X = ...` — direct property assignment
+ * where NS is either the literal namespace chain (`BX.UI.Notification`,
+ * optionally prefixed with `window.` / `this.`) or a local alias.
+ */
+export function collectExportsFromAst(
+	content: string,
+	file: string,
+	namespace: string,
+	out: Set<string>,
+): void
 {
-	if (existsSync(filePath) && statSync(filePath).isFile())
+	const ast = parseJsFile(content, file);
+	if (!ast)
 	{
-		return filePath;
+		return;
 	}
 
-	// Try common extensions
-	for (const ext of ['.ts', '.js', '.tsx', '.jsx'])
-	{
-		const withExt = filePath + ext;
-		if (existsSync(withExt))
+	// Local aliases of the namespace object detected in this file
+	// (e.g. `const ns = window.BX.UI.Notification`).
+	const namespaceAliases = new Set<string>();
+
+	traverseShallow(ast, {
+		// Static exports
+		ExportNamedDeclaration(path: any)
 		{
-			return withExt;
+			const decl = path.node.declaration;
+			if (decl)
+			{
+				collectFromDeclaration(decl, out);
+			}
+
+			for (const spec of path.node.specifiers ?? [])
+			{
+				if (spec.type !== 'ExportSpecifier')
+				{
+					continue;
+				}
+
+				// `export { Foo as Bar }` — Bar is what becomes BX.NS.Bar
+				const exportedName = identifierName(spec.exported);
+				if (exportedName && /^[A-Z]/.test(exportedName))
+				{
+					out.add(exportedName);
+				}
+			}
+		},
+
+		// `const ns = window.BX.UI.Notification` etc.
+		VariableDeclarator(path: any)
+		{
+			const id = path.node.id;
+			const init = path.node.init;
+			if (!id || id.type !== 'Identifier' || !init)
+			{
+				return;
+			}
+
+			if (matchesNamespaceTarget(init, namespace))
+			{
+				namespaceAliases.add(id.name);
+			}
+		},
+
+		// Object.defineProperty(NS, 'X', ...) — lazy singletons
+		CallExpression(path: any)
+		{
+			const callee = path.node.callee;
+			if (callee.type !== 'MemberExpression' || callee.computed)
+			{
+				return;
+			}
+
+			if (callee.object?.name !== 'Object' || callee.property?.name !== 'defineProperty')
+			{
+				return;
+			}
+
+			const [target, key] = path.node.arguments;
+			if (!target || !key)
+			{
+				return;
+			}
+
+			if (!isNamespaceTarget(target, namespace, namespaceAliases))
+			{
+				return;
+			}
+
+			const name = stringLiteralValue(key);
+			if (name && /^[A-Z]/.test(name))
+			{
+				out.add(name);
+			}
+		},
+
+		// NS.X = ... or NS.X.Y = ... (we only record top-level X)
+		AssignmentExpression(path: any)
+		{
+			if (path.node.operator !== '=')
+			{
+				return;
+			}
+
+			const left = path.node.left;
+			if (left.type !== 'MemberExpression' || left.computed)
+			{
+				return;
+			}
+
+			if (left.property?.type !== 'Identifier' || !/^[A-Z]/.test(left.property.name))
+			{
+				return;
+			}
+
+			if (isNamespaceTarget(left.object, namespace, namespaceAliases))
+			{
+				out.add(left.property.name);
+			}
+		},
+	});
+}
+
+function collectFromDeclaration(decl: any, out: Set<string>): void
+{
+	if (decl.type === 'ClassDeclaration' || decl.type === 'FunctionDeclaration')
+	{
+		const name = identifierName(decl.id);
+		if (name && /^[A-Z]/.test(name))
+		{
+			out.add(name);
 		}
+
+		return;
 	}
 
-	// Try index files
-	for (const ext of ['.ts', '.js'])
+	if (decl.type === 'VariableDeclaration')
 	{
-		const indexPath = path.join(filePath, `index${ext}`);
-		if (existsSync(indexPath))
+		for (const d of decl.declarations)
 		{
-			return indexPath;
+			if (d.id?.type === 'Identifier' && /^[A-Z]/.test(d.id.name))
+			{
+				out.add(d.id.name);
+			}
 		}
+	}
+}
+
+function identifierName(node: any): string | null
+{
+	if (!node)
+	{
+		return null;
+	}
+
+	if (node.type === 'Identifier')
+	{
+		return node.name;
+	}
+
+	if (node.type === 'StringLiteral')
+	{
+		return node.value;
+	}
+
+	return null;
+}
+
+function stringLiteralValue(node: any): string | null
+{
+	return node?.type === 'StringLiteral' ? node.value : null;
+}
+
+/**
+ * True when `node` is the namespace object itself: either the literal chain
+ * (with optional `window.` / `globalThis.` / `this.` prefix) or an identifier
+ * that we've previously bound as an alias.
+ */
+function isNamespaceTarget(node: any, namespace: string, aliases: Set<string>): boolean
+{
+	if (!node)
+	{
+		return false;
+	}
+
+	if (node.type === 'Identifier' && aliases.has(node.name))
+	{
+		return true;
+	}
+
+	return matchesNamespaceTarget(node, namespace);
+}
+
+/**
+ * Check whether a member expression chain equals the namespace, allowing for
+ * `window.` / `globalThis.` / `this.` / `self.` roots.
+ */
+function matchesNamespaceTarget(node: any, namespace: string): boolean
+{
+	const chain = memberChainToString(node);
+	if (!chain)
+	{
+		return false;
+	}
+
+	const targets = [
+		namespace,
+		`window.${namespace}`,
+		`globalThis.${namespace}`,
+		`self.${namespace}`,
+		`this.${namespace}`,
+	];
+
+	return targets.includes(chain);
+}
+
+function memberChainToString(node: any): string | null
+{
+	if (!node)
+	{
+		return null;
+	}
+
+	// Peel TypeScript wrappers: `(x as T)` / `<T>x` / `x!`.
+	if (node.type === 'TSAsExpression' || node.type === 'TSTypeAssertion' || node.type === 'TSNonNullExpression')
+	{
+		return memberChainToString(node.expression);
+	}
+
+	// Parenthesized expression — babel exposes the inner node.
+	if (node.type === 'ParenthesizedExpression')
+	{
+		return memberChainToString(node.expression);
+	}
+
+	if (node.type === 'Identifier')
+	{
+		return node.name;
+	}
+
+	if (node.type === 'ThisExpression')
+	{
+		return 'this';
+	}
+
+	if (node.type === 'MemberExpression' && !node.computed && node.property?.type === 'Identifier')
+	{
+		const obj = memberChainToString(node.object);
+		if (!obj)
+		{
+			return null;
+		}
+
+		return `${obj}.${node.property.name}`;
 	}
 
 	return null;

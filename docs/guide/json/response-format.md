@@ -237,7 +237,8 @@ type JsonReportResult<TData> = {
 | `diag unused`                 | `{ scanned, results: { name }[] }`                                                    |
 | `diag circular-deps`          | `{ scanned, results: { name, cycles: string[][] }[] }`                                |
 | `diag circular-imports`       | `{ scanned, results: { name, cycles: string[][] }[] }`                                |
-| `diag find-usages`            | `{ extension, usages: { type, file, line, content }[] }`                              |
+| `diag find-usages`            | `{ extension, summary: { totalUsages, totalFiles, totalModules, byType, imports[], namespaces[], inheritance[], topModules[], locationsByType }, usages: { type, file, line, content, details? }[] }` |
+| `diag find-loaders`           | `{ extension, totalLoaders, totalFiles, totalModules, byType, loaders: { type, file, line, content }[] }` |
 | `diag deps-tree`              | tagged union по `mode`: `'tree' \| 'flat' \| 'why' \| 'not-found'`                    |
 | `diag bundle-size`            | `{ extension, own, dependencies?, total? }` либо `{ extension, notFound: true }`      |
 | `diag config`                 | tagged union по `mode`: `'match' \| 'except' \| 'missing'`                            |
