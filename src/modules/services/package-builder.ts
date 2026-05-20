@@ -89,17 +89,25 @@ export class PackageBuilder
 			}
 		}
 
-		const phpConfig = this.#package.getPhpConfig();
-
-		// Filter out dependencies that are already included in the bundle
-		const includes = new Set<string>(phpConfig.get('includes') ?? []);
-		const dependencies = buildResult.dependencies.filter(dep => !includes.has(dep));
-
-		phpConfig.set('rel', dependencies);
-
-		if (this.#package.shouldUpdatePhpConfig())
+		// Only touch config.php when the build succeeded. A failed build returns
+		// `dependencies: []` because rollup either never ran (type-check error) or aborted —
+		// writing that empty list into rel would let PhpConfigManager.save() apply the
+		// `main.polyfill.core` fallback, silently corrupting the manifest while the existing
+		// bundle on disk still imports the real dependencies.
+		if (buildResult.errors.length === 0)
 		{
-			phpConfig.save(this.#package.getPhpConfigFilePath(), this.#package.getName());
+			const phpConfig = this.#package.getPhpConfig();
+
+			// Filter out dependencies that are already included in the bundle
+			const includes = new Set<string>(phpConfig.get('includes') ?? []);
+			const dependencies = buildResult.dependencies.filter(dep => !includes.has(dep));
+
+			phpConfig.set('rel', dependencies);
+
+			if (this.#package.shouldUpdatePhpConfig())
+			{
+				phpConfig.save(this.#package.getPhpConfigFilePath(), this.#package.getName());
+			}
 		}
 
 		return buildResult;
