@@ -3,5 +3,6 @@ dist/
 !test/fixtures/**/dist/
 CLAUDE.md
 .claude
+.mcp.json
 docs/.vitepress/cache/
 docs/.vitepress/dist/
