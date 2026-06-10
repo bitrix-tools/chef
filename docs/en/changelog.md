@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.16.0 <Badge type="tip" text="6/10/2026" />
+
+Sequential browser execution in e2e tests and reworked test output.
+
+- Browser engines in e2e runs now execute sequentially, one at a time — runs are stable on memory-constrained machines
+- The status bar shows every browser's state: finished, running (with a spinner and counter), or queued, plus the total elapsed time
+- Every test run in every browser is rendered as its own line with an accumulating browser tag
+- The final summary includes a per-browser breakdown
+- Tests that pass on retry are no longer reported as failed
+- Fixed duplicated lines and leaked control sequences in non-terminal output (IDE, CI, pipes)
+- Durations across all reports use a single format: milliseconds, seconds, minutes, hours
+
 ## v1.15.0 <Badge type="tip" text="5/20/2026" />
 
 - fix(build): preserve config.php when the build fails. Previously, a type-check or Rollup error would rewrite rel with an empty array, and PhpConfigManager's fallback would turn it into ['main.polyfill.core'] with skip_core: true. The bundle on disk stayed intact while the manifest was silently corrupted.
