@@ -44,6 +44,8 @@ export class TeamcityReporter
 	#suitePath: Map<string, string[]> = new Map();
 
 	setBrowserCount(_count: number): void {}
+	setTotalTests(_count: number): void {}
+	setBrowsers(_names: string[]): void {}
 	stop(): void {}
 	updateStatus(_status: string, _browser?: string): void {}
 	clearStatus(): void {}
@@ -151,7 +153,7 @@ export class TeamcityReporter
 		}
 	}
 
-	finish(consoleLogs: ConsoleLog[] = []): { passed: number; failed: number; failures: never[] }
+	finish(consoleLogs: ConsoleLog[] = []): { passed: number; failed: number; failures: never[]; browsers: never[] }
 	{
 		if (consoleLogs.length > 0)
 		{
@@ -169,6 +171,6 @@ export class TeamcityReporter
 			this.#write(message('testingFinished'));
 		}
 
-		return { passed: this.#passed, failed: this.#failed, failures: [] };
+		return { passed: this.#passed, failed: this.#failed, failures: [], browsers: [] };
 	}
 }

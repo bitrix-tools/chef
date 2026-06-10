@@ -48,7 +48,7 @@ export type E2ETestOptions = {
 	file?: string;
 	onToken?: (token: TestToken, browser?: string) => void;
 	onStatus?: (status: string) => void;
-	onBegin?: (info: { totalTests: number; browserCount: number }) => void;
+	onBegin?: (info: { totalTests: number; browserCount: number; browsers?: string[] }) => void;
 };
 
 export type ConsoleLog = {

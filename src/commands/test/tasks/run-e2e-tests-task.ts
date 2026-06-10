@@ -17,7 +17,14 @@ export function runEndToEndTestsTask(extension: BasePackage, args: Record<string
 				...args,
 				onToken: (token, browser) => reporter.handleToken(token, browser),
 				onStatus: (status: string) => reporter.updateStatus(status),
-				onBegin: ({ browserCount }) => reporter.setBrowserCount(browserCount),
+				onBegin: ({ browserCount, totalTests, browsers }) => {
+					reporter.setBrowserCount(browserCount);
+					reporter.setTotalTests(totalTests);
+					if (browsers && browsers.length > 0)
+					{
+						reporter.setBrowsers(browsers);
+					}
+				},
 			});
 
 			if (testResult.errors.length > 0)
@@ -52,7 +59,7 @@ export function runEndToEndTestsTask(extension: BasePackage, args: Record<string
 				};
 			}
 
-			const { passed, failed, failures } = reporter.finish(args.console ? testResult.consoleLogs : []);
+			const { passed, failed, failures, browsers } = reporter.finish(args.console ? testResult.consoleLogs : []);
 
 			const title = failed === 0
 				? 'E2E tests'
@@ -61,7 +68,7 @@ export function runEndToEndTestsTask(extension: BasePackage, args: Record<string
 			return {
 				title,
 				status: failed === 0 ? 'passed' : 'failed',
-				metrics: { passed, failed, failures },
+				metrics: { passed, failed, failures, browsers },
 			};
 		},
 	};

@@ -2,6 +2,7 @@ import chalk from 'chalk';
 
 import { hasCodeFrame } from '../../diagnostics/code-frame';
 import { formatError, formatInternalError } from '../../diagnostics/format-error';
+import { formatElapsed } from '../../utils/format-elapsed';
 import {
 	isBaselineCode,
 	extractFeatureLabel,
@@ -33,7 +34,7 @@ const SPINNER_INTERVAL = 100;
 
 function formatDuration(ms: number): string
 {
-	return `${(ms / 1000).toFixed(2)}s`;
+	return formatElapsed(ms);
 }
 
 function statusIcon(status: TaskResult['status']): string

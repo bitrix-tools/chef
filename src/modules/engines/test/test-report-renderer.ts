@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 
 import { TASK_STATUS_ICON } from '../../task/icons';
+import { formatElapsed } from '../../../utils/format-elapsed';
 
 import type { TestToken, ConsoleLog } from './test-types';
 
@@ -84,17 +85,9 @@ export function buildSuiteTree(report: TestToken[]): SuiteNode
 
 function formatDuration(ms: number): string
 {
-	if (ms < 1)
-	{
-		return chalk.gray('< 1ms');
-	}
+	const color = ms < 1000 ? chalk.gray : chalk.yellow;
 
-	if (ms < 1000)
-	{
-		return chalk.gray(`${Math.round(ms)}ms`);
-	}
-
-	return chalk.yellow(`${(ms / 1000).toFixed(2)}s`);
+	return color(formatElapsed(ms));
 }
 
 function stringify(value: unknown): string

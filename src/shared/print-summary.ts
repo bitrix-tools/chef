@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 
 import { pluralize } from '../utils/pluralize';
+import { formatElapsed } from '../utils/format-elapsed';
 import { formatError } from '../diagnostics/format-error';
 import { stripAnsi } from '../diagnostics/code-frame';
 
@@ -258,10 +259,13 @@ export function printSummary(
 	}
 
 	const total = passed + failed + warned;
-	const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+	const duration = formatElapsed(Date.now() - startTime);
 
 	let testsPassed = 0;
 	let testsFailed = 0;
+	// Aggregate per-browser tallies across all extensions, preserving first-seen order.
+	const browserOrder: string[] = [];
+	const browserTotals = new Map<string, { passed: number; failed: number }>();
 	for (const group of results)
 	{
 		for (const task of group.results)
@@ -270,6 +274,18 @@ export function printSummary(
 			{
 				testsPassed += task.metrics.passed;
 				testsFailed += task.metrics.failed;
+
+				for (const browser of task.metrics.browsers ?? [])
+				{
+					if (!browserTotals.has(browser.name))
+					{
+						browserTotals.set(browser.name, { passed: 0, failed: 0 });
+						browserOrder.push(browser.name);
+					}
+					const bt = browserTotals.get(browser.name)!;
+					bt.passed += browser.passed;
+					bt.failed += browser.failed;
+				}
 			}
 		}
 	}
@@ -295,7 +311,23 @@ export function printSummary(
 			const testsTotal = testsPassed + testsFailed;
 			console.log(`   ${chalk.bold('Tests'.padEnd(LABEL_WIDTH))}${testsParts.join(chalk.gray(' | '))} ${chalk.gray(`(${testsTotal})`)}`);
 		}
+
+		// Per-browser breakdown — only when more than one browser ran, so it adds
+		// signal (which engine the failures are in) without noise for single-browser runs.
+		if (browserOrder.length > 1)
+		{
+			const browserParts = browserOrder.map((name) => {
+				const { passed, failed } = browserTotals.get(name)!;
+				const tally = failed > 0
+					? `${chalk.green(`${passed} ✓`)} ${chalk.red(`${failed} ✗`)}`
+					: chalk.green(`${passed} ✓`);
+
+				return `${chalk.dim(name)} ${tally}`;
+			});
+
+			console.log(`   ${chalk.bold('Browsers'.padEnd(LABEL_WIDTH))}${browserParts.join(chalk.gray('  ·  '))}`);
+		}
 	}
 
-	console.log(`   ${chalk.bold('Time'.padEnd(LABEL_WIDTH))}${duration}s`);
+	console.log(`   ${chalk.bold('Time'.padEnd(LABEL_WIDTH))}${duration}`);
 }

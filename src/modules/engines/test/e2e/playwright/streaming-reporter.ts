@@ -16,15 +16,15 @@ export default class StreamingReporter implements Reporter
 
 	onTestBegin(test: TestCase): void
 	{
-		const titlePath = test.titlePath();
-		const project = titlePath[1] || '';
-		const suitePath = titlePath.slice(2);
-		const title = suitePath.pop() ?? '';
-		const fullPath = [...suitePath, title].join(' > ');
+		// Neutral, localized "Running <Browser>..." — used only for the early status
+		// line before per-test results start streaming (the multi-browser status bar
+		// takes over after that). We deliberately drop the raw "chromium: suite > test"
+		// format, which looked out of place and leaked the lowercase project id.
+		const browser = this.#formatBrowserName(test.titlePath()[1]);
 
 		this.#emit({
 			id: 'STATUS',
-			text: project ? `${project}: ${fullPath}` : fullPath,
+			text: browser ? `Running ${browser}...` : 'Running tests...',
 		});
 	}
 
@@ -34,6 +34,19 @@ export default class StreamingReporter implements Reporter
 		const browser = this.#formatBrowserName(titlePath[1]);
 		const suitePath = titlePath.slice(2);
 		const title = suitePath.pop() ?? '';
+
+		// onTestEnd fires once per attempt, including retries. If this attempt failed
+		// but another retry is coming, don't report a failure yet — the test isn't
+		// done. We only emit a final token for the last attempt, so a test that fails
+		// then passes on retry (flaky) is reported as passed, not failed.
+		if (result.status !== 'passed' && result.status !== 'skipped' && result.retry < test.retries)
+		{
+			this.#emit({
+				id: 'STATUS',
+				text: browser ? `${browser}: retrying ${title}` : `retrying ${title}`,
+			});
+			return;
+		}
 
 		const errorMessage = result.errors
 			?.map((e) => e.message)

@@ -2,6 +2,7 @@ import chalk from 'chalk';
 
 import { stripAnsi, hasLocalFilePath } from '../../../diagnostics/code-frame';
 import { formatError } from '../../../diagnostics/format-error';
+import { formatElapsed } from '../../../utils/format-elapsed';
 
 import type { TestToken, ConsoleLog } from './test-types';
 
@@ -10,6 +11,19 @@ export { stripAnsi, hasLocalFilePath };
 const SLOW_TEST_THRESHOLD = 75;
 const PREFIX = '  ';
 const isTTY = process.stdout.isTTY ?? false;
+// Spinner for the active browser: the project's round multicolor "○" that cycles
+// through these colors (same look as createSpinner in diag).
+const SPINNER_COLORS = [
+	chalk.hex('#ff6b6b'),
+	chalk.hex('#ffa06b'),
+	chalk.hex('#ffd06b'),
+	chalk.hex('#6bffa0'),
+	chalk.hex('#6bd0ff'),
+	chalk.hex('#a06bff'),
+	chalk.hex('#ff6bd0'),
+	chalk.hex('#ff6b9a'),
+];
+const SPINNER_INTERVAL_MS = 100;
 
 type FailedTest = {
 	suitePath: string;
@@ -51,23 +65,19 @@ type LiveLine = {
 	status: BrowserStatus;
 	fullPath: string;
 	duration?: number;
+	// Browsers accumulated up to (and including) the engine that produced this line,
+	// fixed at creation time. Every test run in every engine is its own line, so the
+	// tag grows down the list: [chromium] … [chromium · firefox] … [chromium · firefox · webkit].
 	browsers: Map<string, BrowserStatus>;
 	row: number;
 };
 
 function formatDuration(ms: number): string
 {
-	if (ms < 1)
-	{
-		return chalk.gray('< 1ms');
-	}
+	// Sub-second durations stay gray (ms), longer ones yellow (s / m / h).
+	const color = ms < 1000 ? chalk.gray : chalk.yellow;
 
-	if (ms < 1000)
-	{
-		return chalk.gray(`${Math.round(ms)}ms`);
-	}
-
-	return chalk.yellow(`${(ms / 1000).toFixed(2)}s`);
+	return color(formatElapsed(ms));
 }
 
 function formatBrowserTag(browsers: Map<string, BrowserStatus>): string
@@ -91,8 +101,13 @@ export class TestReporter
 	readonly #slowTests: SlowTest[] = [];
 	readonly #browsers = new Set<string>();
 	readonly #browserStatuses = new Map<string, string>();
-	readonly #countedTests = new Set<string>();
-	readonly #liveLines = new Map<string, LiveLine>();
+	// Status each unique test was counted with (fullPath → status). A test is
+	// counted once (first browser), but a later failure in another browser upgrades
+	// it from passed/pending to failed — a unique test that failed anywhere is failed.
+	readonly #countedStatuses = new Map<string, BrowserStatus>();
+	// Per-test outcome in each browser (fullPath → browser → status), used to build
+	// the accumulating browser tag on each line with the real ✓/✗ of every engine.
+	readonly #testBrowserStatuses = new Map<string, Map<string, BrowserStatus>>();
 	readonly #lines: LiveLine[] = [];
 	readonly #startTime: number;
 	readonly #onStatus: (message: string) => void;
@@ -104,6 +119,32 @@ export class TestReporter
 	#passed = 0;
 	#failed = 0;
 	#pending = 0;
+	// Total number of tests in the run, reported up front (e.g. Playwright's
+	// onBegin). 0 means "not yet known" — until then the progress falls back to
+	// the count of finished tests.
+	#totalTests = 0;
+	// Per-browser finished count + the browser whose result arrived last. With
+	// sequential engines the overall "N of total" stops moving once a test was
+	// already counted in an earlier browser, so the bar looks frozen while the
+	// next engine reruns the same specs. Showing "<Browser> N/total" makes the
+	// active engine and its progress visible.
+	readonly #browserProgress = new Map<string, number>();
+	// Per-browser passed/failed tallies for the final summary's "Browsers" line.
+	readonly #browserStats = new Map<string, { passed: number; failed: number }>();
+	#currentBrowser = '';
+	// Full ordered list of browser engines for this run (e.g. Chromium, Firefox,
+	// WebKit), known up front so the status bar can show every engine's state
+	// (done / running / waiting), not just the ones that already produced results.
+	#allBrowsers: string[] = [];
+	// Spinner animation for the active browser: a timer repaints the viewport so the
+	// frame advances even while a slow test runs and no new tokens arrive.
+	#spinnerFrame = 0;
+	#spinnerTimer: ReturnType<typeof setInterval> | null = null;
+	// Index of the line touched last (added or updated). The viewport follows it so
+	// that in the 2nd/3rd browser — which updates already-listed lines rather than
+	// appending — the visible window scrolls to the running test instead of being
+	// stuck on the tail.
+	#activeRow = -1;
 
 	constructor(onStatus?: (message: string) => void, options: { showSummary?: boolean } = {})
 	{
@@ -118,8 +159,43 @@ export class TestReporter
 		this.#expectedBrowsers = count;
 	}
 
+	setBrowsers(names: string[]): void
+	{
+		this.#allBrowsers = names;
+	}
+
+	setTotalTests(count: number): void
+	{
+		this.#totalTests = count;
+	}
+
+	#startSpinner(): void
+	{
+		if (!isTTY || this.#spinnerTimer || this.#allBrowsers.length <= 1)
+		{
+			return;
+		}
+
+		this.#spinnerTimer = setInterval(() => {
+			this.#spinnerFrame = (this.#spinnerFrame + 1) % SPINNER_COLORS.length;
+			this.#renderViewport();
+		}, SPINNER_INTERVAL_MS);
+		// Don't keep the process alive just for the spinner.
+		this.#spinnerTimer.unref?.();
+	}
+
+	#stopSpinner(): void
+	{
+		if (this.#spinnerTimer)
+		{
+			clearInterval(this.#spinnerTimer);
+			this.#spinnerTimer = null;
+		}
+	}
+
 	stop(): void
 	{
+		this.#stopSpinner();
 		if (isTTY)
 		{
 			process.stdout.write('\x1B[?25h');
@@ -128,6 +204,26 @@ export class TestReporter
 
 	updateStatus(status: string, browser?: string): void
 	{
+		// "Starting <Browser>..." marks the moment a new engine is launching. Between
+		// engines there are no test tokens yet, so without this the status bar would
+		// freeze on the previous (finished) browser with no spinner. Mark the new
+		// engine active so the spinner moves to it immediately, and keep the spinner
+		// timer running even after results have started.
+		if (this.#allBrowsers.length > 1)
+		{
+			const starting = this.#allBrowsers.find((name) => status === `Starting ${name}...`);
+			if (starting)
+			{
+				this.#currentBrowser = starting;
+				this.#startSpinner();
+				if (this.#hasResults)
+				{
+					this.#renderViewport();
+				}
+				return;
+			}
+		}
+
 		if (this.#hasResults)
 		{
 			return;
@@ -191,18 +287,43 @@ export class TestReporter
 				: token.id === 'TEST_FAILED' ? 'failed'
 				: 'pending';
 
+			if (browser)
+			{
+				this.#currentBrowser = browser;
+				this.#browserProgress.set(browser, (this.#browserProgress.get(browser) ?? 0) + 1);
+
+				if (!this.#browserStats.has(browser))
+				{
+					this.#browserStats.set(browser, { passed: 0, failed: 0 });
+				}
+				const bs = this.#browserStats.get(browser)!;
+				if (status === 'passed')
+				{
+					bs.passed++;
+				}
+				else if (status === 'failed')
+				{
+					bs.failed++;
+				}
+			}
+
 			if (!this.#suiteStats.has(suiteName))
 			{
 				this.#suiteStats.set(suiteName, { passed: 0, failed: 0, pending: 0, duration: 0 });
 			}
 
 			const stats = this.#suiteStats.get(suiteName)!;
-			const existing = this.#liveLines.get(fullPath);
 
-			if (!existing)
+			// Every run of a test (in each browser) is its own line in the list — the
+			// list grows down with the browser tag accumulating. But the run-wide
+			// counters and per-suite stats count each unique test once (the first time
+			// its fullPath is seen), so the summary reads "9 passed", not "27 passed".
+			// A later failure in another browser upgrades the counted status to failed.
+			const countedStatus = this.#countedStatuses.get(fullPath);
+
+			if (countedStatus === undefined)
 			{
-				// First occurrence of this test — count it
-				this.#countedTests.add(fullPath);
+				this.#countedStatuses.set(fullPath, status);
 				stats.duration += token.duration ?? 0;
 
 				if (status === 'passed')
@@ -221,44 +342,40 @@ export class TestReporter
 					stats.pending++;
 				}
 
-				this.#appendLine(fullPath, status, fullPath, token.duration, browser);
-
 				if (status === 'failed' && typeof token.duration === 'number' && token.duration > SLOW_TEST_THRESHOLD)
 				{
 					this.#slowTests.push({ title: fullPath, duration: token.duration, browser });
 				}
 			}
-			else
+			else if (status === 'failed' && countedStatus !== 'failed')
 			{
-				// Same test in another browser — update the line
-				if (browser)
+				this.#countedStatuses.set(fullPath, 'failed');
+
+				if (countedStatus === 'passed')
 				{
-					existing.browsers.set(browser, status);
+					this.#passed--;
+					stats.passed--;
+				}
+				else
+				{
+					this.#pending--;
+					stats.pending--;
 				}
 
-				// If this browser failed but the test was previously counted as passed, upgrade to failed
-				if (status === 'failed' && existing.status !== 'failed')
-				{
-					const previousStatus = existing.status;
-					existing.status = 'failed';
-
-					if (previousStatus === 'passed')
-					{
-						this.#passed--;
-						stats.passed--;
-					}
-					else if (previousStatus === 'pending')
-					{
-						this.#pending--;
-						stats.pending--;
-					}
-
-					this.#failed++;
-					stats.failed++;
-				}
-
-				this.#updateLine(existing);
+				this.#failed++;
+				stats.failed++;
 			}
+
+			if (browser)
+			{
+				if (!this.#testBrowserStatuses.has(fullPath))
+				{
+					this.#testBrowserStatuses.set(fullPath, new Map());
+				}
+				this.#testBrowserStatuses.get(fullPath)!.set(browser, status);
+			}
+
+			this.#appendLine(status, fullPath, token.duration, browser);
 
 			if (token.id === 'TEST_FAILED')
 			{
@@ -276,7 +393,7 @@ export class TestReporter
 		}
 	}
 
-	#appendLine(key: string, status: BrowserStatus, fullPath: string, duration?: number, browser?: string): void
+	#appendLine(status: BrowserStatus, fullPath: string, duration?: number, browser?: string): void
 	{
 		if (!this.#hasResults)
 		{
@@ -287,13 +404,33 @@ export class TestReporter
 			// Use a generous margin so the viewport never exceeds terminal height.
 			this.#viewportHeight = Math.max(3, (process.stdout.rows ?? 24) - 6);
 
-			// Hide cursor during live rendering
-			process.stdout.write('\x1B[?25l');
+			// Hide cursor during live rendering (TTY only — in a pipe it leaks "[?25l").
+			if (isTTY)
+			{
+				process.stdout.write('\x1B[?25l');
+			}
 		}
 
+		// Tag = every engine up to and including this one, fixed now, each with its
+		// real outcome. With sequential engines #allBrowsers is the run order; we walk
+		// it up to the current browser and read each engine's actual ✓/✗ for this test,
+		// so Chromium lines show [chromium ✓], Firefox lines [chromium ✓ · firefox ✗], etc.
 		const browsers = new Map<string, BrowserStatus>();
 		if (browser)
 		{
+			const order = this.#allBrowsers.length > 0 ? this.#allBrowsers : [browser];
+			const recorded = this.#testBrowserStatuses.get(fullPath);
+			const upTo = order.indexOf(browser);
+			const through = upTo >= 0 ? order.slice(0, upTo + 1) : [browser];
+			for (const name of through)
+			{
+				const recordedStatus = recorded?.get(name);
+				if (recordedStatus)
+				{
+					browsers.set(name, recordedStatus);
+				}
+			}
+			// Guarantee the current engine is present even if not yet recorded.
 			browsers.set(browser, status);
 		}
 
@@ -304,8 +441,8 @@ export class TestReporter
 			browsers,
 			row: this.#lines.length,
 		};
-		this.#liveLines.set(key, live);
 		this.#lines.push(live);
+		this.#activeRow = live.row;
 
 		if (!isTTY)
 		{
@@ -316,27 +453,25 @@ export class TestReporter
 		this.#renderViewport();
 	}
 
-	#updateLine(_live: LiveLine): void
-	{
-		if (!isTTY)
-		{
-			return;
-		}
-
-		this.#renderViewport();
-	}
-
 	#viewportRenderedLines = 0;
 
 	#renderViewport(): void
 	{
+		this.#startSpinner();
+
 		const total = this.#lines.length;
 		const visibleCount = Math.min(total, this.#viewportHeight);
 
-		// Visible test lines (tail of the list)
-		const startIndex = total - visibleCount;
+		// Follow the active line: keep the window so the just-touched test is visible
+		// (placed near the bottom, with completed tests above for context). When lines
+		// are only appended (first browser) this collapses to the usual tail view.
+		const anchor = this.#activeRow >= 0 ? this.#activeRow : total - 1;
+		// Put the anchor on the last row of the window, then clamp to list bounds.
+		let startIndex = anchor - visibleCount + 1;
+		startIndex = Math.max(0, Math.min(startIndex, total - visibleCount));
+
 		const visibleLines: string[] = [];
-		for (let i = startIndex; i < total; i++)
+		for (let i = startIndex; i < startIndex + visibleCount; i++)
 		{
 			visibleLines.push(this.#formatLine(this.#lines[i]));
 		}
@@ -368,7 +503,42 @@ export class TestReporter
 
 	#formatStatusBar(): string
 	{
-		const total = this.#passed + this.#failed + this.#pending;
+		const elapsed = formatDuration(Date.now() - this.#startTime);
+
+		// Multi-browser run (engines run sequentially): show every engine's state at
+		// once — done (✓), running (◌ N/total), or waiting (○). This is clearer than a
+		// single overall counter, which freezes once an engine reruns already-counted
+		// specs.
+		if (this.#allBrowsers.length > 1)
+		{
+			const total = this.#totalTests;
+			const of = total > 0 ? `/${total}` : '';
+			const segments = this.#allBrowsers.map((name) => {
+				const done = this.#browserProgress.get(name) ?? 0;
+				const isDone = total > 0 && done >= total;
+				const isActive = name === this.#currentBrowser && !isDone;
+
+				if (isDone)
+				{
+					// Keep the count on finished engines too (e.g. "✓ Chromium 9/9").
+					return `${chalk.green('✓')} ${chalk.dim(name)} ${chalk.dim(`${done}${of}`)}`;
+				}
+				if (isActive)
+				{
+					const spinner = isTTY
+						? SPINNER_COLORS[this.#spinnerFrame % SPINNER_COLORS.length]('○')
+						: chalk.cyan('○');
+					return `${spinner} ${chalk.cyan(name)} ${done}${of}`;
+				}
+				return `${chalk.gray('○')} ${chalk.gray(name)}`;
+			});
+
+			return `${PREFIX} ${segments.join(chalk.gray('  ·  '))} ${chalk.gray('·')} ${elapsed}`;
+		}
+
+		// Single browser: simple "✓ N of total" counter.
+		const finished = this.#passed + this.#failed + this.#pending;
+		const total = this.#totalTests > 0 ? this.#totalTests : finished;
 		const parts: string[] = [];
 
 		if (this.#passed > 0)
@@ -384,27 +554,21 @@ export class TestReporter
 			parts.push(chalk.yellow(`○ ${this.#pending}`));
 		}
 
-		const elapsed = formatDuration(Date.now() - this.#startTime);
-
 		return `${PREFIX} ${parts.join(chalk.gray('  '))} ${chalk.gray(`of ${total}`)} ${chalk.gray('·')} ${elapsed}`;
 	}
 
 	#formatLine(live: LiveLine): string
 	{
 		const { status, fullPath, duration, browsers } = live;
-		const isComplete = browsers.size >= this.#expectedBrowsers;
 
+		// Each line is one finished run in one engine, so it shows its final status
+		// immediately — no pending "◌ waiting for the other browsers" state.
 		const durationStr = typeof duration === 'number'
 			? ' ' + formatDuration(duration)
 			: '';
 		const browserTag = browsers.size > 0
 			? ' ' + formatBrowserTag(browsers)
 			: '';
-
-		if (!isComplete && status !== 'pending')
-		{
-			return `${PREFIX} ${chalk.gray('◌')} ${chalk.dim(fullPath)}${durationStr}${browserTag}`;
-		}
 
 		if (status === 'passed')
 		{
@@ -462,8 +626,10 @@ export class TestReporter
 		return [...groups.values()];
 	}
 
-	finish(consoleLogs: ConsoleLog[] = []): { passed: number; failed: number; failures: FailedTestGroup[] }
+	finish(consoleLogs: ConsoleLog[] = []): { passed: number; failed: number; failures: FailedTestGroup[]; browsers: Array<{ name: string; passed: number; failed: number }> }
 	{
+		this.#stopSpinner();
+
 		const wallTime = Date.now() - this.#startTime;
 		const total = this.#passed + this.#failed + this.#pending;
 		const failures = this.#groupFailedTests();
@@ -472,20 +638,25 @@ export class TestReporter
 		// (empty describe blocks, suites without any tests).
 		this.#onStatus('');
 
-		// Clear live viewport and print full report
-		if (isTTY && this.#viewportRenderedLines > 0)
+		// In TTY the live viewport showed only a scrolling window, so clear it and
+		// reprint the full list. In non-TTY every line was already streamed as it
+		// arrived (#appendLine), so reprinting here would duplicate the whole list.
+		if (isTTY)
 		{
-			// Move to start of viewport block and clear everything below
-			process.stdout.write(`\x1B[${this.#viewportRenderedLines - 1}A\r\x1B[0J`);
-			this.#viewportRenderedLines = 0;
+			if (this.#viewportRenderedLines > 0)
+			{
+				// Move to start of viewport block and clear everything below
+				process.stdout.write(`\x1B[${this.#viewportRenderedLines - 1}A\r\x1B[0J`);
+				this.#viewportRenderedLines = 0;
 
-			// Show cursor again
-			process.stdout.write('\x1B[?25h');
-		}
+				// Show cursor again
+				process.stdout.write('\x1B[?25h');
+			}
 
-		for (const live of this.#lines)
-		{
-			process.stdout.write(this.#formatLine(live) + '\n');
+			for (const live of this.#lines)
+			{
+				process.stdout.write(this.#formatLine(live) + '\n');
+			}
 		}
 
 		const lines: string[] = [];
@@ -604,6 +775,14 @@ export class TestReporter
 		lines.push('');
 		console.log(lines.join('\n'));
 
-		return { passed: this.#passed, failed: this.#failed, failures };
+		// Per-browser breakdown, in run order (falls back to insertion order).
+		const orderedBrowsers = this.#allBrowsers.length > 0
+			? this.#allBrowsers
+			: [...this.#browserStats.keys()];
+		const browsers = orderedBrowsers
+			.filter((name) => this.#browserStats.has(name))
+			.map((name) => ({ name, ...this.#browserStats.get(name)! }));
+
+		return { passed: this.#passed, failed: this.#failed, failures, browsers };
 	}
 }

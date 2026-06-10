@@ -20,7 +20,7 @@ interface TaskResult
 	title: string;
 	status: TaskStatus;
 	details?: TaskDetail[];
-	metrics?: { passed: number; failed: number; failures?: TaskFailure[] };
+	metrics?: { passed: number; failed: number; failures?: TaskFailure[]; browsers?: Array<{ name: string; passed: number; failed: number }> };
 }
 
 interface Task
