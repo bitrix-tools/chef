@@ -188,11 +188,12 @@ function collectIssues(results: TaskGroupResult[]): ExtensionIssues[]
 export function printSummary(
 	results: TaskGroupResult[],
 	startTime: number,
-	options: { isTestRun?: boolean } = {},
+	options: { isTestRun?: boolean; unitLabel?: string } = {},
 ): void
 {
 	const hasMetrics = results.some((g) => g.results.some((t) => t.metrics !== undefined));
 	const isTestRun = options.isTestRun ?? hasMetrics;
+	const unitLabel = options.unitLabel ?? 'Extensions';
 
 	if (!isTestRun && results.length <= 1)
 	{
@@ -240,9 +241,12 @@ export function printSummary(
 		}
 	}
 
-	const passed = results.filter((r) => r.failed === 0 && r.warnings === 0).length;
 	const failed = results.filter((r) => r.failed > 0).length;
 	const warned = results.filter((r) => r.failed === 0 && r.warnings > 0).length;
+	// A group with no passed tasks and nothing but skipped ones (e.g. a module
+	// or extension that has no test files) is "skipped", not a green "passed".
+	const skipped = results.filter((r) => r.failed === 0 && r.warnings === 0 && r.passed === 0 && r.skipped > 0).length;
+	const passed = results.length - failed - warned - skipped;
 
 	const summaryParts: string[] = [];
 	if (passed > 0)
@@ -257,8 +261,12 @@ export function printSummary(
 	{
 		summaryParts.push(chalk.yellow(pluralize(' warning', warned)));
 	}
+	if (skipped > 0)
+	{
+		summaryParts.push(chalk.gray(`${skipped} skipped`));
+	}
 
-	const total = passed + failed + warned;
+	const total = passed + failed + warned + skipped;
 	const duration = formatElapsed(Date.now() - startTime);
 
 	let testsPassed = 0;
@@ -292,7 +300,7 @@ export function printSummary(
 
 	console.log('');
 	console.log(`   ${chalk.gray('-'.repeat(60))}`);
-	console.log(`   ${chalk.bold('Extensions'.padEnd(LABEL_WIDTH))}${summaryParts.join(chalk.gray(' | '))} ${chalk.gray(`(${total})`)}`);
+	console.log(`   ${chalk.bold(unitLabel.padEnd(LABEL_WIDTH))}${summaryParts.join(chalk.gray(' | '))} ${chalk.gray(`(${total})`)}`);
 
 	if (isTestRun)
 	{

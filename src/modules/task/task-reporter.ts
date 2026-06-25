@@ -100,6 +100,7 @@ export class TaskReporter
 	#passed = 0;
 	#failed = 0;
 	#warnings = 0;
+	#skipped = 0;
 
 	constructor(
 		groupTitle: string,
@@ -161,6 +162,10 @@ export class TaskReporter
 		{
 			this.#warnings++;
 		}
+		else if (result.status === 'skipped')
+		{
+			this.#skipped++;
+		}
 
 		console.log(`${this.#taskPrefix}${statusIcon(result.status)} ${result.title}`);
 
@@ -183,7 +188,7 @@ export class TaskReporter
 		this.#printTitle();
 
 		const duration = Date.now() - this.#startTime;
-		const total = this.#passed + this.#failed + this.#warnings;
+		const total = this.#passed + this.#failed + this.#warnings + this.#skipped;
 
 		if (total > 1 && this.#showSummary)
 		{
@@ -206,6 +211,11 @@ export class TaskReporter
 				summaryParts.push(chalk.yellow(`${this.#warnings} warnings`));
 			}
 
+			if (this.#skipped > 0)
+			{
+				summaryParts.push(chalk.gray(`${this.#skipped} skipped`));
+			}
+
 			console.log(`${this.#taskPrefix}${chalk.bold('Tasks')}  ${summaryParts.join(chalk.gray(' | '))} ${chalk.gray(`(${total})`)}`);
 			console.log(`${this.#taskPrefix} ${chalk.bold('Time')}  ${formatDuration(duration)}`);
 		}
@@ -218,6 +228,7 @@ export class TaskReporter
 			passed: this.#passed,
 			failed: this.#failed,
 			warnings: this.#warnings,
+			skipped: this.#skipped,
 			duration,
 		};
 	}

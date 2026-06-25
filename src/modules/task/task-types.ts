@@ -44,6 +44,7 @@ interface TaskGroupResult
 	passed: number;
 	failed: number;
 	warnings: number;
+	skipped: number;
 	duration: number;
 }
 
