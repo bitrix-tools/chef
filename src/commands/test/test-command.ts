@@ -10,6 +10,8 @@ import { createShutdown } from '../../utils/create-shutdown';
 import { TaskRunner } from '../../modules/task/task-runner';
 import { runUnitTestsTask } from './tasks/run-unit-tests-task';
 import { runEndToEndTestsTask } from './tasks/run-e2e-tests-task';
+import { runModuleTestsTask } from './tasks/run-module-tests-task';
+import { detectCurrentModule, getModuleTestsDirectory, runModuleEndToEndTests } from './module-tests-dir';
 import { TeamcityReporter } from '../../modules/engines/test/teamcity-reporter';
 import { findPlaywrightConfig, getBrowsersFromConfig } from '../../modules/engines/test/unit/playwright/find-playwright-config';
 import { PlaywrightUnitStrategy } from '../../modules/engines/test/unit/playwright/playwright-unit-strategy';
@@ -23,7 +25,7 @@ import { createReporterOption } from '../../shared/options/reporter-option';
 
 import type { BasePackage } from '../../modules/packages/base-package';
 import type { Task, TaskGroupResult } from '../../modules/task/task-types';
-import type { BrowserType } from '../../modules/engines/test/test-types';
+import type { BrowserType, TestToken } from '../../modules/engines/test/test-types';
 import type { FSWatcher } from 'chokidar';
 
 type RunTestsOptions = {
@@ -350,6 +352,168 @@ const commonOptions = (cmd: Command) => cmd
 	.option('--console', 'Print captured browser console output for each extension')
 	.option('--cdp-port <port>', 'Launch browser with Chrome DevTools Protocol on this port', parseInt);
 
+function resolveModules(rawModules: string[]): { modules: string[]; file?: string }
+{
+	const { extensions: moduleArgs, file } = splitExtensionsAndFile(rawModules);
+
+	// No module given → use the one the cwd belongs to.
+	if (moduleArgs.length === 0)
+	{
+		const current = detectCurrentModule();
+		if (!current)
+		{
+			console.log('');
+			console.log('Specify a module: chef test module <module...> (or run inside a module directory).');
+			process.exit(1);
+		}
+
+		return { modules: [current], file };
+	}
+
+	return { modules: moduleArgs, file };
+}
+
+function runModuleTestsTeamcity(modules: string[], args: Record<string, any>): void
+{
+	const reporter = new TeamcityReporter();
+
+	void (async () => {
+		for (const moduleName of modules)
+		{
+			// eslint-disable-next-line no-await-in-loop
+			await runModuleEndToEndTests(moduleName, {
+				...args,
+				onToken: (token: TestToken, browser?: string) => reporter.handleToken(token, browser),
+			});
+		}
+
+		reporter.finish();
+
+		await new Promise<void>((resolve) => {
+			process.stdout.write('', () => resolve());
+		});
+	})();
+}
+
+async function runModuleTests(rawModules: string[], args: Record<string, any>): Promise<void>
+{
+	const { modules, file } = resolveModules(rawModules);
+	const moduleArgs = { ...args, file };
+
+	if (args.reporter === 'json')
+	{
+		console.log('');
+		console.log('The json reporter is not supported for module tests yet. Use the default or teamcity reporter.');
+		process.exit(2);
+	}
+
+	if (args.reporter === 'teamcity')
+	{
+		return runModuleTestsTeamcity(modules, moduleArgs);
+	}
+
+	const runModule = async (moduleName: string): Promise<TaskGroupResult> => TaskRunner.run({
+		title: moduleName,
+		tasks: [runModuleTestsTask(moduleName, moduleArgs)],
+		showSummary: false,
+		suppressErrorDetails: true,
+	});
+
+	if (args.watch)
+	{
+		await runModuleTestsWatch(modules, runModule);
+		return;
+	}
+
+	const testResults: TaskGroupResult[] = [];
+	const startTime = Date.now();
+
+	for (const moduleName of modules)
+	{
+		// eslint-disable-next-line no-await-in-loop
+		testResults.push(await runModule(moduleName));
+	}
+
+	printSummary(testResults, startTime, { isTestRun: true, unitLabel: 'Modules' });
+	process.exit(0);
+}
+
+async function runModuleTestsWatch(
+	modules: string[],
+	runModule: (moduleName: string) => Promise<TaskGroupResult>,
+): Promise<void>
+{
+	const chokidar = await import('chokidar');
+	const watchers: FSWatcher[] = [];
+
+	for (const moduleName of modules)
+	{
+		// eslint-disable-next-line no-await-in-loop
+		await runModule(moduleName);
+
+		const watcher = chokidar.watch(getModuleTestsDirectory(moduleName), {
+			ignoreInitial: true,
+			ignored: ['**/*.map', '**/dist/**'],
+		});
+		watchers.push(watcher);
+
+		let running = false;
+		let pendingRerun = false;
+		let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+		const rerun = async (): Promise<void> => {
+			running = true;
+			await runModule(moduleName);
+			running = false;
+
+			if (pendingRerun)
+			{
+				pendingRerun = false;
+				void rerun();
+			}
+		};
+
+		watcher.on('change', () => {
+			if (debounceTimer)
+			{
+				clearTimeout(debounceTimer);
+			}
+
+			debounceTimer = setTimeout(() => {
+				debounceTimer = null;
+
+				if (running)
+				{
+					pendingRerun = true;
+					return;
+				}
+
+				void rerun();
+			}, 300);
+		});
+	}
+
+	console.log(modules.length === 1
+		? `\n${chalk.green('✔')} Watcher started`
+		: `\n${chalk.green('✔')} Watcher started for ${modules.length} modules`);
+
+	const shutdown = createShutdown(async () => {
+		console.log('\nWatcher stopped...');
+		for await (const watcher of watchers)
+		{
+			await watcher.close();
+		}
+		console.log('Goodbye!');
+	});
+
+	process.on('SIGINT', shutdown);
+	process.on('SIGTERM', shutdown);
+	if (process.platform !== 'win32')
+	{
+		process.on('SIGTSTP', shutdown);
+	}
+}
+
 export const testCommand = new Command('test');
 
 testCommand
@@ -400,6 +564,17 @@ commonOptions(e2eCommand)
 		runTests({ extensions, args: { ...args, file }, type: 'e2e' });
 	});
 
+const moduleCommand = new Command('module')
+	.description('Run module-level scenario e2e tests from <module>/tests/chef/e2e')
+	.argument('[modules...]', 'Modules to test (e.g. crm sale); defaults to the current module');
+
+commonOptions(moduleCommand)
+	.action((rawArgs: string[], _opts, command: Command): void => {
+		const args = command.optsWithGlobals();
+		runModuleTests(rawArgs, args);
+	});
+
 testCommand
 	.addCommand(unitCommand)
-	.addCommand(e2eCommand);
+	.addCommand(e2eCommand)
+	.addCommand(moduleCommand);
