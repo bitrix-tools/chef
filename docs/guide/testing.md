@@ -1,6 +1,6 @@
 # Тестирование
 
-Chef запускает тесты в реальном браузере через [Playwright](https://playwright.dev/). Поддерживаются два вида тестов: unit-тесты ([Mocha](https://mochajs.org/) + [Chai](https://www.chaijs.com/)) и E2E-тесты (Playwright Test API).
+Chef запускает тесты в реальном браузере через [Playwright](https://playwright.dev/). Поддерживаются два вида тестов: unit-тесты ([Mocha](https://mochajs.org/) + [Chai](https://www.chaijs.com/)) и E2E-тесты (Playwright Test API). E2E-тесты можно писать как для отдельного расширения, так и на уровне модуля — для [сценариев](/guide/testing-module), в которых участвует сразу несколько расширений.
 
 ## Подготовка
 
@@ -61,6 +61,9 @@ chef test unit vendor.my-extension
 # Только e2e-тесты
 chef test e2e vendor.my-extension
 
+# Сценарные тесты уровня модуля (несколько расширений)
+chef test module crm
+
 # Конкретный файл
 chef test unit vendor.my-extension ./utils.test.ts
 
@@ -110,6 +113,8 @@ chef test im.v2.** --console
 | `— Unit tests (no test files)` | В директории `test/unit/` (или `test/`) нет `*.test.{ts,js}` |
 | `— E2E tests (no test files)` | То же для e2e |
 
+Расширение или модуль, у которого нет тестов, помечается как `skipped` (не `passed`) — в сводке отдельной цифрой.
+
 ### Сводка в конце
 
 После прогона chef печатает агрегированный отчёт:
@@ -117,7 +122,7 @@ chef test im.v2.** --console
 - **Failed Tests (N)** — все упавшие тесты со стек-трейсами и code frame, сгруппированные по расширениям.
 - **Errors (N)** — ошибки сборки и runtime-крэши, по одной строке на причину.
 - **Issues** — список расширений с количеством ошибок/предупреждений.
-- **Extensions / Tests / Time** — общие цифры: сколько расширений и тестов прошло/упало, сколько заняло.
+- **Extensions / Tests / Time** — общие цифры: сколько расширений и тестов прошло, упало или было пропущено, сколько заняло. Для `chef test module` строка называется **Modules**.
 
 ## Советы
 

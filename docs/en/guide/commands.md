@@ -45,11 +45,13 @@ Run unit and E2E tests via Playwright.
 chef test [extensions...] [options]        # unit + e2e
 chef test unit [extensions...] [file?]     # unit only
 chef test e2e [extensions...] [file?]      # e2e only
+chef test module [modules...] [options]    # module-level scenario tests
 ```
 
 | Option | Description |
 |--------|-------------|
 | `extensions` | Extension names or glob patterns |
+| `modules` | For `module` only — module names (defaults to the module of the current directory) |
 | `file` | For `unit`/`e2e` only — test file name (`dom.test.ts`) |
 | `-w, --watch` | Watch for changes and rerun tests |
 | `-p, --path [path]` | Test a specific directory |
@@ -71,7 +73,11 @@ chef test main.core --debug                       # Debug with DevTools
 chef test --grep "should render"                  # Filter by name
 chef test main.core --project chromium firefox    # Specific browsers
 chef test main.core --console                     # With browser console output
+chef test module crm                              # Scenario tests for the crm module
+chef test module                                  # Module of the current directory
 ```
+
+The `module` subcommand runs module-level E2E scenario tests — for checks that involve several extensions at once. See [Scenario Tests](/en/guide/testing-module) for details.
 
 ## chef typecheck
 

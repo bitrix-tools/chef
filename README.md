@@ -60,7 +60,7 @@ chef build my.extension
 | Команда | Описание |
 |---------|----------|
 | `chef build` | Сборка расширений (TypeScript, Babel, PostCSS) |
-| `chef test` | Запуск unit и E2E тестов (подкоманды `unit`/`e2e` для раздельного запуска) |
+| `chef test` | Запуск unit и E2E тестов (подкоманды `unit`/`e2e`/`module` для раздельного запуска) |
 | `chef typecheck` | Проверка типов TypeScript в расширениях |
 | `chef lint` | Линтинг расширений через ESLint |
 | `chef diag` | Диагностика: зависимости, размеры бандлов, циклы, неиспользуемые расширения |
@@ -264,6 +264,7 @@ chef test main.core -w                    # Watch-режим
 chef test --grep "should render"          # Фильтр по имени теста
 chef test main.core --debug               # Открыть браузер с DevTools и sourcemaps
 chef test main.core --project chromium    # Запуск только в конкретном браузере
+chef test module crm                      # Сценарные тесты модуля (несколько расширений)
 ```
 
 <br>

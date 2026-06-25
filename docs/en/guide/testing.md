@@ -1,6 +1,6 @@
 # Testing
 
-Chef runs tests in a real browser via [Playwright](https://playwright.dev/). Two types of tests are supported: unit tests ([Mocha](https://mochajs.org/) + [Chai](https://www.chaijs.com/)) and E2E tests (Playwright Test API).
+Chef runs tests in a real browser via [Playwright](https://playwright.dev/). Two types of tests are supported: unit tests ([Mocha](https://mochajs.org/) + [Chai](https://www.chaijs.com/)) and E2E tests (Playwright Test API). E2E tests can be written for a single extension or at the module level — for [scenarios](/en/guide/testing-module) that span several extensions.
 
 ## Setup
 
@@ -61,6 +61,9 @@ chef test unit vendor.my-extension
 # E2E tests only
 chef test e2e vendor.my-extension
 
+# Module-level scenario tests (several extensions)
+chef test module crm
+
 # Specific file
 chef test unit vendor.my-extension ./utils.test.ts
 
@@ -110,6 +113,8 @@ Chef shows the failure reason inline next to each extension:
 | `— Unit tests (no test files)` | No `*.test.{ts,js}` in the `test/unit/` (or `test/`) directory |
 | `— E2E tests (no test files)` | Same for e2e |
 
+An extension or module with no tests is marked `skipped` (not `passed`) — counted separately in the summary.
+
 ### Final Summary
 
 After the run chef prints an aggregated report:
@@ -117,7 +122,7 @@ After the run chef prints an aggregated report:
 - **Failed Tests (N)** — all failed tests with stack traces and code frames, grouped by extension.
 - **Errors (N)** — build errors and runtime crashes, one line per cause.
 - **Issues** — list of extensions with error/warning counts.
-- **Extensions / Tests / Time** — totals: how many extensions and tests passed/failed, how long it took.
+- **Extensions / Tests / Time** — totals: how many extensions and tests passed, failed or were skipped, how long it took. For `chef test module` the line is labeled **Modules**.
 
 ## Tips
 

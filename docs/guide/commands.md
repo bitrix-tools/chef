@@ -45,11 +45,13 @@ chef build ui.buttons --production # Production-сборка
 chef test [extensions...] [options]        # unit + e2e
 chef test unit [extensions...] [file?]     # только unit
 chef test e2e [extensions...] [file?]      # только e2e
+chef test module [modules...] [options]    # сценарные тесты уровня модуля
 ```
 
 | Параметр | Описание |
 |----------|----------|
 | `extensions` | Имена расширений или glob-паттерны |
+| `modules` | Только для `module` — имена модулей (по умолчанию — модуль из текущей директории) |
 | `file` | Только для `unit`/`e2e` — имя файла с тестами (`dom.test.ts`) |
 | `-w, --watch` | Отслеживать изменения и перезапускать тесты |
 | `-p, --path [path]` | Тестировать конкретную директорию |
@@ -71,7 +73,11 @@ chef test main.core --debug                       # Отладка с DevTools
 chef test --grep "should render"                  # Фильтрация по имени
 chef test main.core --project chromium firefox    # Конкретные браузеры
 chef test main.core --console                     # С консольным выводом браузера
+chef test module crm                              # Сценарные тесты модуля crm
+chef test module                                  # Модуль из текущей директории
 ```
+
+Подкоманда `module` запускает сценарные E2E-тесты уровня модуля — для проверок, в которых участвует сразу несколько расширений. Подробнее в разделе [Сценарные тесты](/guide/testing-module).
 
 ## chef typecheck
 

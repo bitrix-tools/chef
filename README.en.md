@@ -60,7 +60,7 @@ chef build my.extension
 | Command | Description |
 |---------|-------------|
 | `chef build` | Build extensions (TypeScript, Babel, PostCSS) |
-| `chef test` | Run unit and E2E tests (use `unit`/`e2e` subcommands to run separately) |
+| `chef test` | Run unit and E2E tests (use `unit`/`e2e`/`module` subcommands to run separately) |
 | `chef typecheck` | Check TypeScript types in extensions |
 | `chef lint` | Lint extensions with ESLint |
 | `chef diag` | Diagnostics: dependencies, bundle sizes, cycles, unused extensions |
@@ -300,6 +300,7 @@ chef test main.core -w                    # Watch mode
 chef test --grep "should render"          # Filter by test name
 chef test main.core --debug               # Open browser with DevTools and sourcemaps
 chef test main.core --project chromium    # Run in specific browser only
+chef test module crm                      # Module-level scenario tests (several extensions)
 ```
 
 ### Test file structure
@@ -352,9 +353,11 @@ Note: In zsh, escape glob patterns to prevent shell expansion: chef build ui.\*
 chef test [extensions...] [options]        # unit + e2e
 chef test unit [extensions...] [file?]     # unit only
 chef test e2e [extensions...] [file?]      # e2e only
+chef test module [modules...] [options]    # module-level scenario tests
 
 Arguments:
   extensions               Extension names or glob patterns (e.g. main.core ui.bbcode.*)
+  modules                  module only — module names (defaults to the current directory's module)
   file                     unit/e2e only — test file name (e.g. dom.test.ts)
 
 Options:
