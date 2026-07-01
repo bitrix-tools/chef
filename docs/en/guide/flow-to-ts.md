@@ -12,7 +12,7 @@ The command finds all extensions in the current directory and for each one:
 
 1. Renames `.js` → `.ts` via `hg rename`
 2. Converts Flow syntax to TypeScript
-3. Updates `bundle.config.js` → `bundle.config.ts` with the new entry point
+3. Updates `bundle.config.js` → `bundle.config.ts` with the new entry point and replaces `module.exports` with `export default`
 
 ## Options
 

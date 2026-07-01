@@ -12,7 +12,7 @@ chef flow-to-ts
 
 1. Переименует `.js` → `.ts` через `hg rename`
 2. Конвертирует синтаксис Flow в TypeScript
-3. Обновит `bundle.config.js` → `bundle.config.ts` с новой точкой входа
+3. Обновит `bundle.config.js` → `bundle.config.ts` с новой точкой входа и заменит `module.exports` на `export default`
 
 ## Параметры
 

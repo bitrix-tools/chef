@@ -127,6 +127,25 @@ flowToTsCommand
 								};
 							},
 						},
+						{
+							title: 'Convert bundle config export...',
+							run: async (): Promise<TaskResult> => {
+								const result = await migrator.convertBundleConfigExport();
+
+								if (result.converted)
+								{
+									return {
+										title: 'Bundle config export converted to export default',
+										status: 'passed',
+									};
+								}
+
+								return {
+									title: 'Bundle config already uses export default',
+									status: 'warning',
+								};
+							},
+						},
 					];
 
 					await TaskRunner.run({
