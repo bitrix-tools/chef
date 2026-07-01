@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.18.0 <Badge type="tip" text="7/1/2026" />
+
+Flow-to-TypeScript migration now converts module.exports to export default in bundle.config. All files created by chef (templates, aliases.tsconfig.json, migration output) end with a trailing newline
+
 ## v1.17.1 <Badge type="tip" text="7/1/2026" />
 
 Docs for multi-user e2e tests: defining multiple users in .env.test and selecting them via test.use({ user }) and loginAs

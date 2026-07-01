@@ -1,5 +1,9 @@
 # История изменений
 
+## v1.18.0 <Badge type="tip" text="01.07.2026" />
+
+Миграция Flow→TypeScript теперь конвертирует module.exports в export default в bundle.config. Все создаваемые chef файлы (шаблоны, aliases.tsconfig.json, результат миграции) заканчиваются пустой строкой
+
 ## v1.17.1 <Badge type="tip" text="01.07.2026" />
 
 Документация по multi-user e2e-тестам: как задавать нескольких пользователей в .env.test и выбирать их в тестах через test.use({ user }) и loginAs
