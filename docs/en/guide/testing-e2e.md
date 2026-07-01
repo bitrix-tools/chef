@@ -83,6 +83,60 @@ test('admin panel is accessible', async ({ page }) => {
 });
 ```
 
+### Testing as Different Users
+
+Sometimes the same behavior needs to be checked under different accounts — for example, that an element is visible to an administrator but not available to a regular employee. To do this, add extra users to `.env.test`: a `LOGIN_<ID>` / `PASSWORD_<ID>` pair per user. The `<ID>` is the suffix in the variable name (its case doesn't matter; you select the user by that same identifier in the test).
+
+```
+BASE_URL=http://your-local-bitrix.test
+
+# default (for example, an administrator)
+LOGIN=admin
+PASSWORD=admin-password
+
+# additional user
+LOGIN_MANAGER=manager
+PASSWORD_MANAGER=manager-password
+```
+
+**A whole block of tests as a given user** — via `test.use({ user })`:
+
+```ts
+import { test, expect } from 'ui.test.e2e.auth';
+
+test.describe('The section as a regular employee', () => {
+  test.use({ user: 'manager' });
+
+  test('the settings button is unavailable to a non-admin', async ({ page }) => {
+    await page.goto('/settings/');
+
+    await expect(page.locator('.settings-button')).toHaveCount(0);
+  });
+});
+```
+
+Blocks without `test.use` keep running as the default user (`LOGIN` / `PASSWORD`) — existing tests need no changes.
+
+**Two users in a single test** — via `loginAs`, which opens a page as another user in a separate browser context. This is useful for "one user did something, another sees it" scenarios:
+
+```ts
+import { test, expect } from 'ui.test.e2e.auth';
+
+test('an admin change is visible to an employee', async ({ page, loginAs }) => {
+  // page is the default user (the administrator)
+  await page.goto('/settings/');
+  await page.click('.publish-button');
+
+  // the employee opens the same page in their own context
+  const managerPage = await loginAs('manager');
+  await managerPage.goto('/settings/');
+
+  await expect(managerPage.locator('.published-banner')).toBeVisible();
+});
+```
+
+The context opened via `loginAs` is closed automatically when the test finishes.
+
 ### Working with Forms
 
 ```ts

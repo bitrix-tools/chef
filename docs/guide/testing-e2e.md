@@ -83,6 +83,60 @@ test('admin panel is accessible', async ({ page }) => {
 });
 ```
 
+### Тесты под разными пользователями
+
+Иногда одно и то же поведение нужно проверить под разными учётными записями — например, что элемент виден администратору, но недоступен обычному сотруднику. Для этого в `.env.test` добавляются дополнительные пользователи: пара `LOGIN_<ID>` / `PASSWORD_<ID>` на каждого. Идентификатор `<ID>` — суффикс в имени переменной (регистр в имени переменной не важен, в тесте пользователь указывается по этому же идентификатору).
+
+```
+BASE_URL=http://your-local-bitrix.test
+
+# по умолчанию (например, администратор)
+LOGIN=admin
+PASSWORD=admin-password
+
+# дополнительный пользователь
+LOGIN_MANAGER=manager
+PASSWORD_MANAGER=manager-password
+```
+
+**Весь блок тестов под выбранным пользователем** — через `test.use({ user })`:
+
+```ts
+import { test, expect } from 'ui.test.e2e.auth';
+
+test.describe('Раздел глазами обычного сотрудника', () => {
+  test.use({ user: 'manager' });
+
+  test('кнопка настроек недоступна не-администратору', async ({ page }) => {
+    await page.goto('/settings/');
+
+    await expect(page.locator('.settings-button')).toHaveCount(0);
+  });
+});
+```
+
+Блоки без `test.use` продолжают работать под пользователем по умолчанию (`LOGIN` / `PASSWORD`) — существующие тесты менять не нужно.
+
+**Двух пользователей в одном тесте** — через `loginAs`, который открывает страницу под другим пользователем в отдельном контексте браузера. Это нужно для сценариев «один пользователь что-то сделал — другой это увидел»:
+
+```ts
+import { test, expect } from 'ui.test.e2e.auth';
+
+test('изменение администратора видно сотруднику', async ({ page, loginAs }) => {
+  // page — пользователь по умолчанию (администратор)
+  await page.goto('/settings/');
+  await page.click('.publish-button');
+
+  // сотрудник открывает ту же страницу в своём контексте
+  const managerPage = await loginAs('manager');
+  await managerPage.goto('/settings/');
+
+  await expect(managerPage.locator('.published-banner')).toBeVisible();
+});
+```
+
+Контекст, открытый через `loginAs`, автоматически закрывается по завершении теста.
+
 ### Работа с формами
 
 ```ts
