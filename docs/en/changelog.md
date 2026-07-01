@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.17.1 <Badge type="tip" text="7/1/2026" />
+
+Docs for multi-user e2e tests: defining multiple users in .env.test and selecting them via test.use({ user }) and loginAs
+
 ## v1.17.0 <Badge type="tip" text="6/25/2026" />
 
 Added the chef test module command for module-level E2E scenario tests — for checks that span several extensions at once. Tests live in the module's tests/chef/e2e/; on an installed Bitrix they are looked up under local/modules/. Extensions and modules with no tests are now reported as skipped instead of passed.
