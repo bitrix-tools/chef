@@ -119,6 +119,7 @@ export class FlowToTsStrategy extends MigrationStrategy
 		const regexVoidToUndefined = /(\w+)\s+\|\snull\s\|\svoid/g;
 		formatted = formatted.replace(regexVoidToUndefined, '$1 | null | undefined');
 
-		return formatted;
+		// Every generated file ends with a single trailing newline.
+		return `${formatted}\n`;
 	}
 }

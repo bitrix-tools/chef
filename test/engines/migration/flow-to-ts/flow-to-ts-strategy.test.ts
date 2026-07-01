@@ -11,7 +11,12 @@ async function migrate(source: string): Promise<string>
 	const result = await strategy.migrate({ code: source });
 	assert.isTrue(result.success);
 
-	return result.code;
+	// Generated files always end with a single trailing newline. Assert it here so
+	// every case covers it, then strip it so the assertions can compare against the
+	// `code` helper (which trims trailing whitespace).
+	assert.match(result.code, /[^\n]\n$/, 'converted code must end with a single trailing newline');
+
+	return result.code.replace(/\n$/, '');
 }
 
 describe('FlowToTsStrategy', () => {

@@ -82,6 +82,26 @@ describe('AliasGenerator', () => {
 			assert.property(aliases.compilerOptions.paths, 'main.core');
 			assert.property(aliases.compilerOptions.paths, 'ui.buttons');
 		});
+
+		it('should end the file with a trailing newline', async () => {
+			const aliasesPath = path.join(tmpDir, 'aliases.tsconfig.json');
+			await fs.writeFile(aliasesPath, JSON.stringify({
+				compilerOptions: {
+					baseUrl: tmpDir,
+					paths: {},
+				},
+			}));
+
+			const generator = new AliasGenerator();
+			await generator.addAlias({
+				rootPath: tmpDir,
+				extensionName: 'ui.buttons',
+				packagePath: path.join(tmpDir, 'ui', 'buttons'),
+			});
+
+			const raw = await fs.readFile(aliasesPath, 'utf8');
+			assert.match(raw, /[^\n]\n$/, 'aliases.tsconfig.json must end with a single trailing newline');
+		});
 	});
 
 	describe('update', () => {
@@ -146,6 +166,18 @@ describe('AliasGenerator', () => {
 
 			assert.isEmpty(result.added);
 			assert.isEmpty(result.removed);
+		});
+
+		it('should end the file with a trailing newline', async () => {
+			const generator = new AliasGenerator();
+			await generator.update({
+				rootPath: tmpDir,
+				added: [],
+				removed: [],
+			});
+
+			const raw = await fs.readFile(aliasesPath, 'utf8');
+			assert.match(raw, /[^\n]\n$/, 'aliases.tsconfig.json must end with a single trailing newline');
 		});
 	});
 });

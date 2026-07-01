@@ -71,7 +71,7 @@ export class AliasGenerator
 		});
 
 		const filePath = path.join(rootPath, 'aliases.tsconfig.json');
-		await fs.writeFile(filePath, JSON.stringify(tsconfig, null, 4));
+		await fs.writeFile(filePath, `${JSON.stringify(tsconfig, null, 4)}\n`);
 
 		return { aliasesCount, filePath };
 	}
@@ -118,7 +118,7 @@ export class AliasGenerator
 			}
 		}
 
-		await fs.writeFile(filePath, JSON.stringify(aliases, null, 4));
+		await fs.writeFile(filePath, `${JSON.stringify(aliases, null, 4)}\n`);
 
 		return { added: addedNames, removed: removedNames, filePath };
 	}
@@ -136,7 +136,7 @@ export class AliasGenerator
 			aliases.compilerOptions ??= {};
 			aliases.compilerOptions.paths ??= {};
 			aliases.compilerOptions.paths[extensionName] = [relPath];
-			await fs.writeFile(aliasesPath, JSON.stringify(aliases, null, 4));
+			await fs.writeFile(aliasesPath, `${JSON.stringify(aliases, null, 4)}\n`);
 
 			return true;
 		}

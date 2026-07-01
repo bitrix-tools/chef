@@ -45,6 +45,34 @@ describe('chef create', () => {
 		assert.isTrue(fs.existsSync(path.join(extPath, 'src')));
 	});
 
+	it('should end every generated file with a trailing newline', async () => {
+		const { exitCode } = await runChef(
+			['create', 'local.newline-ext'],
+			{ cwd: tmpProject },
+		);
+
+		assert.equal(exitCode, 0);
+
+		const extPath = path.join(tmpProject, 'local/js/local/newline-ext');
+		const files = fs.readdirSync(extPath, { recursive: true, withFileTypes: true })
+			.filter((entry) => entry.isFile())
+			.map((entry) => path.join(entry.parentPath, entry.name));
+
+		assert.isNotEmpty(files);
+		for (const file of files)
+		{
+			const content = fs.readFileSync(file, 'utf8');
+			if (content.length > 0)
+			{
+				assert.match(
+					content,
+					/[^\n]\n$/,
+					`${path.relative(extPath, file)} must end with a single trailing newline`,
+				);
+			}
+		}
+	});
+
 	it('should create a JavaScript extension', async () => {
 		const { exitCode } = await runChef(
 			['create', 'local.js-ext', '--tech', 'js'],
