@@ -237,6 +237,10 @@ class SymbolCollector
 	readonly #siblingNpmOwnership = new Map<string, Set<string>>();
 	/** Sibling extensions whose entry we've seen imported by the current bundle. */
 	readonly #importedSiblings = new Map<string, ts.SourceFile | null>();
+
+	// Cache for #findExtensionReExportingPath: maps "<modulePath> <qualifier>" to the
+	// extension that re-exports that file (namespace + exported name), or null when none does.
+	readonly #pathOwningExtension = new Map<string, { namespace: string; exportedName: string } | null>();
 	#currentNamespace = '';
 
 	constructor(tsModule: typeof ts, program: ts.Program, checker: ts.TypeChecker, options: SymbolCollectorOptions)
@@ -745,6 +749,11 @@ class SymbolCollector
 	{
 		const namespaceMemberSymbols = this.#collectNamespaceMemberSymbols();
 		const hasExternal = this.#siblingReplacements.size > 0 || this.#npmReplacements.size > 0;
+		// A cross-extension type reached through a container (e.g. `Cache.MemoryCache`) is
+		// emitted as a bare-path import type with no registered sibling/npm replacement.
+		// Detect those separately so extensions without any sibling/npm edits keep their
+		// previous output untouched (only bare cross-extension paths are rewritten).
+		const resolvesBareImports = Boolean(this.#options.tsconfigPaths);
 		const needsNamespaceQualification = namespaceMemberSymbols.size > 0;
 
 		for (const member of this.#result)
@@ -758,6 +767,11 @@ class SymbolCollector
 			const externalEdits = hasExternal
 				? this.#findExternalEdits(member.sourceDecl, member.sourceTextStart)
 				: [];
+
+			if (resolvesBareImports)
+			{
+				externalEdits.push(...this.#findBareImportTypeEdits(member.sourceDecl, member.sourceTextStart));
+			}
 
 			const renames = member.renames ?? [];
 
@@ -898,6 +912,58 @@ class SymbolCollector
 		return edits;
 	}
 
+	/**
+	 * Rewrites bare-path import types that point at another extension's sources into a
+	 * namespace reference. TS emits these for a type reached through a container class (e.g.
+	 * `new Cache.MemoryCache()` → `import("main/install/js/main/core/src/lib/cache/memory-cache").default`).
+	 * Only bare file paths outside this extension are touched, so declarations that stay
+	 * within the extension (relative import types) are left exactly as they were.
+	 */
+	#findBareImportTypeEdits(decl: ts.Node, textStart: number): Array<{ start: number; end: number; replacement: string }>
+	{
+		const ts = this.#ts;
+		const edits: Array<{ start: number; end: number; replacement: string }> = [];
+		const sourceFile = decl.getSourceFile();
+		const baseUrl = this.#options.tsconfigBaseUrl ?? this.#options.packageRoot;
+
+		const visit = (node: ts.Node): void => {
+			if (ts.isImportTypeNode(node)
+				&& node.qualifier
+				&& ts.isLiteralTypeNode(node.argument)
+				&& ts.isStringLiteral(node.argument.literal))
+			{
+				const modulePath = node.argument.literal.text;
+				if (isBareFilePath(modulePath))
+				{
+					const targetFile = path.resolve(baseUrl, modulePath);
+					if (!isInsideDirectory(targetFile, this.#options.packageRoot))
+					{
+						const qualifierText = node.qualifier.getText(sourceFile);
+						const owningExtension = this.#findExtensionReExportingPath(targetFile, qualifierText);
+						if (owningExtension)
+						{
+							const headStart = node.getStart(sourceFile, false) - textStart;
+							const headEnd = node.typeArguments && node.typeArguments.length > 0
+								? (node.typeArguments.pos - 1) - textStart
+								: node.getEnd() - textStart;
+							edits.push({
+								start: headStart,
+								end: headEnd,
+								replacement: `${owningExtension.namespace}.${owningExtension.exportedName}`,
+							});
+						}
+					}
+				}
+			}
+
+			ts.forEachChild(node, visit);
+		};
+
+		visit(decl);
+
+		return edits;
+	}
+
 	#buildLocalImportTypeEdit(
 		node: ts.ImportTypeNode,
 		resolved: ts.Symbol,
@@ -996,11 +1062,6 @@ class SymbolCollector
 		const qualifierLeft = getEntityNameLeft(ts, node.qualifier);
 		if (!qualifierLeft) return null;
 
-		const symbol = this.#checker.getSymbolAtLocation(qualifierLeft);
-		if (!symbol) return null;
-
-		const resolved = this.#resolveAliasDeep(symbol) ?? symbol;
-
 		// The "head" of an ImportTypeNode is the part before type arguments:
 		// `import("pkg").QualifierPath` — everything up to `<` (or the end of node if no `<`).
 		const headStart = node.getStart(sourceFile, false) - textStart;
@@ -1008,6 +1069,11 @@ class SymbolCollector
 			? (node.typeArguments.pos - 1) - textStart // position of '<'
 			: node.getEnd() - textStart;
 		const qualifierText = node.qualifier.getText(sourceFile);
+
+		const symbol = this.#checker.getSymbolAtLocation(qualifierLeft);
+		if (!symbol) return null;
+
+		const resolved = this.#resolveAliasDeep(symbol) ?? symbol;
 
 		// Local file (relative import like `import("./header").Data`) — the symbol lives
 		// in our own dts graph. We may have already collected it as a member or need to.
@@ -1764,6 +1830,166 @@ class SymbolCollector
 		// multiple unrelated siblings.
 		const siblings = [...this.#importedSiblings.entries()].filter(([, src]) => src !== null);
 		if (siblings.length === 1) return pick(siblings[0][0]);
+
+		return null;
+	}
+
+	/**
+	 * Finds the Bitrix extension that publicly re-exports `target` and returns its
+	 * namespace together with the name the symbol is exported under. Used when a type
+	 * points at another extension's sources through a container (e.g. `Cache.MemoryCache`
+	 * → the `MemoryCache` class in main.core), which TS emits as a relative import
+	 * instead of a namespace reference.
+	 *
+	 * We walk the extensions declared in tsconfig `paths`, parse each entry, and match
+	 * the symbol against the entry's exports through the type checker. A direct named
+	 * re-export (`export { MemoryCache }`) wins over anything else.
+	 */
+	/**
+	 * Finds the Bitrix extension whose entry re-exports the file at the emitted
+	 * `import("<modulePath>")` path, and returns its namespace plus the name the file's
+	 * export is re-exported under. Purely syntactic: the symbol isn't in this extension's
+	 * dts program (it's a bare cross-extension path), so we parse candidate entries and
+	 * match their `export`/`import`+`export` declarations against the target file.
+	 *
+	 * `qualifierText` is the member accessed on the import (`default` for a default class,
+	 * or a named export). A direct named re-export of the target file wins.
+	 */
+	#findExtensionReExportingPath(
+		targetFile: string,
+		qualifierText: string,
+	): { namespace: string; exportedName: string } | null
+	{
+		const cacheKey = `${targetFile} ${qualifierText}`;
+		if (this.#pathOwningExtension.has(cacheKey))
+		{
+			return this.#pathOwningExtension.get(cacheKey) ?? null;
+		}
+
+		const result = this.#resolveExtensionReExportingPath(targetFile, qualifierText);
+		this.#pathOwningExtension.set(cacheKey, result);
+
+		return result;
+	}
+
+	#resolveExtensionReExportingPath(
+		targetFile: string,
+		qualifierText: string,
+	): { namespace: string; exportedName: string } | null
+	{
+		const paths = this.#options.tsconfigPaths;
+		if (!paths) return null;
+
+		const baseUrl = this.#options.tsconfigBaseUrl ?? this.#options.packageRoot;
+		const targetDir = path.dirname(targetFile);
+
+		for (const extensionName of Object.keys(paths))
+		{
+			if (!isSiblingExtensionName(extensionName)) continue;
+
+			// The extension that re-exports a file lives next to it in the tree. Skip entries
+			// whose declared path doesn't share a meaningful directory prefix with the target,
+			// so we don't parse thousands of unrelated entries per import.
+			const entryPath = paths[extensionName]?.[0];
+			if (!entryPath) continue;
+			const entryAbsolute = path.isAbsolute(entryPath) ? entryPath : path.resolve(baseUrl, entryPath);
+			if (!sharesDirectoryPrefix(path.dirname(entryAbsolute), targetDir)) continue;
+
+			const entry = this.#resolveSiblingSourceFile(extensionName);
+			if (!entry) continue;
+
+			const exportedName = this.#findReExportName(entry, targetFile, qualifierText);
+			if (!exportedName) continue;
+
+			const pkg = PackageResolver.resolve(extensionName);
+			if (!pkg) continue;
+
+			const namespace = pkg.getGlobal()[pkg.getName()];
+			if (!namespace || namespace === 'window') continue;
+
+			return { namespace, exportedName };
+		}
+
+		return null;
+	}
+
+	/**
+	 * In an extension entry file, finds the name under which the target file's export
+	 * (identified by `qualifierText`: `default` or a named export) is re-exported.
+	 * Recognises `import X from './target'; export { X }` and `export { X } from './target'`.
+	 */
+	#findReExportName(entry: ts.SourceFile, targetFile: string, qualifierText: string): string | null
+	{
+		const ts = this.#ts;
+		const entryDir = path.dirname(entry.fileName);
+
+		const resolvesToTarget = (specifier: string): boolean => {
+			if (!specifier.startsWith('.')) return false;
+			const resolved = path.resolve(entryDir, specifier);
+
+			return stripKnownExtension(resolved) === stripKnownExtension(targetFile);
+		};
+
+		// import <local> from './target'  →  which local name binds the wanted export
+		const localForWanted = new Map<string, string>(); // localName -> importedName ('default' | named)
+
+		for (const statement of entry.statements)
+		{
+			if (!ts.isImportDeclaration(statement)) continue;
+			if (!ts.isStringLiteral(statement.moduleSpecifier)) continue;
+			if (!resolvesToTarget(statement.moduleSpecifier.text)) continue;
+
+			const clause = statement.importClause;
+			if (!clause) continue;
+
+			if (clause.name)
+			{
+				localForWanted.set(clause.name.text, 'default');
+			}
+
+			if (clause.namedBindings && ts.isNamedImports(clause.namedBindings))
+			{
+				for (const element of clause.namedBindings.elements)
+				{
+					const importedName = element.propertyName?.text ?? element.name.text;
+					localForWanted.set(element.name.text, importedName);
+				}
+			}
+		}
+
+		for (const statement of entry.statements)
+		{
+			if (!ts.isExportDeclaration(statement)) continue;
+			if (!statement.exportClause || !ts.isNamedExports(statement.exportClause)) continue;
+
+			// export { X } from './target'
+			if (statement.moduleSpecifier
+				&& ts.isStringLiteral(statement.moduleSpecifier)
+				&& resolvesToTarget(statement.moduleSpecifier.text))
+			{
+				for (const element of statement.exportClause.elements)
+				{
+					const importedName = element.propertyName?.text ?? element.name.text;
+					if (importedName === qualifierText)
+					{
+						return element.name.text;
+					}
+				}
+			}
+
+			// export { X } where X was imported from './target'
+			if (!statement.moduleSpecifier)
+			{
+				for (const element of statement.exportClause.elements)
+				{
+					const localName = element.propertyName?.text ?? element.name.text;
+					if (localForWanted.get(localName) === qualifierText)
+					{
+						return element.name.text;
+					}
+				}
+			}
+		}
 
 		return null;
 	}
@@ -2607,6 +2833,77 @@ function normalizeNpmPackageName(specifier: string): string | null
 function isSiblingExtensionName(name: string): boolean
 {
 	return EXTENSION_NAME_PATTERN.test(name);
+}
+
+const KNOWN_MODULE_EXTENSIONS = ['.d.ts', '.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'];
+
+/**
+ * Whether `filePath` lives inside `dir` — used to tell a type reaching this extension's own
+ * sources apart from one reaching another extension.
+ */
+export function isInsideDirectory(filePath: string, dir: string): boolean
+{
+	const relative = path.relative(dir, filePath);
+
+	return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
+/**
+ * Whether two directories share a prefix deep enough that one could re-export files from
+ * the other — i.e. they belong to the same Bitrix extension subtree. Used to avoid parsing
+ * thousands of unrelated extension entries when resolving a cross-extension import path.
+ *
+ * Extensions live under `.../<module>/install/js/<module>/<extension>/...`; we require the
+ * common prefix to reach at least one segment past `install/js` (the module), so files in
+ * completely different modules/extensions are skipped.
+ */
+export function sharesDirectoryPrefix(dirA: string, dirB: string): boolean
+{
+	const segmentsA = dirA.split(path.sep);
+	const segmentsB = dirB.split(path.sep);
+
+	let common = 0;
+	while (common < segmentsA.length && common < segmentsB.length && segmentsA[common] === segmentsB[common])
+	{
+		common += 1;
+	}
+
+	const marker = segmentsA.indexOf('js');
+	if (marker >= 0 && segmentsA[marker - 1] === 'install')
+	{
+		// Require the common prefix to reach past `install/js/<module>`.
+		return common > marker + 2;
+	}
+
+	// Fallback for non-standard layouts: any non-trivial shared prefix.
+	return common >= 3;
+}
+
+/**
+ * A `import("...")` specifier that looks like a file path (`a/b/c`) rather than a package
+ * (`main.core.cache`) or a relative import (`./x`). These bare paths are what TS emits for
+ * cross-extension types reached through a container.
+ */
+export function isBareFilePath(specifier: string): boolean
+{
+	return specifier.includes('/') && !specifier.startsWith('.') && !specifier.startsWith('@');
+}
+
+/**
+ * Drops a known module extension so paths compare equal regardless of how they were written
+ * (`.../memory-cache` vs `.../memory-cache.ts` vs `.../memory-cache.d.ts`).
+ */
+export function stripKnownExtension(filePath: string): string
+{
+	for (const ext of KNOWN_MODULE_EXTENSIONS)
+	{
+		if (filePath.endsWith(ext))
+		{
+			return filePath.slice(0, -ext.length);
+		}
+	}
+
+	return filePath;
 }
 
 function extractImportSource(
