@@ -1,3 +1,4 @@
+import MagicString from 'magic-string';
 import type { Plugin } from 'rollup';
 
 function makeSafe(namespace: string): string
@@ -52,14 +53,28 @@ export default function safeNamespacesPlugin(): Plugin
 		{
 			const lines = code.split('\n');
 
+			// Find the IIFE-closing line (near the end) and rewrite just that line in place
+			// via magic-string, so the returned map composes with the chunk's map instead of
+			// dropping it (map: null would leave the previous map, desyncing positions).
+			let lineStart = code.length;
 			for (let i = lines.length - 1; i >= 0; i--)
 			{
-				const transformed = transformIifeLine(lines[i]);
-				if (transformed)
+				lineStart -= lines[i].length;
+				if (i > 0)
 				{
-					lines[i] = transformed;
+					lineStart -= 1; // the '\n' before this line
+				}
 
-					return { code: lines.join('\n'), map: null };
+				const transformed = transformIifeLine(lines[i]);
+				if (transformed !== null)
+				{
+					const magic = new MagicString(code);
+					magic.overwrite(lineStart, lineStart + lines[i].length, transformed);
+
+					return {
+						code: magic.toString(),
+						map: magic.generateMap({ hires: true }),
+					};
 				}
 			}
 

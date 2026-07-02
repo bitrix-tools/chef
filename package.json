@@ -80,6 +80,7 @@
     "eslint": "^9.39.4",
     "fast-glob": "^3.3.3",
     "log-symbols": "^7.0.1",
+    "magic-string": "^0.30.21",
     "playwright": "^1.57.0",
     "postcss": "^8.5.6",
     "prettier": "^3.7.4",

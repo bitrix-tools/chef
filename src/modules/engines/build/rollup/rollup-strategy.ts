@@ -1,6 +1,8 @@
 import path from 'node:path';
 import fs from 'node:fs';
 
+import MagicString from 'magic-string';
+
 import {
 	rollup,
 	type InputOptions,
@@ -158,15 +160,22 @@ export class RollupBuildStrategy extends BuildStrategy
 					return null;
 				}
 
-				let result = code;
+				// Replace env expressions through magic-string so the shorter/longer
+				// replacements keep the source map aligned (map: null would drop it).
+				const magic = new MagicString(code);
 				for (const key of matched)
 				{
-					result = result.replaceAll(key, replacements[key]);
+					let index = code.indexOf(key);
+					while (index !== -1)
+					{
+						magic.overwrite(index, index + key.length, replacements[key]);
+						index = code.indexOf(key, index + key.length);
+					}
 				}
 
 				return {
-					code: result,
-					map: null,
+					code: magic.toString(),
+					map: magic.generateMap({ hires: true }),
 				};
 			},
 		};
@@ -695,9 +704,22 @@ export class RollupBuildStrategy extends BuildStrategy
 					return null;
 				}
 
-				lines.splice(firstExportAssignment, 0, `${indent}exports = __originalExports__;`);
+				// Insert `exports = __originalExports__;` before the first export assignment.
+				// Done through magic-string so the inserted line shifts the map for everything
+				// below it (returning map: null would leave stale positions).
+				let insertAt = 0;
+				for (let i = 0; i < firstExportAssignment; i++)
+				{
+					insertAt += lines[i].length + 1; // +1 for '\n'
+				}
 
-				return { code: lines.join('\n'), map: null };
+				const magic = new MagicString(code);
+				magic.appendLeft(insertAt, `${indent}exports = __originalExports__;\n`);
+
+				return {
+					code: magic.toString(),
+					map: magic.generateMap({ hires: true }),
+				};
 			},
 		};
 	}
@@ -933,7 +955,9 @@ export class RollupBuildStrategy extends BuildStrategy
 			name: 'terser',
 			async renderChunk(code) {
 				const { minify } = await import('terser');
-				const result = await minify(code, options);
+				// sourceMap: true makes terser emit a delta map (input → minified) that Rollup
+				// composes with the chunk's map. Without it minification would drop the map.
+				const result = await minify(code, { ...options, sourceMap: true });
 
 				if (!result.code && result.code !== '')
 				{

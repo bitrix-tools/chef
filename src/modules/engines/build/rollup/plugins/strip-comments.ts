@@ -1,3 +1,4 @@
+import MagicString from 'magic-string';
 import type { Plugin } from 'rollup';
 
 export default function stripCommentsPlugin(options: { banner?: string } = {}): Plugin
@@ -7,245 +8,187 @@ export default function stripCommentsPlugin(options: { banner?: string } = {}): 
 		renderChunk(code)
 		{
 			const { banner } = options;
-			let input = code;
 
-			if (banner && code.startsWith(banner))
-			{
-				input = code.slice(banner.length);
-			}
+			// Keep the banner (a leading block comment Rollup prepends) — strip everything
+			// after it. Passing the banner length as `protectedPrefixLength` leaves those
+			// characters in place and keeps the map aligned (no line shifting from splicing
+			// the banner out and back in).
+			const protectedPrefixLength = banner && code.startsWith(banner) ? banner.length : 0;
 
-			const stripped = stripComments(input);
-
-			return {
-				code: banner ? `${banner}\n${stripped.trimStart()}` : stripped,
-				map: null,
-			};
+			return stripCommentsWithMap(code, protectedPrefixLength);
 		},
 	};
 }
 
+/**
+ * Removes comments from `code` and returns both the stripped code and a source map that
+ * accounts for the removed ranges. `prefix` (e.g. the eslint-disable banner) is prepended
+ * to the output through magic-string so the map stays aligned.
+ *
+ * Uses magic-string so every removal is tracked precisely instead of rebuilding the string
+ * (which would desynchronise the source map and shift lines in the browser).
+ */
+export function stripCommentsWithMap(
+	code: string,
+	protectedPrefixLength = 0,
+): { code: string; map: ReturnType<MagicString['generateMap']> }
+{
+	const magic = new MagicString(code);
+
+	for (const range of findRemovableRanges(code))
+	{
+		// Skip anything inside the protected prefix (e.g. the leading banner comment).
+		if (range.start < protectedPrefixLength)
+		{
+			continue;
+		}
+
+		magic.remove(range.start, range.end);
+	}
+
+	return {
+		code: magic.toString(),
+		map: magic.generateMap({ hires: true, includeContent: false }),
+	};
+}
+
+/**
+ * Text-only comment stripper kept for callers that just need the string (diagnostics,
+ * tests). Delegates to the magic-string implementation and drops the map.
+ */
 export function stripComments(code: string): string
 {
-	let result = '';
+	return stripCommentsWithMap(code).code;
+}
+
+type Range = { start: number; end: number };
+
+/**
+ * Scans `code` and collects the character ranges to remove: comments (line and block),
+ * skipping string/template/regex literals so comment-like content inside them is preserved,
+ * plus runs of excessive blank lines. A comment occupying its own line takes the whole line
+ * (including its newline) so no blank line is left behind.
+ */
+// eslint-disable-next-line complexity
+function findRemovableRanges(code: string): Range[]
+{
+	const ranges: Range[] = [];
 	let i = 0;
 
 	while (i < code.length)
 	{
-		// String literals
-		if (code[i] === '"' || code[i] === '\'' || code[i] === '`')
+		const char = code[i];
+
+		if (char === '"' || char === '\'' || char === '`')
 		{
-			const quote = code[i];
-			result += quote;
-			i++;
-
-			while (i < code.length && code[i] !== quote)
-			{
-				if (code[i] === '\\')
-				{
-					result += code[i] + code[i + 1];
-					i += 2;
-				}
-				else
-				{
-					if (quote === '`' && code[i] === '$' && code[i + 1] === '{')
-					{
-						// Template literal expression — copy until matching }
-						const expr = copyTemplateExpression(code, i);
-						result += expr.text;
-						i = expr.end;
-					}
-					else
-					{
-						result += code[i];
-						i++;
-					}
-				}
-			}
-
-			if (i < code.length)
-			{
-				result += code[i];
-				i++;
-			}
-
+			i = skipStringLiteral(code, i);
 			continue;
 		}
 
-		// Single-line comment
-		if (code[i] === '/' && code[i + 1] === '/')
+		// Single-line comment.
+		if (char === '/' && code[i + 1] === '/')
 		{
-			const isOwnLine = isCommentOnOwnLine(result);
-			if (isOwnLine)
+			const ownLine = isCommentOnOwnLine(code, i);
+			// Own-line comment removes the whole line; an inline one removes the comment
+			// plus the whitespace before it so no trailing space is left on the code line.
+			const start = ownLine ? lineStartIndex(code, i) : trimTrailingWhitespaceStart(code, i);
+
+			let end = i;
+			while (end < code.length && code[end] !== '\n')
 			{
-				result = trimTrailingWhitespaceLine(result);
+				end++;
+			}
+			if (ownLine && end < code.length && code[end] === '\n')
+			{
+				end++;
 			}
 
-			while (i < code.length && code[i] !== '\n')
-			{
-				i++;
-			}
-
-			// Skip the newline if the comment was on its own line
-			if (isOwnLine && i < code.length && code[i] === '\n')
-			{
-				i++;
-			}
-
+			ranges.push({ start, end });
+			i = end;
 			continue;
 		}
 
-		// Multi-line comment
-		if (code[i] === '/' && code[i + 1] === '*')
+		// Multi-line comment.
+		if (char === '/' && code[i + 1] === '*')
 		{
-			const isOwnLine = isCommentOnOwnLine(result);
-			if (isOwnLine)
-			{
-				result = trimTrailingWhitespaceLine(result);
-			}
+			const ownLine = isCommentOnOwnLine(code, i);
+			const start = ownLine ? lineStartIndex(code, i) : i;
 
 			const commentEnd = code.indexOf('*/', i + 2);
-			if (commentEnd === -1)
-			{
-				i = code.length;
-			}
-			else
-			{
-				i = commentEnd + 2;
+			let end = commentEnd === -1 ? code.length : commentEnd + 2;
 
-				// Skip trailing whitespace and newline after block comment on its own line
-				if (isOwnLine)
+			if (ownLine)
+			{
+				while (end < code.length && (code[end] === ' ' || code[end] === '\t'))
 				{
-					while (i < code.length && (code[i] === ' ' || code[i] === '\t'))
-					{
-						i++;
-					}
-
-					if (i < code.length && code[i] === '\n')
-					{
-						i++;
-					}
+					end++;
+				}
+				if (end < code.length && code[end] === '\n')
+				{
+					end++;
 				}
 			}
 
+			ranges.push({ start, end });
+			i = end;
 			continue;
 		}
 
-		// Regular expression literals
-		if (code[i] === '/' && isRegexStart(code, i, result))
+		// Regex literal — skip so its slashes aren't mistaken for comments.
+		if (char === '/' && isRegexStart(code, i))
 		{
-			result += code[i];
-			i++;
-
-			while (i < code.length && code[i] !== '/')
-			{
-				if (code[i] === '\\')
-				{
-					result += code[i] + code[i + 1];
-					i += 2;
-				}
-				else if (code[i] === '[')
-				{
-					while (i < code.length && code[i] !== ']')
-					{
-						if (code[i] === '\\')
-						{
-							result += code[i] + code[i + 1];
-							i += 2;
-						}
-						else
-						{
-							result += code[i];
-							i++;
-						}
-					}
-
-					if (i < code.length)
-					{
-						result += code[i];
-						i++;
-					}
-				}
-				else
-				{
-					result += code[i];
-					i++;
-				}
-			}
-
-			if (i < code.length)
-			{
-				result += code[i];
-				i++;
-			}
-
-			while (i < code.length && /[gimsuy]/.test(code[i]))
-			{
-				result += code[i];
-				i++;
-			}
-
+			i = skipRegexLiteral(code, i);
 			continue;
 		}
 
-		result += code[i];
+		// Collapse 3+ consecutive newlines to 2 (one blank line).
+		if (char === '\n' && code[i + 1] === '\n' && code[i + 2] === '\n')
+		{
+			let end = i + 2;
+			while (end < code.length && code[end] === '\n')
+			{
+				end++;
+			}
+			// Keep two newlines, remove the rest.
+			ranges.push({ start: i + 2, end });
+			i = end;
+			continue;
+		}
+
 		i++;
 	}
 
-	return result
-		// Clean up trailing whitespace left by inline comments
-		.replace(/[ \t]+\n/g, '\n')
-		// Clean up excessive blank lines
-		.replace(/\n{3,}/g, '\n\n');
+	return ranges;
 }
 
-/**
- * Checks if the current position in result is at the start of a line
- * (only whitespace between the last newline and the end of result).
- */
-function isCommentOnOwnLine(result: string): boolean
+function skipStringLiteral(code: string, start: number): number
 {
-	let j = result.length - 1;
-	while (j >= 0 && (result[j] === ' ' || result[j] === '\t'))
+	const quote = code[start];
+	let i = start + 1;
+
+	while (i < code.length && code[i] !== quote)
 	{
-		j--;
+		if (code[i] === '\\')
+		{
+			i += 2;
+			continue;
+		}
+
+		if (quote === '`' && code[i] === '$' && code[i + 1] === '{')
+		{
+			i = skipTemplateExpression(code, i);
+			continue;
+		}
+
+		i++;
 	}
 
-	return j < 0 || result[j] === '\n';
+	return i < code.length ? i + 1 : i;
 }
 
-/**
- * Trims trailing whitespace after the last newline.
- * Should only be called when isCommentOnOwnLine() returns true.
- */
-function trimTrailingWhitespaceLine(result: string): string
+function skipTemplateExpression(code: string, start: number): number
 {
-	let j = result.length - 1;
-	while (j >= 0 && (result[j] === ' ' || result[j] === '\t'))
-	{
-		j--;
-	}
-
-	return result.slice(0, j + 1);
-}
-
-function isRegexStart(code: string, position: number, preceding: string): boolean
-{
-	const trimmed = preceding.trimEnd();
-	if (trimmed.length === 0)
-	{
-		return true;
-	}
-
-	const lastChar = trimmed[trimmed.length - 1];
-
-	// After these characters, / starts a regex
-	return '=({[;,!&|?:~^%*/+-><'.includes(lastChar);
-}
-
-function copyTemplateExpression(code: string, start: number): { text: string; end: number }
-{
-	let text = code[start] + code[start + 1]; // ${
-	let i = start + 2;
+	let i = start + 2; // past `${`
 	let depth = 1;
 
 	while (i < code.length && depth > 0)
@@ -259,9 +202,114 @@ function copyTemplateExpression(code: string, start: number): { text: string; en
 			depth--;
 		}
 
-		text += code[i];
 		i++;
 	}
 
-	return { text, end: i };
+	return i;
+}
+
+function skipRegexLiteral(code: string, start: number): number
+{
+	let i = start + 1;
+
+	while (i < code.length && code[i] !== '/')
+	{
+		if (code[i] === '\\')
+		{
+			i += 2;
+			continue;
+		}
+
+		if (code[i] === '[')
+		{
+			i++;
+			while (i < code.length && code[i] !== ']')
+			{
+				i += code[i] === '\\' ? 2 : 1;
+			}
+			if (i < code.length)
+			{
+				i++;
+			}
+			continue;
+		}
+
+		i++;
+	}
+
+	if (i < code.length)
+	{
+		i++; // closing '/'
+	}
+
+	while (i < code.length && /[gimsuy]/.test(code[i]))
+	{
+		i++;
+	}
+
+	return i;
+}
+
+/**
+ * Whether the character at `position` is preceded only by whitespace on its line.
+ */
+function isCommentOnOwnLine(code: string, position: number): boolean
+{
+	let j = position - 1;
+	while (j >= 0 && (code[j] === ' ' || code[j] === '\t'))
+	{
+		j--;
+	}
+
+	return j < 0 || code[j] === '\n';
+}
+
+/**
+ * Index at which to start removal so the whitespace immediately before `position` (on the
+ * same line) is also removed — used for inline line comments so no trailing space remains.
+ */
+function trimTrailingWhitespaceStart(code: string, position: number): number
+{
+	let j = position;
+	while (j > 0 && (code[j - 1] === ' ' || code[j - 1] === '\t'))
+	{
+		j--;
+	}
+
+	return j;
+}
+
+/**
+ * Index of the first character of the line containing `position`, so removing a whole-line
+ * comment also removes its leading indentation.
+ */
+function lineStartIndex(code: string, position: number): number
+{
+	let j = position - 1;
+	while (j >= 0 && code[j] !== '\n')
+	{
+		j--;
+	}
+
+	return j + 1;
+}
+
+/**
+ * Whether `/` at `position` starts a regex (rather than a division), judged by the last
+ * significant character before it.
+ */
+function isRegexStart(code: string, position: number): boolean
+{
+	let j = position - 1;
+	while (j >= 0 && (code[j] === ' ' || code[j] === '\t' || code[j] === '\n'))
+	{
+		j--;
+	}
+
+	if (j < 0)
+	{
+		return true;
+	}
+
+	return '=({[;,!&|?:~^%*/+-><'.includes(code[j]);
 }
