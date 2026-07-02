@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.18.1 <Badge type="tip" text="7/2/2026" />
+
+Fixed source maps of built bundles — positions no longer drift (lines point to the real source code). Types accessed through a main.core container (e.g. Cache.MemoryCache) now resolve to a namespace reference in .d.ts instead of a relative import
+
 ## v1.18.0 <Badge type="tip" text="7/1/2026" />
 
 Flow-to-TypeScript migration now converts module.exports to export default in bundle.config. All files created by chef (templates, aliases.tsconfig.json, migration output) end with a trailing newline
