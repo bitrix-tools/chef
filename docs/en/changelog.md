@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.19.0 <Badge type="tip" text="7/6/2026" />
+
+Dropped Mercurial support. The chef flow-to-ts and chef init hooks commands now work with Git only: file moves via git mv, git hooks instead of .hg/hgrc.
+
 ## v1.18.1 <Badge type="tip" text="7/2/2026" />
 
 Fixed source maps of built bundles — positions no longer drift (lines point to the real source code). Types accessed through a main.core container (e.g. Cache.MemoryCache) now resolve to a namespace reference in .d.ts instead of a relative import
