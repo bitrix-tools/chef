@@ -84,13 +84,18 @@ const tag = `v${newVersion}`;
 
 console.log(`${currentVersion} → ${newVersion}\n`);
 
-pkg.version = newVersion;
-writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-
 const run = (cmd: string) => {
 	console.log(`$ ${cmd}`);
 	execSync(cmd, { stdio: 'inherit' });
 };
+
+// Sync with origin first: the previous release's CI pushes a changelog commit to
+// main asynchronously, so a release soon after would fail to push (non-fast-forward).
+// Rebase before bumping so the version commit lands on top of the latest main.
+run(`git pull --rebase`);
+
+pkg.version = newVersion;
+writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
 
 run(`git add package.json`);
 run(`git commit -m "release: ${tag}"`);
