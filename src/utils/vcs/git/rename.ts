@@ -7,13 +7,13 @@ type RenameResult = {
 	stderr: string,
 };
 
-export async function hgRename(oldPath: string, newPath: string): Promise<RenameResult>
+export async function gitRename(oldPath: string, newPath: string): Promise<RenameResult>
 {
 	const cwd = Environment.getRoot();
 
-	const hgProcess = spawnSync(
-		'hg',
-		['rename', oldPath, newPath],
+	const gitProcess = spawnSync(
+		'git',
+		['mv', oldPath, newPath],
 		{
 			cwd,
 			stdio: 'pipe',
@@ -21,12 +21,12 @@ export async function hgRename(oldPath: string, newPath: string): Promise<Rename
 		},
 	);
 
-	if (hgProcess.error)
+	if (gitProcess.error)
 	{
-		return { status: 'fail', stderr: hgProcess.error.message };
+		return { status: 'fail', stderr: gitProcess.error.message };
 	}
 
-	const stderr = hgProcess.stderr?.toString('utf-8') ?? '';
+	const stderr = gitProcess.stderr?.toString('utf-8') ?? '';
 
 	return {
 		status: stderr.length === 0 ? 'ok' : 'fail',

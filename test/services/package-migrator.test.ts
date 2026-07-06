@@ -223,8 +223,8 @@ describe('PackageMigrator', () => {
 			const mockPackage = { getPath: () => tmpDir } as any;
 			const migrator = new PackageMigrator(mockPackage);
 
-			// renameFile will call hgRename which calls spawnSync('hg', ...)
-			// In test env, hg is not available, so we check the result shape
+			// renameFile calls gitRename which runs `git mv`. The path isn't tracked
+			// by git here, so the move fails — we only assert the result shape.
 			const result = await migrator.renameFile('/some/path/app.js');
 
 			assert.equal(result.from, '/some/path/app.js');

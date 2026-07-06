@@ -9,7 +9,7 @@ import { createPathOption } from '../../shared/options/path-option';
 import { multiline } from '../../utils/multiline-text-tag';
 import { CF } from '../../diagnostics/diagnostic-codes';
 import { formatInternalError } from '../../diagnostics/format-error';
-import { detectVcs, installGitHooks, installHgHooks } from './hooks/install-hooks';
+import { hasGitRepo, installGitHooks } from './hooks/install-hooks';
 
 import type { InstallHooksResult } from './hooks/install-hooks';
 
@@ -19,24 +19,19 @@ const gitHookDescriptions: Record<string, string> = {
 	'.chef/hooks/post-rewrite': 'Updates aliases after rebase',
 };
 
-const hgHookDescriptions: Record<string, string> = {
-	'.chef/hooks/update-aliases.sh': 'Updates aliases after hg update/pull',
-};
-
 const initHooksCommand = new Command('hooks')
-	.description('Install VCS hooks to auto-update path aliases on pull/merge')
+	.description('Install git hooks to auto-update path aliases on pull/merge')
 	.addOption(createPathOption('Project root where hooks will be installed'))
 	.action(async () => {
 		const rootPath = Environment.getRoot();
-		const vcs = await detectVcs(rootPath);
 
-		if (!vcs)
+		if (!await hasGitRepo(rootPath))
 		{
 			const lines: string[] = [];
-			lines.push(chalk.red(`${CF.VCS_NOT_FOUND}: No version control system found`));
+			lines.push(chalk.red(`${CF.VCS_NOT_FOUND}: No git repository found`));
 			lines.push('');
 			lines.push(`Directory ${chalk.dim(rootPath)} does not contain`);
-			lines.push(`${chalk.bold('.git')} or ${chalk.bold('.hg')} directory.`);
+			lines.push(`a ${chalk.bold('.git')} directory.`);
 			lines.push('');
 			lines.push(`Make sure you are running this command from the project root.`);
 
@@ -52,28 +47,21 @@ const initHooksCommand = new Command('hooks')
 			return;
 		}
 
-		const descriptions = vcs === 'git' ? gitHookDescriptions : hgHookDescriptions;
+		const descriptions = gitHookDescriptions;
 		const fileList = Object.entries(descriptions)
 			.map(([name, desc]) => `  \u2022 ${chalk.cyan(name)} \u2014 ${desc}`)
 			.join('\n');
 
 		console.log(
 			multiline`
-				Preparing ${vcs} hooks in ${Environment.getRoot()}
+				Preparing git hooks in ${Environment.getRoot()}
 
 				${chalk.bold('The following files will be added/updated:')}
 				${fileList}
 			`,
 		);
 
-		if (vcs === 'git')
-		{
-			console.log(`  \u2022 ${chalk.cyan('git core.hooksPath')} \u2014 Will be set to ${chalk.cyan('.chef/hooks')}`);
-		}
-		else
-		{
-			console.log(`  \u2022 ${chalk.cyan('.hg/hgrc [hooks]')} \u2014 Will add update.chef and changegroup.chef entries`);
-		}
+		console.log(`  \u2022 ${chalk.cyan('git core.hooksPath')} \u2014 Will be set to ${chalk.cyan('.chef/hooks')}`);
 
 		console.log('');
 
@@ -83,18 +71,9 @@ const initHooksCommand = new Command('hooks')
 				prefix: `  ${chalk.green(logSymbols.success)}`,
 			};
 
-			const result: InstallHooksResult = vcs === 'git'
-				? await installGitHooks(rootPath, { theme })
-				: await installHgHooks(rootPath, { theme });
+			const result: InstallHooksResult = await installGitHooks(rootPath, { theme });
 
-			if (vcs === 'git')
-			{
-				console.log(`  ${chalk.green(logSymbols.success)} git core.hooksPath set to ${chalk.cyan('.chef/hooks')}`);
-			}
-			else
-			{
-				console.log(`  ${chalk.green(logSymbols.success)} .hg/hgrc updated with hook entries`);
-			}
+			console.log(`  ${chalk.green(logSymbols.success)} git core.hooksPath set to ${chalk.cyan('.chef/hooks')}`);
 
 			const statusMap: Record<string, string> = {
 				[SaveFileStatus.CREATED]: 'Files created:',

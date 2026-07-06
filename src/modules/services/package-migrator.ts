@@ -1,6 +1,6 @@
 import * as fs from 'node:fs/promises';
 
-import { hgRename } from '../../utils/vcs/hg/rename';
+import { gitRename } from '../../utils/vcs/git/rename';
 
 import type { MigrationEngine } from '../engines/migration/migration-engine';
 import type { BasePackage } from '../packages/base-package';
@@ -33,7 +33,7 @@ export class PackageMigrator
 	async renameFile(filePath: string): Promise<RenameFileResult>
 	{
 		const tsPath = filePath.replace(/\.js$/, '.ts');
-		const renameResult = await hgRename(filePath, tsPath);
+		const renameResult = await gitRename(filePath, tsPath);
 
 		return {
 			from: filePath,
@@ -86,7 +86,7 @@ export class PackageMigrator
 	{
 		const bundleConfigJsPath = this.#package.getBundleConfigJsFilePath();
 		const bundleConfigTsPath = bundleConfigJsPath.replace(/\.js$/, '.ts');
-		const renameResult = await hgRename(bundleConfigJsPath, bundleConfigTsPath);
+		const renameResult = await gitRename(bundleConfigJsPath, bundleConfigTsPath);
 
 		return renameResult.status === 'ok';
 	}
