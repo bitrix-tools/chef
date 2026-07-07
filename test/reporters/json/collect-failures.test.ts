@@ -1,10 +1,14 @@
-import { describe, it } from 'mocha';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import * as os from 'node:os';
+
+import { describe, it, beforeEach, afterEach } from 'mocha';
 import { assert } from 'chai';
 
-import { collectFailures } from '../../../src/reporters/json/test';
+import { collectFailures, resolveUnitBrowsers } from '../../../src/reporters/json/test';
 import { CF } from '../../../src/diagnostics/diagnostic-codes';
 
-import type { TestKindDetails } from '../../../src/reporters/json/test';
+import type { TestKindDetails, TestOptions } from '../../../src/reporters/json/test';
 
 function kind(overrides: Partial<TestKindDetails> = {}): TestKindDetails
 {
@@ -71,5 +75,32 @@ describe('collectFailures', () => {
 		});
 
 		assert.isEmpty(collectFailures(details));
+	});
+});
+
+describe('resolveUnitBrowsers', () => {
+	let tmpDir: string;
+
+	beforeEach(() => {
+		tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'chef-browsers-'));
+	});
+
+	afterEach(() => {
+		fs.rmSync(tmpDir, { recursive: true, force: true });
+	});
+
+	function fakePackage()
+	{
+		return { getPath: () => tmpDir, getName: () => 'test.package' } as any;
+	}
+
+	it('falls back to default browsers when the config fails to load (does not throw)', async () => {
+		// A broken config must not abort the whole --json run here; the strategy re-loads it
+		// and surfaces the real error. resolveUnitBrowsers only needs a browser list.
+		fs.writeFileSync(path.join(tmpDir, 'playwright.config.ts'), 'export default { this is broken');
+
+		const browsers = await resolveUnitBrowsers(fakePackage(), {} as TestOptions);
+
+		assert.deepEqual(browsers, ['chromium', 'firefox', 'webkit']);
 	});
 });

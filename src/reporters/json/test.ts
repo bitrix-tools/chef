@@ -248,7 +248,7 @@ async function runUnit(extensionPackage: BasePackage, options: TestOptions): Pro
 	return merger.finish(durationMs, allLogs);
 }
 
-async function resolveUnitBrowsers(extensionPackage: BasePackage, options: TestOptions): Promise<BrowserType[]>
+export async function resolveUnitBrowsers(extensionPackage: BasePackage, options: TestOptions): Promise<BrowserType[]>
 {
 	if (options.project !== undefined)
 	{
@@ -262,7 +262,19 @@ async function resolveUnitBrowsers(extensionPackage: BasePackage, options: TestO
 		}
 	}
 
-	const config = await findPlaywrightConfig(extensionPackage.getPath(), Environment.getRoot() ?? extensionPackage.getPath());
+	// Only used to enumerate browser projects. A config that fails to load must not abort
+	// the whole run here — let the strategy hit it and report a clean PLAYWRIGHT_ERROR via
+	// runErrors. Fall back to the default browser set so the run reaches the strategy.
+	let config = null;
+	try
+	{
+		config = await findPlaywrightConfig(extensionPackage.getPath(), Environment.getRoot() ?? extensionPackage.getPath());
+	}
+	catch
+	{
+		// Swallowed on purpose — the strategy re-loads the config and surfaces the real error.
+	}
+
 	return getBrowsersFromConfig(config);
 }
 
