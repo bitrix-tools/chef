@@ -1,4 +1,4 @@
-import type { TestToken, ConsoleLog } from './test-types';
+import type { TestToken, ConsoleLog, NodeOutputSection } from './test-types';
 
 function escape(text: string): string
 {
@@ -153,8 +153,10 @@ export class TeamcityReporter
 		}
 	}
 
-	finish(consoleLogs: ConsoleLog[] = []): { passed: number; failed: number; failures: never[]; browsers: never[] }
+	finish(options: { consoleLogs?: ConsoleLog[]; nodeOutput?: NodeOutputSection[] } = {}): { passed: number; failed: number; failures: never[]; browsers: never[] }
 	{
+		const consoleLogs = options.consoleLogs ?? [];
+
 		if (consoleLogs.length > 0)
 		{
 			for (const log of consoleLogs)
@@ -163,6 +165,18 @@ export class TeamcityReporter
 					: log.type === 'warning' ? 'WARNING'
 					: 'LOG';
 				this.#write(`[${prefix}] ${log.text}`);
+			}
+		}
+
+		for (const section of options.nodeOutput ?? [])
+		{
+			const label = section.browser ? `[${section.browser}] ` : '';
+			for (const message of section.messages)
+			{
+				for (const line of message.split('\n'))
+				{
+					this.#write(`[LOG] ${label}${line}`);
+				}
 			}
 		}
 

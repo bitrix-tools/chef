@@ -182,6 +182,15 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 			aggregated.report.push(...result.report);
 			aggregated.consoleLogs.push(...result.consoleLogs);
 			aggregated.errors.push(...result.errors);
+
+			if (result.nodeOutput?.length)
+			{
+				// Keep one section per engine (the label is set from this project) so the
+				// reporter can group the output by browser, like a real console.
+				(aggregated.nodeOutput ??= []).push(
+					...result.nodeOutput.map((section) => ({ ...section, browser: browserLabel })),
+				);
+			}
 		}
 
 		return aggregated;
@@ -210,6 +219,7 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 		const consoleLogs: ConsoleLog[] = [];
 		const errors: Error[] = [];
 		const runErrors: string[] = [];
+		const nodeMessages: string[] = [];
 		let stdoutBuffer = '';
 		let totalTests = -1;
 		let stdoutTail = '';
@@ -246,6 +256,20 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 					// global-setup throw, "No tests found"). Keep the real reason so it can
 					// be reported instead of a bare exit code.
 					runErrors.push(event.stack || event.message);
+				}
+				else if (event.type === 'stdio')
+				{
+					// The spec's own stdout/stderr, captured by Playwright and forwarded by
+					// our reporter — one event per console.* call. Keep them separate (only
+					// when requested) so the reporter can delimit each message on a green run.
+					if (options.captureNodeOutput)
+					{
+						const message = event.text.replace(/\n+$/, '');
+						if (message !== '')
+						{
+							nodeMessages.push(message);
+						}
+					}
 				}
 				else if (event.type === 'token')
 				{
@@ -302,6 +326,7 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 					stats: {},
 					consoleLogs: report.length > 0 ? consoleLogs : [],
 					errors,
+					...(nodeMessages.length > 0 ? { nodeOutput: [{ browser: browserLabel, messages: nodeMessages }] } : {}),
 				});
 			});
 		});

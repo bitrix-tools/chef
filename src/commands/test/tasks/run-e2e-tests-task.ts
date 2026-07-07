@@ -1,5 +1,6 @@
 import { createReporter } from '../create-reporter';
 import { checkCredentialsWarning } from '../check-env-test';
+import { showsBrowserConsole, showsNodeOutput } from '../console-target';
 
 import type { BasePackage } from '../../../modules/packages/base-package';
 import type { Task, TaskResult, TaskDetail } from '../../../modules/task/task-types';
@@ -15,6 +16,7 @@ export function runEndToEndTestsTask(extension: BasePackage, args: Record<string
 
 			const testResult = await extension.runEndToEndTests({
 				...args,
+				captureNodeOutput: showsNodeOutput(args.console),
 				onToken: (token, browser) => reporter.handleToken(token, browser),
 				onStatus: (status: string) => reporter.updateStatus(status),
 				onBegin: ({ browserCount, totalTests, browsers }) => {
@@ -59,7 +61,10 @@ export function runEndToEndTestsTask(extension: BasePackage, args: Record<string
 				};
 			}
 
-			const { passed, failed, failures, browsers } = reporter.finish(args.console ? testResult.consoleLogs : []);
+			const { passed, failed, failures, browsers } = reporter.finish({
+				consoleLogs: showsBrowserConsole(args.console) ? testResult.consoleLogs : [],
+				nodeOutput: showsNodeOutput(args.console) ? testResult.nodeOutput : undefined,
+			});
 
 			const title = failed === 0
 				? 'E2E tests'

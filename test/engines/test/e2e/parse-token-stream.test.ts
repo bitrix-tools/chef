@@ -82,6 +82,15 @@ describe('parseTokenStream', () => {
 		assert.deepEqual(events[0], { type: 'runError', message: 'Cannot find module', stack: 'at spec.ts:1' });
 	});
 
+	it('should parse a STDIO event and decode its base64 text (incl. newlines and cyrillic)', () => {
+		const text = 'DEBUG: значение = 42\nвторая строка';
+		const buffer = wrap({ id: 'STDIO', textBase64: Buffer.from(text, 'utf-8').toString('base64') });
+		const { events } = parseTokenStream(buffer);
+
+		assert.equal(events.length, 1);
+		assert.deepEqual(events[0], { type: 'stdio', text });
+	});
+
 	it('should extract browser from token data', () => {
 		const buffer = wrap({ id: 'TEST_PASSED', title: 'test', browser: 'Chromium' });
 		const { events } = parseTokenStream(buffer);

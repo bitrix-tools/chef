@@ -4,7 +4,7 @@ import { stripAnsi, hasLocalFilePath } from '../../../diagnostics/code-frame';
 import { formatError } from '../../../diagnostics/format-error';
 import { formatElapsed } from '../../../utils/format-elapsed';
 
-import type { TestToken, ConsoleLog } from './test-types';
+import type { TestToken, ConsoleLog, NodeOutputSection } from './test-types';
 
 export { stripAnsi, hasLocalFilePath };
 
@@ -626,8 +626,11 @@ export class TestReporter
 		return [...groups.values()];
 	}
 
-	finish(consoleLogs: ConsoleLog[] = []): { passed: number; failed: number; failures: FailedTestGroup[]; browsers: Array<{ name: string; passed: number; failed: number }> }
+	finish(options: { consoleLogs?: ConsoleLog[]; nodeOutput?: NodeOutputSection[] } = {}): { passed: number; failed: number; failures: FailedTestGroup[]; browsers: Array<{ name: string; passed: number; failed: number }> }
 	{
+		const consoleLogs = options.consoleLogs ?? [];
+		const nodeOutput = options.nodeOutput ?? [];
+
 		this.#stopSpinner();
 
 		const wallTime = Date.now() - this.#startTime;
@@ -770,6 +773,38 @@ export class TestReporter
 				const countSuffix = count > 1 ? chalk.yellow(` ×${count}`) : '';
 				lines.push(`${PREFIX} ${chalk.gray('[')}${prefix}${chalk.gray(']')} ${text}${countSuffix}`);
 			}
+		}
+
+		// Node-side stdout of the test process, printed verbatim (not deduplicated like the
+		// browser console above) so multi-line output keeps its shape. Grouped per browser,
+		// and within a browser each console.* call is marked with `›` so messages are
+		// visually delimited — a multi-line message's continuation is indented under it.
+		const nodeSections = nodeOutput.filter((section) => section.messages.length > 0);
+		if (nodeSections.length > 0)
+		{
+			lines.push('');
+			lines.push(`${PREFIX} ${chalk.bold('Node output:')}`);
+			nodeSections.forEach((section, index) => {
+				if (section.browser)
+				{
+					// Blank separator line between engines (not before the first one).
+					if (index > 0)
+					{
+						lines.push(`${PREFIX} ${chalk.gray('│')}`);
+					}
+					lines.push(`${PREFIX} ${chalk.gray('│')} ${chalk.cyan.bold(section.browser)}`);
+				}
+
+				for (const message of section.messages)
+				{
+					const [first, ...rest] = message.split('\n');
+					lines.push(`${PREFIX} ${chalk.gray('│')}   ${chalk.gray('›')} ${first}`);
+					for (const line of rest)
+					{
+						lines.push(`${PREFIX} ${chalk.gray('│')}     ${line}`);
+					}
+				}
+			});
 		}
 
 		lines.push('');

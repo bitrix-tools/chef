@@ -46,6 +46,8 @@ export type E2ETestOptions = {
 	grep?: string;
 	project?: string | string[];
 	file?: string;
+	// Collect the Node-side stdout of the test process (see TestResult.nodeOutput).
+	captureNodeOutput?: boolean;
 	onToken?: (token: TestToken, browser?: string) => void;
 	onStatus?: (status: string) => void;
 	onBegin?: (info: { totalTests: number; browserCount: number; browsers?: string[] }) => void;
@@ -56,10 +58,22 @@ export type ConsoleLog = {
 	text: string;
 };
 
+export type NodeOutputSection = {
+	browser?: string;
+	// One entry per captured stdout/stderr write (i.e. per console.* call), kept separate
+	// so the reporter can delimit each message rather than merging them into one blob.
+	messages: string[];
+};
+
 export type TestResult = {
 	report: TestToken[];
 	stats: Record<string, unknown>;
 	consoleLogs: ConsoleLog[];
 	errors: Error[];
+	// Raw Node-side stdout of the test process (e2e specs run in Node, not the browser).
+	// One entry per browser project run (browser is undefined for a single, unlabeled run).
+	// Collected only when console output is requested, and printed verbatim so a spec's
+	// `console.log` is visible on green runs — grouped per browser like a real console.
+	nodeOutput?: NodeOutputSection[];
 	debugCleanup?: (() => Promise<void>) | null;
 };

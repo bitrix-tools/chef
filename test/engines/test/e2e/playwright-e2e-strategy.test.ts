@@ -21,10 +21,15 @@ describe('PlaywrightE2EStrategy error surfacing', function () {
 	let tmpDir: string;
 	let testsDir: string;
 
+	// chef's own node_modules — linked into the temp project so specs that import
+	// '@playwright/test' can resolve it (only needed by tests that actually compile a spec).
+	const chefNodeModules = path.resolve(import.meta.dirname, '../../../../node_modules');
+
 	beforeEach(() => {
 		tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'chef-e2e-'));
 		testsDir = path.join(tmpDir, 'tests');
 		fs.mkdirSync(testsDir, { recursive: true });
+		fs.symlinkSync(chefNodeModules, path.join(tmpDir, 'node_modules'), 'dir');
 	});
 
 	afterEach(() => {
@@ -88,5 +93,41 @@ describe('PlaywrightE2EStrategy error surfacing', function () {
 		// hasTests:false is the legitimate empty case — no error, no report.
 		assert.isEmpty(result.errors);
 		assert.isEmpty(result.report);
+	});
+
+	function writePassingSpecWithLog(): void
+	{
+		fs.writeFileSync(
+			path.join(tmpDir, 'playwright.config.ts'),
+			"export default { testDir: './tests', projects: [{ name: 'chromium', use: { defaultBrowserType: 'chromium' } }] };",
+		);
+		fs.writeFileSync(
+			path.join(testsDir, 'log.spec.ts'),
+			"import { test, expect } from '@playwright/test';\n"
+			+ "test('logs', async () => { console.log('CHEF_NODE_MARKER value'); expect(1).toBe(1); });",
+		);
+	}
+
+	it('captures the spec Node stdout when captureNodeOutput is set', async () => {
+		writePassingSpecWithLog();
+
+		const result = await new PlaywrightE2EStrategy().run({ ...options(), project: 'chromium', captureNodeOutput: true });
+
+		assert.isEmpty(result.errors);
+		assert.isArray(result.nodeOutput);
+		const messages = (result.nodeOutput ?? []).flatMap((section) => section.messages);
+		assert.isTrue(
+			messages.some((message) => message.includes('CHEF_NODE_MARKER')),
+			'console.log from the spec must be captured',
+		);
+	});
+
+	it('does not collect Node stdout when captureNodeOutput is not set', async () => {
+		writePassingSpecWithLog();
+
+		const result = await new PlaywrightE2EStrategy().run({ ...options(), project: 'chromium' });
+
+		assert.isEmpty(result.errors);
+		assert.isUndefined(result.nodeOutput, 'without the flag nodeOutput must stay unset');
 	});
 });

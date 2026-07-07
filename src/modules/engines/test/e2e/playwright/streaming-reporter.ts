@@ -90,6 +90,16 @@ export default class StreamingReporter implements Reporter
 		}
 	}
 
+	onStdOut(chunk: string | Buffer): void
+	{
+		this.#emitStdio(chunk);
+	}
+
+	onStdErr(chunk: string | Buffer): void
+	{
+		this.#emitStdio(chunk);
+	}
+
 	onError(error: TestError): void
 	{
 		// Run-level errors not tied to a single test — e.g. a spec that fails to compile
@@ -133,6 +143,15 @@ export default class StreamingReporter implements Reporter
 		};
 
 		return labels[name] ?? name.charAt(0).toUpperCase() + name.slice(1);
+	}
+
+	#emitStdio(chunk: string | Buffer): void
+	{
+		// Playwright captures a spec's stdout/stderr and routes it here instead of printing
+		// it — so we forward it as a token. Base64 the text so newlines and any accidental
+		// __CHEF_TOKEN__ substrings in the output can't corrupt the token stream.
+		const text = typeof chunk === 'string' ? chunk : chunk.toString('utf-8');
+		this.#emit({ id: 'STDIO', textBase64: Buffer.from(text, 'utf-8').toString('base64') });
 	}
 
 	#emit(data: Record<string, unknown>): void

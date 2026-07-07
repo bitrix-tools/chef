@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import { Command } from 'commander';
+import { Command, InvalidArgumentError } from 'commander';
 import { SequentialQueue } from '../../utils/sequential-queue';
 
 import { preparePath } from '../../utils/cli/prepare-path';
@@ -19,6 +19,17 @@ import { Environment } from '../../environment/environment';
 import { formatInternalError } from '../../diagnostics/format-error';
 import { CF } from '../../diagnostics/diagnostic-codes';
 import { printSummary } from '../../shared/print-summary';
+import { isValidConsoleValue, consoleTargetValues } from './console-target';
+
+function parseConsoleOption(value: string): string
+{
+	if (!isValidConsoleValue(value))
+	{
+		throw new InvalidArgumentError(`Unknown --console target "${value}". Use one of: ${consoleTargetValues()}.`);
+	}
+
+	return value;
+}
 import { test as testJson } from '../../reporters/json/test';
 import { emitJson } from '../../reporters/json/emit';
 import { createReporterOption } from '../../shared/options/reporter-option';
@@ -349,7 +360,7 @@ const commonOptions = (cmd: Command) => cmd
 	.option('--grep <pattern>', 'Run only tests that match the given pattern')
 	.option('--project <projects...>', 'Run tests in the specified Playwright projects')
 	.addOption(createReporterOption(['default', 'json', 'teamcity']))
-	.option('--console', 'Print captured browser console output for each extension')
+	.option('--console [target]', 'Print test output: browser (in-page console), node (test process stdout), or all. Bare --console means browser.', parseConsoleOption)
 	.option('--cdp-port <port>', 'Launch browser with Chrome DevTools Protocol on this port', parseInt);
 
 function resolveModules(rawModules: string[]): { modules: string[]; file?: string }

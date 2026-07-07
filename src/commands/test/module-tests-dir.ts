@@ -101,6 +101,7 @@ export async function runModuleEndToEndTests(moduleName: string, args: Record<st
 		grep: args.grep,
 		project: args.project,
 		file: args.file,
+		captureNodeOutput: args.captureNodeOutput,
 		onToken: args.onToken,
 		onStatus: args.onStatus,
 		onBegin: args.onBegin,

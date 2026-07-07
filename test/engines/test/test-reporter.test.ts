@@ -269,15 +269,86 @@ describe('TestReporter', () => {
 			reporter.handleToken({ id: 'TEST_PASSED', title: 'test', suite: ['S'], duration: 1 });
 
 			output = '';
-			reporter.finish([
-				{ type: 'log', text: 'debug info' },
-				{ type: 'error', text: 'some error' },
-			]);
+			reporter.finish({
+				consoleLogs: [
+					{ type: 'log', text: 'debug info' },
+					{ type: 'error', text: 'some error' },
+				],
+			});
 
 			const plain = stripAnsi(output);
 			assert.include(plain, 'Console output');
 			assert.include(plain, 'debug info');
 			assert.include(plain, 'some error');
+		});
+
+		it('marks each Node message with a delimiter and keeps repeats verbatim', () => {
+			const reporter = createReporter();
+
+			reporter.handleToken({ id: 'TEST_PASSED', title: 'test', suite: ['S'], duration: 1 });
+
+			output = '';
+			reporter.finish({
+				nodeOutput: [{
+					messages: ['первое сообщение', 'повтор', 'повтор'],
+				}],
+			});
+
+			const plain = stripAnsi(output);
+			assert.include(plain, 'Node output');
+			assert.include(plain, 'первое сообщение');
+			// Each message is delimited with a marker — one per message, not merged.
+			assert.equal(plain.split('›').length - 1, 3, 'one marker per message');
+			// Verbatim: the repeated message is kept, not collapsed with a ×N counter.
+			assert.equal(plain.split('повтор').length - 1, 2, 'repeated messages are printed as-is');
+		});
+
+		it('indents continuation lines of a multi-line message under its marker', () => {
+			const reporter = createReporter();
+
+			reporter.handleToken({ id: 'TEST_PASSED', title: 'test', suite: ['S'], duration: 1 });
+
+			output = '';
+			reporter.finish({
+				nodeOutput: [{ messages: ['первая строка\nвторая строка'] }],
+			});
+
+			const plain = stripAnsi(output);
+			// A single multi-line message carries exactly one marker.
+			assert.equal(plain.split('›').length - 1, 1, 'multi-line message has one marker');
+			assert.include(plain, 'первая строка');
+			assert.include(plain, 'вторая строка');
+		});
+
+		it('groups Node output by browser with a header per engine', () => {
+			const reporter = createReporter(2);
+
+			reporter.handleToken({ id: 'TEST_PASSED', title: 'test', suite: ['S'], duration: 1 });
+
+			output = '';
+			reporter.finish({
+				nodeOutput: [
+					{ browser: 'Chromium', messages: ['из chromium'] },
+					{ browser: 'Firefox', messages: ['из firefox'] },
+				],
+			});
+
+			const plain = stripAnsi(output);
+			assert.include(plain, 'Chromium');
+			assert.include(plain, 'Firefox');
+			assert.include(plain, 'из chromium');
+			assert.include(plain, 'из firefox');
+		});
+
+		it('does not print a Node output block when there is no node output', () => {
+			const reporter = createReporter();
+
+			reporter.handleToken({ id: 'TEST_PASSED', title: 'test', suite: ['S'], duration: 1 });
+
+			output = '';
+			reporter.finish({});
+
+			assert.notInclude(stripAnsi(output), 'Node output');
 		});
 	});
 });

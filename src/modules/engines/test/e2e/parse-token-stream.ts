@@ -7,6 +7,7 @@ export type ParsedEvent =
 	| { type: 'status'; text: string }
 	| { type: 'token'; token: TestToken; browser?: string }
 	| { type: 'runError'; message: string; stack?: string }
+	| { type: 'stdio'; text: string }
 	| { type: 'end' };
 
 export function parseTokenStream(buffer: string): { events: ParsedEvent[]; remaining: string }
@@ -57,6 +58,15 @@ export function parseTokenStream(buffer: string): { events: ParsedEvent[]; remai
 					type: 'runError',
 					message: data.error?.message ?? 'Playwright run error',
 					stack: data.error?.stack,
+				});
+				continue;
+			}
+
+			if (data.id === 'STDIO')
+			{
+				events.push({
+					type: 'stdio',
+					text: Buffer.from(String(data.textBase64 ?? ''), 'base64').toString('utf-8'),
 				});
 				continue;
 			}

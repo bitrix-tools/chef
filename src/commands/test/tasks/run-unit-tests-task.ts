@@ -4,6 +4,7 @@ import boxen from 'boxen';
 import { createReporter } from '../create-reporter';
 import { checkBaseUrlWarning } from '../check-env-test';
 import { findPlaywrightConfig, getBrowsersFromConfig } from '../../../modules/engines/test/unit/playwright/find-playwright-config';
+import { showsBrowserConsole } from '../console-target';
 import { Environment } from '../../../environment/environment';
 
 import type { BasePackage } from '../../../modules/packages/base-package';
@@ -114,7 +115,7 @@ function createDebugTask(extension: BasePackage, args: Record<string, any>, brow
 
 				if (testResult.report.length > 0)
 				{
-					reporter.finish(args.console ? testResult.consoleLogs : []);
+					reporter.finish({ consoleLogs: showsBrowserConsole(args.console) ? testResult.consoleLogs : [] });
 				}
 
 				if (testResult.debugCleanup)
@@ -316,8 +317,8 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 				};
 			}
 
-			const allConsoleLogs = args.console ? deduplicateConsoleLogs(consoleLogSets) : [];
-			const { passed, failed, failures } = reporter.finish(allConsoleLogs);
+			const allConsoleLogs = showsBrowserConsole(args.console) ? deduplicateConsoleLogs(consoleLogSets) : [];
+			const { passed, failed, failures } = reporter.finish({ consoleLogs: allConsoleLogs });
 
 			const title = failed === 0
 				? 'Unit tests'

@@ -1,6 +1,7 @@
 import { createReporter } from '../create-reporter';
 import { checkCredentialsWarning } from '../check-env-test';
 import { getModuleTests, getModuleTestsDirectory, runModuleEndToEndTests } from '../module-tests-dir';
+import { showsBrowserConsole, showsNodeOutput } from '../console-target';
 
 import type { Task, TaskResult, TaskDetail } from '../../../modules/task/task-types';
 import type { TestToken } from '../../../modules/engines/test/test-types';
@@ -21,6 +22,7 @@ export function runModuleTestsTask(moduleName: string, args: Record<string, any>
 
 			const testResult = await runModuleEndToEndTests(moduleName, {
 				...args,
+				captureNodeOutput: showsNodeOutput(args.console),
 				onToken: (token: TestToken, browser?: string) => reporter.handleToken(token, browser),
 				onStatus: (status: string) => reporter.updateStatus(status),
 				onBegin: ({ browserCount, totalTests, browsers }: { browserCount: number; totalTests: number; browsers?: string[] }) => {
@@ -65,7 +67,10 @@ export function runModuleTestsTask(moduleName: string, args: Record<string, any>
 				};
 			}
 
-			const { passed, failed, failures, browsers } = reporter.finish(args.console ? testResult.consoleLogs : []);
+			const { passed, failed, failures, browsers } = reporter.finish({
+				consoleLogs: showsBrowserConsole(args.console) ? testResult.consoleLogs : [],
+				nodeOutput: showsNodeOutput(args.console) ? testResult.nodeOutput : undefined,
+			});
 
 			const title = failed === 0 ? 'E2E tests' : `E2E tests (${failed} failed)`;
 
