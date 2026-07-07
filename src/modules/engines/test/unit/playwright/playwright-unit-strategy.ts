@@ -29,6 +29,17 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 {
 	static #bundleCache = new Map<string, Promise<TestBundle>>();
 
+	// Run-level errors carry their full diagnostic in the message. Their JS stack would
+	// point at this file — where the ChefError is constructed — which is meaningless to
+	// the user and makes the reporter's code-frame highlight chef's own source. Drop it.
+	static #runError(code: string, message: string): ChefError
+	{
+		const error = new ChefError(code, message);
+		error.stack = undefined;
+
+		return error;
+	}
+
 	static clearBundleCache(): void
 	{
 		PlaywrightUnitStrategy.#bundleCache.clear();
@@ -76,7 +87,25 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 
 	async run(options: UnitTestOptions): Promise<TestResult>
 	{
-		const playwrightConfig = await findPlaywrightConfig(options.packageRoot, options.projectRoot);
+		let playwrightConfig;
+		try
+		{
+			playwrightConfig = await findPlaywrightConfig(options.packageRoot, options.projectRoot);
+		}
+		catch (error)
+		{
+			// A config that exists but can't be loaded (syntax error, missing import) must
+			// surface as a real error, not fall through to a config-less run.
+			const reason = error instanceof Error ? error.message : String(error);
+
+			return {
+				report: [],
+				stats: {},
+				consoleLogs: [],
+				errors: [PlaywrightUnitStrategy.#runError(CF.PLAYWRIGHT_ERROR, `Failed to load Playwright config: ${reason}`)],
+			};
+		}
+
 		if (playwrightConfig === null)
 		{
 			return {
@@ -84,7 +113,23 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 				stats: {},
 				consoleLogs: [],
 				errors: [
-					new ChefError(CF.PLAYWRIGHT_CONFIG_NOT_FOUND, 'playwright.config.ts not found. Run `chef init tests` to set up the test environment.'),
+					PlaywrightUnitStrategy.#runError(CF.PLAYWRIGHT_CONFIG_NOT_FOUND, 'playwright.config.ts not found. Run `chef init tests` to set up the test environment.'),
+				],
+			};
+		}
+
+		if (!playwrightConfig.use?.baseURL)
+		{
+			return {
+				report: [],
+				stats: {},
+				consoleLogs: [],
+				errors: [
+					PlaywrightUnitStrategy.#runError(
+						CF.BASE_URL_NOT_SET,
+						'baseURL is not set in playwright.config.ts. Add `use: { baseURL: \'http://your-bitrix-host\' }` '
+						+ 'so chef knows where the test page lives.',
+					),
 				],
 			};
 		}
@@ -102,7 +147,7 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 				stats: {},
 				consoleLogs: [],
 				errors: [
-					new ChefError(CF.UNKNOWN_BROWSER, `Unknown browser type: ${browserType}`),
+					PlaywrightUnitStrategy.#runError(CF.UNKNOWN_BROWSER, `Unknown browser type: ${browserType}`),
 				],
 			};
 		}
@@ -265,7 +310,22 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 			testsPageUrl.searchParams.set('extension', options.packageName);
 
 			onStatus('Loading test page...');
-			await page.goto(testsPageUrl.toString());
+			const response = await page.goto(testsPageUrl.toString());
+
+			// page.goto only throws on a network error or timeout — a 404/500/302 resolves
+			// fine, so without this check a missing mocha-wrapper.php or an unreachable
+			// stand would silently load a wrong page and end as "no tests collected".
+			if (!response || !response.ok())
+			{
+				const status = response ? `HTTP ${response.status()}` : 'no response';
+
+				throw PlaywrightUnitStrategy.#runError(
+					CF.TEST_PAGE_UNAVAILABLE,
+					`Could not load the test page (${status}): ${testsPageUrl.toString()}\n`
+					+ 'Check that the baseURL in playwright.config.ts points to a running Bitrix install '
+					+ 'and that /dev/ui/cli/mocha-wrapper.php exists there.',
+				);
+			}
 
 			// Close extra pages (about:blank) so CDP /json only shows the test page.
 			// This prevents WipRemoteVmConnection from connecting to the wrong page.
@@ -282,6 +342,20 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 
 			const grep = options.grep ?? null;
 			const timeout = isDebug ? 60000 : 10000;
+
+			// The page returned 2xx but might still be the wrong one — a login redirect, a
+			// stub, or a mocha-wrapper.php that didn't emit the runner. Fail with a clear
+			// reason instead of a cryptic "Cannot read properties of undefined (mocha)".
+			const hasMocha = await page.evaluate(() => typeof (globalThis as any).mocha !== 'undefined');
+			if (!hasMocha)
+			{
+				throw PlaywrightUnitStrategy.#runError(
+					CF.TEST_PAGE_UNAVAILABLE,
+					`The test page loaded but Mocha was not found on it: ${testsPageUrl.toString()}\n`
+					+ 'The page is likely not the test runner — check that /dev/ui/cli/mocha-wrapper.php is '
+					+ 'served correctly and that the install does not redirect to an authorization page.',
+				);
+			}
 
 			await page.evaluate(({ grep, timeout }) => {
 				// @ts-ignore

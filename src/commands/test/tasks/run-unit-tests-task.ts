@@ -305,7 +305,11 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 					details: [
 						{
 							type: 'block',
-							text: 'Test files exist but Mocha did not collect any tests. Check that describe/it blocks are not empty or skipped.',
+							text: 'Test files exist but Mocha did not collect any tests. Likely causes:\n'
+								+ '  • describe/it blocks are empty or all skipped\n'
+								+ '  • the test page did not load the runner (check baseURL and /dev/ui/cli/mocha-wrapper.php)\n'
+								+ '  • the Bitrix install redirects to authorization\n'
+								+ 'Run with --headed or --debug to inspect the page in the browser.',
 							color: 'yellow',
 						},
 					],
