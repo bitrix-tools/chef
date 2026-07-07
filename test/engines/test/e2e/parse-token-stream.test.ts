@@ -74,6 +74,14 @@ describe('parseTokenStream', () => {
 		assert.deepEqual(events[0], { type: 'end' });
 	});
 
+	it('should parse a RUN_ERROR event', () => {
+		const buffer = wrap({ id: 'RUN_ERROR', error: { message: 'Cannot find module', stack: 'at spec.ts:1' } });
+		const { events } = parseTokenStream(buffer);
+
+		assert.equal(events.length, 1);
+		assert.deepEqual(events[0], { type: 'runError', message: 'Cannot find module', stack: 'at spec.ts:1' });
+	});
+
 	it('should extract browser from token data', () => {
 		const buffer = wrap({ id: 'TEST_PASSED', title: 'test', browser: 'Chromium' });
 		const { events } = parseTokenStream(buffer);

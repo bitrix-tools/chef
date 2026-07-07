@@ -1,6 +1,7 @@
 node_modules/
 dist/
 !test/fixtures/**/dist/
+test-results/
 CLAUDE.md
 .claude
 .mcp.json

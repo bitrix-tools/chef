@@ -23,6 +23,18 @@ const STREAMING_REPORTER_PATH = fs.existsSync(path.resolve(STREAMING_REPORTER_DI
 
 export class PlaywrightE2EStrategy extends E2ETestStrategy
 {
+	// Run-level errors carry their full diagnostic in the message (esbuild/Playwright
+	// already include the file and location). The JS stack would point at this line —
+	// where the ChefError is constructed — which is meaningless to the user and makes the
+	// reporter's code-frame highlight chef's own source instead of the real cause. Drop it.
+	static #runError(message: string): ChefError
+	{
+		const error = new ChefError(CF.PLAYWRIGHT_ERROR, message);
+		error.stack = undefined;
+
+		return error;
+	}
+
 	async run(options: E2ETestOptions): Promise<TestResult>
 	{
 		if (!options.hasTests)
@@ -37,8 +49,26 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 
 		const baseArgs = ['playwright', 'test', `--reporter=${STREAMING_REPORTER_PATH}`];
 
-		const playwrightConfig = await findPlaywrightConfig(options.testsDirectory, options.projectRoot)
-			?? await findPlaywrightConfig(options.projectRoot, options.projectRoot);
+		let playwrightConfig;
+		try
+		{
+			playwrightConfig = await findPlaywrightConfig(options.testsDirectory, options.projectRoot)
+				?? await findPlaywrightConfig(options.projectRoot, options.projectRoot);
+		}
+		catch (error)
+		{
+			// A playwright.config.{ts,js} that fails to load (syntax error, missing import,
+			// throwing top-level code) must surface as a real error — not be swallowed into
+			// an empty run that reads as "no tests collected".
+			const reason = error instanceof Error ? error.message : String(error);
+
+			return {
+				report: [],
+				stats: {},
+				consoleLogs: [],
+				errors: [PlaywrightE2EStrategy.#runError(`Failed to load Playwright config: ${reason}`)],
+			};
+		}
 
 		if (!playwrightConfig)
 		{
@@ -179,11 +209,21 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 		const report: TestToken[] = [];
 		const consoleLogs: ConsoleLog[] = [];
 		const errors: Error[] = [];
+		const runErrors: string[] = [];
 		let stdoutBuffer = '';
 		let totalTests = -1;
+		let stdoutTail = '';
 
 		childProcess.stdout.on('data', (data: Buffer) => {
-			stdoutBuffer += data.toString();
+			const chunk = data.toString();
+			stdoutBuffer += chunk;
+
+			// Keep a rolling tail of human-readable stdout so a crash before any token still
+			// has context to report (Playwright prints load/build errors to stdout, not only
+			// stderr). Strip the token markers so the tail carries the real message — e.g.
+			// "Cannot find module ..." — instead of a dump of __CHEF_TOKEN__ JSON.
+			const humanText = chunk.replace(/\n?__CHEF_TOKEN__.*?__CHEF_TOKEN__\n?/gs, '');
+			stdoutTail = (stdoutTail + humanText).slice(-4000);
 
 			const { events, remaining } = parseTokenStream(stdoutBuffer);
 			stdoutBuffer = remaining;
@@ -199,6 +239,13 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 				else if (event.type === 'status')
 				{
 					onStatus(event.text);
+				}
+				else if (event.type === 'runError')
+				{
+					// A run-level failure the reporter captured (spec that won't compile,
+					// global-setup throw, "No tests found"). Keep the real reason so it can
+					// be reported instead of a bare exit code.
+					runErrors.push(event.stack || event.message);
 				}
 				else if (event.type === 'token')
 				{
@@ -221,11 +268,33 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 		});
 
 		return new Promise((resolve) => {
+			// The process failed to even start (npx missing, permissions, ENOENT). Without
+			// this handler the 'error' event would either crash chef or leave the promise
+			// pending — the user would never learn why the run produced no tests.
+			childProcess.on('error', (spawnError: Error) => {
+				errors.push(PlaywrightE2EStrategy.#runError(`Failed to start Playwright: ${spawnError.message}`));
+				resolve({ report, stats: {}, consoleLogs: [], errors });
+			});
+
 			childProcess.on('close', (code) => {
-				if (report.length === 0 && code !== 0 && totalTests !== 0)
+				// A non-zero exit with no collected results is always a real failure —
+				// broken config, crash on load, wrong testDir. We reach #runOnce only when
+				// test files exist (see run()'s hasTests guard), so "no tests" here is not
+				// a benign empty run: report it instead of masking it as "no tests collected".
+				if (report.length === 0 && code !== 0)
 				{
-					const stderrText = consoleLogs.map((l) => l.text).join('\n').trim();
-					errors.push(new ChefError(CF.PLAYWRIGHT_ERROR, stderrText || 'Playwright exited with errors'));
+					// Prefer the reporter-captured run error (real reason, e.g. a compile
+					// failure) — with a custom reporter Playwright routes those through
+					// onError instead of printing them. Fall back to stderr, then to the
+					// (token-stripped) stdout tail, then to a bare exit code.
+					const details = runErrors.join('\n\n').trim()
+						|| consoleLogs.map((l) => l.text).join('\n').trim()
+						|| stdoutTail.trim();
+					const message = details
+						? `Playwright exited with code ${code}:\n${details}`
+						: `Playwright exited with code ${code}`;
+
+					errors.push(PlaywrightE2EStrategy.#runError(message));
 				}
 
 				resolve({

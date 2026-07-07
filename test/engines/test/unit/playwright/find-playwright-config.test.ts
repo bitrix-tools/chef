@@ -72,4 +72,23 @@ describe('findPlaywrightConfig', () => {
 		assert.isNotNull(result);
 		assert.equal(result?.use?.baseURL, 'http://ts');
 	});
+
+	it('should throw (not return null) when the config exists but fails to load', async () => {
+		const configPath = path.join(tmpDir, 'playwright.config.js');
+		// A syntax error must surface as an error, not be swallowed into a config-less run.
+		fs.writeFileSync(configPath, 'module.exports = { this is broken');
+
+		let thrown: Error | null = null;
+		try
+		{
+			await findPlaywrightConfig(tmpDir, tmpDir);
+		}
+		catch (error)
+		{
+			thrown = error as Error;
+		}
+
+		assert.isNotNull(thrown, 'a broken config should throw');
+		assert.include(thrown!.message, configPath, 'error message should name the config path');
+	});
 });

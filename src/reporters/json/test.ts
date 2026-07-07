@@ -79,6 +79,10 @@ export type TestKindDetails = {
 	total: number,
 	tests: TestEntry[],
 	consoleLogs: ConsoleLog[],
+	// Run-level errors not tied to a single test — a broken config, a spec that won't
+	// compile, a crashed process. Without these a failed run would serialize as an empty
+	// success (total: 0, failed: 0), masking the failure for tooling that reads --json.
+	runErrors: JsonErrorPayload[],
 };
 
 export type TestDetails = {
@@ -187,7 +191,9 @@ async function testOne(
 		return {
 			name,
 			path,
-			success: unit.failed + e2e.failed === 0,
+			// A run-level error (broken config, crash) fails the run even when no individual
+			// test reported a failure — otherwise a fully broken run serializes as success.
+			success: unit.failed + e2e.failed === 0 && errors.length === 0,
 			durationMs: Date.now() - taskStart,
 			details: { unit, e2e },
 			errors,
@@ -297,6 +303,7 @@ function createMerger(): Merger
 {
 	const map = new Map<string, TestEntry>();
 	const browsers = new Set<string>();
+	const runErrors: JsonErrorPayload[] = [];
 
 	const keyOf = (suite: string[], title: string): string => {
 		return JSON.stringify([...suite, title]);
@@ -317,6 +324,11 @@ function createMerger(): Merger
 	return {
 		absorb(result, fallbackBrowser)
 		{
+			for (const error of result.errors)
+			{
+				runErrors.push(toErrorPayload(error, CF.PLAYWRIGHT_ERROR));
+			}
+
 			const stack: string[] = [];
 
 			for (const token of result.report)
@@ -406,6 +418,7 @@ function createMerger(): Merger
 				total: passed + failed + skipped,
 				tests,
 				consoleLogs,
+				runErrors,
 			};
 		},
 	};
@@ -459,9 +472,11 @@ function aggregateStatus(results: Record<string, BrowserTestResult>, browsers: s
 	return allSkipped ? 'skipped' : 'passed';
 }
 
-function collectFailures(kind: TestKindDetails): JsonErrorPayload[]
+export function collectFailures(kind: TestKindDetails): JsonErrorPayload[]
 {
-	const failures: JsonErrorPayload[] = [];
+	// Run-level errors (broken config, spec that won't compile, crashed process) first —
+	// these explain why there may be no per-test failures to report at all.
+	const failures: JsonErrorPayload[] = [...kind.runErrors];
 
 	for (const entry of kind.tests)
 	{
@@ -519,6 +534,7 @@ function emptyKind(skipReason?: string): TestKindDetails
 		total: 0,
 		tests: [],
 		consoleLogs: [],
+		runErrors: [],
 	};
 	if (skipReason)
 	{

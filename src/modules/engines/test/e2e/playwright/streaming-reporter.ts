@@ -1,4 +1,4 @@
-import type { Reporter, FullConfig, Suite, TestCase, TestResult, FullResult } from '@playwright/test/reporter';
+import type { Reporter, FullConfig, Suite, TestCase, TestResult, FullResult, TestError } from '@playwright/test/reporter';
 
 export default class StreamingReporter implements Reporter
 {
@@ -88,6 +88,21 @@ export default class StreamingReporter implements Reporter
 				error: errorMessage ? { message: errorMessage, stack: errorStack || undefined } : undefined,
 			});
 		}
+	}
+
+	onError(error: TestError): void
+	{
+		// Run-level errors not tied to a single test — e.g. a spec that fails to compile
+		// ("Cannot find module ..."), a global-setup throw, or "No tests found". With a
+		// custom reporter Playwright routes these here instead of printing them, so we must
+		// forward the message ourselves or the run would look empty with no explanation.
+		this.#emit({
+			id: 'RUN_ERROR',
+			error: {
+				message: error.message ?? error.value ?? 'Playwright run error',
+				stack: error.stack,
+			},
+		});
 	}
 
 	onEnd(result: FullResult): void
