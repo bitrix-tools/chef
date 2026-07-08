@@ -200,6 +200,8 @@ async function runTestsJson({ extensions, args, type }: RunTestsOptions): Promis
 
 function runTests({ extensions, args, type }: RunTestsOptions): void
 {
+	warnOnLikelyUnquotedGrep(extensions, args);
+
 	if (args.reporter === 'json')
 	{
 		void runTestsJson({ extensions, args, type });
@@ -411,6 +413,8 @@ async function runModuleTests(rawModules: string[], args: Record<string, any>): 
 	const { modules, file } = resolveModules(rawModules);
 	const moduleArgs = { ...args, file };
 
+	warnOnLikelyUnquotedGrep(modules, args);
+
 	if (args.reporter === 'json')
 	{
 		console.log('');
@@ -551,6 +555,33 @@ function splitExtensionsAndFile(args: string[]): { extensions: string[]; file?: 
 	}
 
 	return { extensions: args };
+}
+
+// Extension names are dotted/hyphenated slugs (main.core, ui.icon-set.solid, *). An
+// argument with spaces or non-latin letters is almost never an extension — it's usually a
+// word from a `--grep` phrase that lost its quotes, so the shell split it into positional
+// args. Warn with the fix instead of letting it fail later as "Extension <word> not found".
+const EXTENSION_NAME_PATTERN = /^[a-z0-9.*_-]+$/i;
+
+export function warnOnLikelyUnquotedGrep(extensions: string[], args: Record<string, any>): void
+{
+	if (!args.grep || extensions.length === 0)
+	{
+		return;
+	}
+
+	const stray = extensions.filter((name) => !EXTENSION_NAME_PATTERN.test(name));
+	if (stray.length === 0)
+	{
+		return;
+	}
+
+	const phrase = [args.grep, ...stray].join(' ');
+	console.log('');
+	console.log(chalk.yellow(
+		`These look like words of a --grep phrase, not extensions: ${stray.map((s) => chalk.bold(s)).join(', ')}`,
+	));
+	console.log(chalk.yellow(`Quote a pattern that contains spaces: ${chalk.bold(`--grep '${phrase}'`)}`));
 }
 
 const unitCommand = new Command('unit')

@@ -92,7 +92,11 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 
 		if (options.grep)
 		{
-			baseArgs.push(`--grep=${options.grep}`);
+			// Normalize to NFC: a pattern pasted on macOS often arrives decomposed (NFD) —
+			// e.g. "й" as "и"+combining breve — while the source titles are NFC. The two
+			// look identical but the RegExp then matches nothing, silently filtering out
+			// every test. NFC makes the pattern match the way the user sees it.
+			baseArgs.push(`--grep=${options.grep.normalize('NFC')}`);
 		}
 
 		if (options.file)

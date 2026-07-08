@@ -340,7 +340,11 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 				}
 			}
 
-			const grep = options.grep ?? null;
+			// Normalize to NFC: a pattern pasted on macOS often arrives decomposed (NFD) —
+			// e.g. "й" as "и"+combining breve — while the source titles are NFC. Mocha turns
+			// the string into a RegExp, which then matches nothing and silently drops every
+			// test. NFC makes the pattern match the way the user sees it.
+			const grep = options.grep ? options.grep.normalize('NFC') : null;
 			const timeout = isDebug ? 60000 : 10000;
 
 			// The page returned 2xx but might still be the wrong one — a login redirect, a

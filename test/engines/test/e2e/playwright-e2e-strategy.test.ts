@@ -130,4 +130,28 @@ describe('PlaywrightE2EStrategy error surfacing', function () {
 		assert.isEmpty(result.errors);
 		assert.isUndefined(result.nodeOutput, 'without the flag nodeOutput must stay unset');
 	});
+
+	it('matches a grep pattern pasted in NFD against an NFC test title (normalizes to NFC)', async () => {
+		fs.writeFileSync(
+			path.join(tmpDir, 'playwright.config.ts'),
+			"export default { testDir: './tests', projects: [{ name: 'chromium', use: { defaultBrowserType: 'chromium' } }] };",
+		);
+		// Title with "й" written in NFC (the normal on-disk form).
+		fs.writeFileSync(
+			path.join(testsDir, 'ru.spec.ts'),
+			"import { test, expect } from '@playwright/test';\n"
+			+ "test('русский тест', async () => { expect(1).toBe(1); });",
+		);
+
+		// Same word decomposed to NFD, as it arrives from a macOS paste. Without the
+		// strategy normalizing to NFC, this would match nothing and report zero tests.
+		const grep = 'русский'.normalize('NFD');
+		assert.notEqual(grep, 'русский', 'NFD form must differ byte-wise from NFC');
+
+		const result = await new PlaywrightE2EStrategy().run({ ...options(), project: 'chromium', grep });
+
+		assert.isEmpty(result.errors);
+		const passed = result.report.filter((token) => token.id === 'TEST_PASSED');
+		assert.lengthOf(passed, 1, 'the NFD pattern must match the NFC title after normalization');
+	});
 });
