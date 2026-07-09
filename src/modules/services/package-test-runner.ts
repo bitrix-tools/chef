@@ -32,6 +32,7 @@ export class PackageTestRunner
 			grep: args.grep,
 			file: args.file,
 			cdpPort: args.cdpPort,
+			listOnly: args.listOnly,
 			onToken: args.onToken,
 			onStatus: args.onStatus,
 		});

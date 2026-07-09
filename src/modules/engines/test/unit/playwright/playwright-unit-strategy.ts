@@ -406,6 +406,54 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 
 			type TestStats = Promise<{ stats: any }>;
 
+			// --list: the bundle is injected (so describe/it have populated mocha.suite), but
+			// instead of running we walk the suite tree and emit TEST_LISTED for each test.
+			if (options.listOnly)
+			{
+				const listed = await page.evaluate(() => {
+					// Iterative DFS on purpose: a named nested function would make the bundler
+					// inject a `__name(...)` helper into the serialized page.evaluate body,
+					// which is undefined in the browser and throws "__name is not defined".
+					// @ts-ignore — mocha is provided by the test page
+					const root = globalThis.mocha.suite;
+					const stack: Array<{ suite: any; path: string[] }> = [{ suite: root, path: [] }];
+					const tests: Array<{ title: string; suite: string[]; pending: boolean }> = [];
+
+					while (stack.length > 0)
+					{
+						const { suite, path } = stack.pop()!;
+						const here = suite.title ? [...path, suite.title] : path;
+
+						for (const test of suite.tests ?? [])
+						{
+							tests.push({ title: test.title, suite: here, pending: Boolean(test.pending) });
+						}
+						// Push children in reverse so they pop in source order.
+						const children = suite.suites ?? [];
+						for (let index = children.length - 1; index >= 0; index--)
+						{
+							stack.push({ suite: children[index], path: here });
+						}
+					}
+
+					return tests;
+				});
+
+				for (const test of listed)
+				{
+					const token: TestToken = { id: 'TEST_LISTED', title: test.title, suite: test.suite, pending: test.pending, browser: browserType };
+					report.push(token);
+					options.onToken?.(token);
+				}
+
+				if (!isDebug && !cdpPort)
+				{
+					await browser.close();
+				}
+
+				return { report, stats: {}, consoleLogs, errors: [] };
+			}
+
 			const { stats } = await page.evaluate((): TestStats => {
 				return new Promise((resolve) => {
 					// @ts-ignore

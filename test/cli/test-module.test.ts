@@ -69,6 +69,14 @@ describe('chef test module', () => {
 		assert.equal(json.extensions[0].details.e2e.skipReason, 'no e2e tests');
 	});
 
+	it('supports --list (module with no tests lists nothing, exits cleanly)', async () => {
+		const { exitCode, output } = await runChef(['test', 'module', 'crm', '--list'], { cwd: sourceRepo });
+
+		// crm has no test files → nothing to list, but the run is clean, not an error.
+		assert.equal(exitCode, 0);
+		assert.include(output, 'no test files');
+	});
+
 	it('works on an installed Bitrix (project), resolving modules under local/', async () => {
 		// projectRepo has no local/modules/mymod, so there are no test files —
 		// the run must still complete cleanly and report the module as skipped

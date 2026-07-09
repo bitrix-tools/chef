@@ -2,9 +2,38 @@ import type { Reporter, FullConfig, Suite, TestCase, TestResult, FullResult, Tes
 
 export default class StreamingReporter implements Reporter
 {
+	// --list mode: Playwright still calls onBegin with the full suite but never runs the
+	// tests, so we emit the whole list here and skip the run-time hooks below.
+	#listOnly = process.env.CHEF_LIST === '1';
+
 	onBegin(config: FullConfig, suite: Suite): void
 	{
 		const tests = suite.allTests();
+
+		if (this.#listOnly)
+		{
+			for (const test of tests)
+			{
+				// titlePath: ["", <project>, <file>, ...<describe>, <title>]
+				const titlePath = test.titlePath();
+				const browser = this.#formatBrowserName(titlePath[1]);
+				const suitePath = titlePath.slice(3, -1);
+				const title = titlePath[titlePath.length - 1] ?? '';
+
+				this.#emit({
+					id: 'TEST_LISTED',
+					title,
+					suite: suitePath,
+					browser,
+					file: test.location?.file,
+					line: test.location?.line,
+					// test.skip()/fixme() → expectedStatus 'skipped'; mark it in the listing.
+					pending: test.expectedStatus === 'skipped',
+				});
+			}
+			return;
+		}
+
 		const projects = new Set(tests.map((t) => t.titlePath()[1]).filter(Boolean));
 
 		this.#emit({
@@ -16,6 +45,11 @@ export default class StreamingReporter implements Reporter
 
 	onTestBegin(test: TestCase): void
 	{
+		if (this.#listOnly)
+		{
+			return;
+		}
+
 		// Neutral, localized "Running <Browser>..." — used only for the early status
 		// line before per-test results start streaming (the multi-browser status bar
 		// takes over after that). We deliberately drop the raw "chromium: suite > test"

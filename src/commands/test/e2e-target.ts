@@ -67,6 +67,7 @@ export async function runE2eForTarget(target: E2eTarget, args: Record<string, an
 		project: args.project,
 		file: args.file,
 		captureNodeOutput: args.captureNodeOutput,
+		listOnly: args.listOnly,
 		onToken: args.onToken,
 		onStatus: args.onStatus,
 		onBegin: args.onBegin,

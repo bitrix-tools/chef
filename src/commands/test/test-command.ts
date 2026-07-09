@@ -167,6 +167,66 @@ function createTestTasks(extension: BasePackage, args: Record<string, any>, type
 	];
 }
 
+/**
+ * --list summary: one block with a line per test kind (Unit / E2E), totals summed across
+ * every listed extension. Unit and E2E are separate tasks with separate reporters, so the
+ * per-kind counts arrive via each task's metrics.listing and are merged here into one block.
+ */
+function printListingSummary(testResults: TaskGroupResult[]): void
+{
+	const totals = {
+		unit: { total: 0, runnable: 0, skipped: 0 },
+		e2e: { total: 0, runnable: 0, skipped: 0 },
+	};
+
+	for (const group of testResults)
+	{
+		for (const result of group.results)
+		{
+			const listing = result.metrics?.listing;
+			if (!listing)
+			{
+				continue;
+			}
+			const bucket = totals[listing.kind];
+			bucket.total += listing.total;
+			bucket.runnable += listing.runnable;
+			bucket.skipped += listing.skipped;
+		}
+	}
+
+	const formatLine = (label: string, counts: { total: number; runnable: number; skipped: number }): string => {
+		const parts = [chalk.bold(`${counts.total} ${counts.total === 1 ? 'test' : 'tests'}`)];
+		parts.push(chalk.green(`${counts.runnable} runnable`));
+		if (counts.skipped > 0)
+		{
+			parts.push(chalk.yellow(`${counts.skipped} skipped`));
+		}
+
+		return `  ${chalk.bold(label.padEnd(6))}${parts.join(chalk.gray(' · '))}`;
+	};
+
+	const lines: string[] = [];
+	if (totals.unit.total > 0)
+	{
+		lines.push(formatLine('Unit', totals.unit));
+	}
+	if (totals.e2e.total > 0)
+	{
+		lines.push(formatLine('E2E', totals.e2e));
+	}
+
+	if (lines.length === 0)
+	{
+		return;
+	}
+
+	console.log('');
+	console.log(`  ${chalk.bold('Summary')}`);
+	console.log(lines.join('\n'));
+	console.log('');
+}
+
 async function runTestsJson({ extensions, args, type }: RunTestsOptions): Promise<void>
 {
 	if (args.watch)
@@ -194,6 +254,7 @@ async function runTestsJson({ extensions, args, type }: RunTestsOptions): Promis
 		grep: args.grep,
 		file: args.file,
 		project: args.project,
+		listOnly: args.list,
 	});
 	emitJson(result);
 	process.exit(result.success ? 0 : 1);
@@ -203,6 +264,13 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 {
 	if (reportUnquotedGrep(extensions, args))
 	{
+		process.exit(1);
+	}
+
+	if (args.list && args.watch)
+	{
+		console.log('');
+		console.log(chalk.yellow('--list cannot be combined with --watch.'));
 		process.exit(1);
 	}
 
@@ -322,6 +390,12 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 					console.log(`\n${chalk.green('✔')} Watcher started for ${count} extensions`);
 				}
 			}
+			else if (args.list)
+			{
+				printListingSummary(testResults);
+
+				process.exit(0);
+			}
 			else
 			{
 				printSummary(testResults, startTime, { isTestRun: true });
@@ -367,7 +441,8 @@ const commonOptions = (cmd: Command) => cmd
 	.option('--project <projects...>', 'Run tests in the specified Playwright projects')
 	.addOption(createReporterOption(['default', 'json', 'teamcity']))
 	.option('--console [target]', 'Print test output: browser (in-page console), node (test process stdout), or all. Bare --console means browser.', parseConsoleOption)
-	.option('--cdp-port <port>', 'Launch browser with Chrome DevTools Protocol on this port', parseInt);
+	.option('--cdp-port <port>', 'Launch browser with Chrome DevTools Protocol on this port', parseInt)
+	.option('--list', 'List the tests that would run, without running them');
 
 function resolveModules(rawModules: string[]): { modules: string[]; file?: string }
 {
@@ -448,6 +523,7 @@ async function runModuleTests(rawModules: string[], args: Record<string, any>): 
 			debug: args.debug,
 			grep: args.grep,
 			project: args.project,
+			listOnly: args.list,
 		});
 		emitJson(result);
 		process.exit(result.success ? 0 : 1);
@@ -488,7 +564,14 @@ async function runModuleTests(rawModules: string[], args: Record<string, any>): 
 		testResults.push(await runModule(moduleName));
 	}
 
-	printSummary(testResults, startTime, { isTestRun: true, unitLabel: 'Modules' });
+	if (args.list)
+	{
+		printListingSummary(testResults);
+	}
+	else
+	{
+		printSummary(testResults, startTime, { isTestRun: true, unitLabel: 'Modules' });
+	}
 	process.exit(0);
 }
 

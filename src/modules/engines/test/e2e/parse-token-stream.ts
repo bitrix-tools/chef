@@ -78,6 +78,9 @@ export function parseTokenStream(buffer: string): { events: ParsedEvent[]; remai
 				duration: data.duration,
 				error: data.error,
 				attachments: data.attachments,
+				file: data.file,
+				line: data.line,
+				pending: data.pending,
 				browser: data.browser,
 			};
 

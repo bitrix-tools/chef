@@ -1,4 +1,4 @@
-import type { TestToken, ConsoleLog, NodeOutputSection } from './test-types';
+import type { TestToken, ConsoleLog, NodeOutputSection, ListingCounts } from './test-types';
 
 function escape(text: string): string
 {
@@ -153,7 +153,7 @@ export class TeamcityReporter
 		}
 	}
 
-	finish(options: { consoleLogs?: ConsoleLog[]; nodeOutput?: NodeOutputSection[] } = {}): { passed: number; failed: number; failures: never[]; browsers: never[] }
+	finish(options: { consoleLogs?: ConsoleLog[]; nodeOutput?: NodeOutputSection[] } = {}): { passed: number; failed: number; failures: never[]; browsers: never[]; listing?: ListingCounts }
 	{
 		const consoleLogs = options.consoleLogs ?? [];
 

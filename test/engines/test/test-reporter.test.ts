@@ -387,4 +387,49 @@ describe('TestReporter', () => {
 			assert.notInclude(stripAnsi(output), 'Node output');
 		});
 	});
+
+	describe('--list output', () => {
+		it('lists tests grouped by suite, deduped across browsers, and returns the counts', () => {
+			const reporter = createReporter(2);
+
+			// Same tests reported per browser (as Playwright --list does) — must be deduped.
+			for (const browser of ['Chromium', 'Firefox'])
+			{
+				reporter.handleToken({ id: 'TEST_LISTED', title: 'первый', suite: ['Группа A'], browser }, browser);
+				reporter.handleToken({ id: 'TEST_LISTED', title: 'второй', suite: ['Группа A'], browser }, browser);
+				reporter.handleToken({ id: 'TEST_LISTED', title: 'корневой', suite: [], browser }, browser);
+			}
+
+			output = '';
+			const result = reporter.finish();
+
+			const plain = stripAnsi(output);
+			assert.include(plain, 'Группа A');
+			assert.include(plain, 'первый');
+			assert.include(plain, 'корневой');
+			// The list is not a pass/fail run, and the reporter doesn't print its own
+			// summary — the command layer merges per-kind counts into one Summary block.
+			assert.equal(result.passed, 0);
+			assert.equal(result.failed, 0);
+			// Deduped: 3 unique tests, not 6.
+			assert.deepEqual(result.listing, { total: 3, runnable: 3, skipped: 0 });
+		});
+
+		it('marks skipped tests in the list and counts them separately', () => {
+			const reporter = createReporter();
+
+			reporter.handleToken({ id: 'TEST_LISTED', title: 'обычный', suite: ['S'] });
+			reporter.handleToken({ id: 'TEST_LISTED', title: 'отложенный', suite: ['S'], pending: true });
+
+			output = '';
+			const result = reporter.finish();
+
+			const plain = stripAnsi(output);
+			// The skipped test is tagged in the list; the runnable one is not.
+			assert.match(plain, /отложенный\s+skipped/);
+			assert.notMatch(plain, /обычный\s+skipped/);
+			// The counts come back on the result, split into runnable vs skipped.
+			assert.deepEqual(result.listing, { total: 2, runnable: 1, skipped: 1 });
+		});
+	});
 });

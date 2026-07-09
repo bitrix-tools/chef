@@ -154,4 +154,29 @@ describe('PlaywrightE2EStrategy error surfacing', function () {
 		const passed = result.report.filter((token) => token.id === 'TEST_PASSED');
 		assert.lengthOf(passed, 1, 'the NFD pattern must match the NFC title after normalization');
 	});
+
+	it('lists tests without running them when listOnly is set', async () => {
+		fs.writeFileSync(
+			path.join(tmpDir, 'playwright.config.ts'),
+			"export default { testDir: './tests', projects: [{ name: 'chromium', use: { defaultBrowserType: 'chromium' } }] };",
+		);
+		fs.writeFileSync(
+			path.join(testsDir, 'list.spec.ts'),
+			"import { test, expect } from '@playwright/test';\n"
+			+ "test.describe('Группа', () => {\n"
+			+ "  test('первый', async () => { expect(1).toBe(2); });\n"  // would FAIL if run
+			+ "  test('второй', async () => { expect(1).toBe(1); });\n"
+			+ '});',
+		);
+
+		const result = await new PlaywrightE2EStrategy().run({ ...options(), project: 'chromium', listOnly: true });
+
+		assert.isEmpty(result.errors, 'listing must not error even if a test would fail when run');
+		const listed = result.report.filter((token) => token.id === 'TEST_LISTED');
+		assert.lengthOf(listed, 2, 'both tests are listed');
+		// No run happened — the failing test is not reported as failed.
+		assert.isEmpty(result.report.filter((token) => token.id === 'TEST_FAILED'));
+		assert.deepEqual(listed.map((t) => t.title), ['первый', 'второй']);
+		assert.deepEqual(listed[0].suite, ['Группа']);
+	});
 });

@@ -40,9 +40,11 @@ export type TestOptions = JsonInputOptions & TargetSelector & {
 	grep?: string,
 	file?: string,
 	project?: string | string[],
+	// List tests without running them (--list).
+	listOnly?: boolean,
 };
 
-export type TestStatus = 'passed' | 'failed' | 'skipped';
+export type TestStatus = 'passed' | 'failed' | 'skipped' | 'listed';
 
 export type BrowserTestResult = {
 	status: TestStatus,
@@ -76,6 +78,8 @@ export type TestEntry = {
 
 export type TestKindDetails = {
 	ran: boolean,
+	// True when this kind was only listed (--list), not run.
+	listed?: boolean,
 	skipReason?: string,
 	durationMs: number,
 	browsers: string[],
@@ -336,6 +340,7 @@ async function runUnit(extensionPackage: BasePackage, options: TestOptions): Pro
 			grep: options.grep,
 			file: options.file,
 			browserType,
+			listOnly: options.listOnly,
 		});
 		merger.absorb(result, browserType);
 		allLogs.push(...result.consoleLogs);
@@ -391,6 +396,7 @@ async function runE2E(target: E2eTarget, options: TestOptions): Promise<TestKind
 		grep: options.grep,
 		file: options.file,
 		project: options.project,
+		listOnly: options.listOnly,
 	});
 	merger.absorb(result);
 	const durationMs = Date.now() - runStart;
@@ -460,7 +466,10 @@ function createMerger(): Merger
 					continue;
 				}
 
-				if (token.id !== 'TEST_PASSED' && token.id !== 'TEST_FAILED' && token.id !== 'TEST_PENDING')
+				if (
+					token.id !== 'TEST_PASSED' && token.id !== 'TEST_FAILED'
+					&& token.id !== 'TEST_PENDING' && token.id !== 'TEST_LISTED'
+				)
 				{
 					continue;
 				}
@@ -475,7 +484,8 @@ function createMerger(): Merger
 
 				const status: TestStatus = token.id === 'TEST_PASSED'
 					? 'passed'
-					: token.id === 'TEST_FAILED' ? 'failed' : 'skipped';
+					: token.id === 'TEST_FAILED' ? 'failed'
+						: token.id === 'TEST_LISTED' ? 'listed' : 'skipped';
 
 				const browserResult: BrowserTestResult = { status };
 				if (typeof token.duration === 'number')
@@ -501,6 +511,7 @@ function createMerger(): Merger
 			let passed = 0;
 			let failed = 0;
 			let skipped = 0;
+			let listed = 0;
 
 			for (const entry of map.values())
 			{
@@ -514,6 +525,10 @@ function createMerger(): Merger
 				{
 					skipped++;
 				}
+				else if (status === 'listed')
+				{
+					listed++;
+				}
 				else
 				{
 					passed++;
@@ -522,13 +537,14 @@ function createMerger(): Merger
 			}
 
 			return {
-				ran: true,
+				ran: listed === 0,
+				listed: listed > 0,
 				durationMs,
 				browsers: browserList,
 				passed,
 				failed,
 				skipped,
-				total: passed + failed + skipped,
+				total: passed + failed + skipped + listed,
 				tests,
 				consoleLogs,
 				runErrors,
@@ -565,6 +581,14 @@ function buildFailure(token: { error?: { message: string, stack?: string }, show
 
 function aggregateStatus(results: Record<string, BrowserTestResult>, browsers: string[]): TestStatus
 {
+	// --list: every browser reports the test as 'listed' (never run), so the aggregate is
+	// 'listed'. This is checked first — a listed test has no pass/fail/skip to weigh.
+	const values = browsers.map((browser) => results[browser]).filter(Boolean);
+	if (values.length > 0 && values.every((result) => result.status === 'listed'))
+	{
+		return 'listed';
+	}
+
 	let allSkipped = true;
 	for (const browser of browsers)
 	{

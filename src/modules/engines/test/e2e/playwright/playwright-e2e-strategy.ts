@@ -49,6 +49,13 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 
 		const baseArgs = ['playwright', 'test', `--reporter=${STREAMING_REPORTER_PATH}`];
 
+		// --list: Playwright enumerates tests (honoring --grep/--project) without running
+		// them. The reporter is told via CHEF_LIST (see #runOnce env) to emit TEST_LISTED.
+		if (options.listOnly)
+		{
+			baseArgs.push('--list');
+		}
+
 		let playwrightConfig;
 		try
 		{
@@ -215,6 +222,7 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 			env: {
 				...global.process.env,
 				TESTS_DIR: options.testsDirectory,
+				...(options.listOnly ? { CHEF_LIST: '1' } : {}),
 			},
 			shell: process.platform === 'win32',
 		});

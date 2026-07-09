@@ -5,7 +5,7 @@ import { groupAttachmentsByBrowser } from './test-types';
 import { formatError } from '../../../diagnostics/format-error';
 import { formatElapsed } from '../../../utils/format-elapsed';
 
-import type { TestToken, ConsoleLog, NodeOutputSection, TestAttachment } from './test-types';
+import type { TestToken, ConsoleLog, NodeOutputSection, TestAttachment, ListingCounts } from './test-types';
 
 export { stripAnsi, hasLocalFilePath };
 
@@ -103,6 +103,7 @@ export class TestReporter
 	readonly #suiteStacks = new Map<string, string[]>();
 	readonly #suiteStats = new Map<string, SuiteStats>();
 	readonly #failedTests: FailedTest[] = [];
+	readonly #listedTests: Array<{ suitePath: string; title: string; file?: string; line?: number; pending: boolean }> = [];
 	readonly #slowTests: SlowTest[] = [];
 	readonly #browsers = new Set<string>();
 	readonly #browserStatuses = new Map<string, string>();
@@ -258,6 +259,24 @@ export class TestReporter
 
 	handleToken(token: TestToken, browser?: string): void
 	{
+		// --list: no run, just collect the enumerated tests; finish() prints them.
+		if (token.id === 'TEST_LISTED')
+		{
+			const testBrowser = token.browser ?? browser;
+			if (testBrowser)
+			{
+				this.#browsers.add(testBrowser);
+			}
+			this.#listedTests.push({
+				suitePath: (token.suite ?? []).join(' > '),
+				title: token.title ?? '',
+				file: token.file,
+				line: token.line,
+				pending: token.pending ?? false,
+			});
+			return;
+		}
+
 		const key = browser ?? '';
 
 		if (browser)
@@ -642,12 +661,80 @@ export class TestReporter
 		return [...groups.values()];
 	}
 
-	finish(options: { consoleLogs?: ConsoleLog[]; nodeOutput?: NodeOutputSection[] } = {}): { passed: number; failed: number; failures: FailedTestGroup[]; browsers: Array<{ name: string; passed: number; failed: number }> }
+	#printListing(): ListingCounts
+	{
+		// Dedupe across browsers — a test repeated per project is one test in the listing.
+		const seen = new Set<string>();
+		const bySuite = new Map<string, Array<{ title: string; pending: boolean }>>();
+		let skipped = 0;
+		for (const test of this.#listedTests)
+		{
+			const key = `${test.suitePath} ${test.title}`;
+			if (seen.has(key))
+			{
+				continue;
+			}
+			seen.add(key);
+			if (test.pending)
+			{
+				skipped++;
+			}
+			const list = bySuite.get(test.suitePath) ?? [];
+			list.push({ title: test.title, pending: test.pending });
+			bySuite.set(test.suitePath, list);
+		}
+
+		const lines: string[] = [''];
+		let first = true;
+		for (const [suitePath, tests] of bySuite)
+		{
+			if (!first)
+			{
+				lines.push('');
+			}
+			first = false;
+
+			if (suitePath)
+			{
+				lines.push(`${PREFIX} ${chalk.bold(suitePath)}`);
+			}
+			for (const test of tests)
+			{
+				// Reuse the run-report look: skipped tests get the yellow ○ + "skipped"
+				// marker; a test that would run gets a neutral grey ○.
+				lines.push(test.pending
+					? `${PREFIX}   ${chalk.yellow('○')} ${chalk.dim(test.title)} ${chalk.yellow('skipped')}`
+					: `${PREFIX}   ${chalk.gray('○')} ${chalk.dim(test.title)}`);
+			}
+		}
+
+		lines.push('');
+
+		console.log(lines.join('\n'));
+
+		// The Summary block isn't printed here — it's per test kind, but the command layer
+		// wants one combined block (Unit / E2E lines together), so it collects these counts
+		// from finish() and prints the summary once after all kinds have listed.
+		const total = seen.size;
+
+		return { total, runnable: total - skipped, skipped };
+	}
+
+	finish(options: { consoleLogs?: ConsoleLog[]; nodeOutput?: NodeOutputSection[] } = {}): { passed: number; failed: number; failures: FailedTestGroup[]; browsers: Array<{ name: string; passed: number; failed: number }>; listing?: ListingCounts }
 	{
 		const consoleLogs = options.consoleLogs ?? [];
 		const nodeOutput = options.nodeOutput ?? [];
 
 		this.#stopSpinner();
+		this.#onStatus('');
+
+		// --list: print the enumerated tests grouped by suite (unique tests, not per-browser).
+		// The counts go back to the caller, which prints one combined Summary across kinds.
+		if (this.#listedTests.length > 0)
+		{
+			const listing = this.#printListing();
+			return { passed: 0, failed: 0, failures: [], browsers: [], listing };
+		}
 
 		const wallTime = Date.now() - this.#startTime;
 		const total = this.#passed + this.#failed + this.#pending;

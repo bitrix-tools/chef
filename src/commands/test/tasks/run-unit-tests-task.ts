@@ -9,7 +9,7 @@ import { Environment } from '../../../environment/environment';
 
 import type { BasePackage } from '../../../modules/packages/base-package';
 import type { Task, TaskResult, TaskDetail } from '../../../modules/task/task-types';
-import type { BrowserType, ConsoleLog } from '../../../modules/engines/test/test-types';
+import type { BrowserType, ConsoleLog, TestToken } from '../../../modules/engines/test/test-types';
 
 function deduplicateConsoleLogs(sets: ConsoleLog[][]): ConsoleLog[]
 {
@@ -166,6 +166,44 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 		run: async (onUpdate): Promise<TaskResult> => {
 			const browsers = await resolveBrowsers();
 			const reporter = createReporter(args.reporter, onUpdate, { showSummary: false });
+
+			// --list: the test set is identical across browsers, so enumerate in just one
+			// (still needs a browser — the bundle's describe/it run to populate the suite).
+			if (args.list)
+			{
+				const listResult = await extension.runUnitTests({
+					...args,
+					browserType: browsers[0],
+					listOnly: true,
+					onToken: (token: TestToken) => reporter.handleToken(token, BROWSER_LABEL[browsers[0]] ?? browsers[0]),
+				});
+				reporter.stop();
+				reporter.clearStatus();
+
+				if (listResult.errors.length > 0)
+				{
+					return {
+						title: 'Unit tests (errored)',
+						status: 'failed',
+						details: listResult.errors.map((error: Error) => ({
+							type: 'error' as const,
+							code: 'code' in error ? (error as any).code : undefined,
+							message: error.message,
+							stack: error.stack,
+						})),
+					};
+				}
+
+				const { listing } = reporter.finish();
+				const listed = listResult.report.filter((token) => token.id === 'TEST_LISTED').length;
+
+				return {
+					title: listed > 0 ? 'Unit tests (listed)' : 'Unit tests (no test files)',
+					status: 'skipped',
+					metrics: listing ? { listing: { kind: 'unit', ...listing } } : undefined,
+				};
+			}
+
 			reporter.setBrowserCount(browsers.length);
 			const consoleLogSets: ConsoleLog[][] = [];
 			const allErrors: Error[] = [];

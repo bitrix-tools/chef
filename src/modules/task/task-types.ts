@@ -22,7 +22,14 @@ interface TaskResult
 	title: string;
 	status: TaskStatus;
 	details?: TaskDetail[];
-	metrics?: { passed: number; failed: number; failures?: TaskFailure[]; browsers?: Array<{ name: string; passed: number; failed: number }> };
+	metrics?: {
+		passed?: number;
+		failed?: number;
+		failures?: TaskFailure[];
+		browsers?: Array<{ name: string; passed: number; failed: number }>;
+		// --list only: enumerated-test counts for the combined Summary block.
+		listing?: { kind: 'unit' | 'e2e'; total: number; runnable: number; skipped: number };
+	};
 }
 
 interface Task

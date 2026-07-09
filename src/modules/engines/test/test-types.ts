@@ -35,7 +35,7 @@ export function groupAttachmentsByBrowser<T extends { browser?: string }>(
 }
 
 export type TestToken = {
-	id: 'SUITE_START' | 'SUITE_END' | 'TEST_PASSED' | 'TEST_FAILED' | 'TEST_PENDING';
+	id: 'SUITE_START' | 'SUITE_END' | 'TEST_PASSED' | 'TEST_FAILED' | 'TEST_PENDING' | 'TEST_LISTED';
 	title?: string;
 	suite?: string[];
 	root?: boolean;
@@ -43,6 +43,13 @@ export type TestToken = {
 	speed?: string;
 	error?: { message: string; stack?: string };
 	attachments?: TestAttachment[];
+	// Source location, populated only for TEST_LISTED (--list). e2e gets it from Playwright's
+	// test.location; unit has no source mapping in the browser, so it stays absent there.
+	file?: string;
+	line?: number;
+	// TEST_LISTED only: the test is skipped (test.skip/fixme / it.skip) — shown as skipped
+	// in the listing rather than as a regular pending run.
+	pending?: boolean;
 	showDiff?: boolean;
 	actual?: unknown;
 	expected?: unknown;
@@ -52,6 +59,15 @@ export type TestToken = {
 	 * BrowserType. Absent when not applicable (e.g. SUITE_START tokens).
 	 */
 	browser?: string;
+};
+
+// --list result: how many unique tests were enumerated, split into ones that would run and
+// ones that are skipped. Each test kind (unit / e2e) reports its own counts; the command
+// layer merges them into a single Summary block across kinds.
+export type ListingCounts = {
+	total: number;
+	runnable: number;
+	skipped: number;
 };
 
 export type UnitTestOptions = {
@@ -68,6 +84,8 @@ export type UnitTestOptions = {
 	grep?: string;
 	file?: string;
 	cdpPort?: number;
+	// List tests (emit TEST_LISTED) instead of running them (--list).
+	listOnly?: boolean;
 	onToken?: (token: TestToken, browser?: string) => void;
 	onStatus?: (status: string) => void;
 };
@@ -83,6 +101,8 @@ export type E2ETestOptions = {
 	file?: string;
 	// Collect the Node-side stdout of the test process (see TestResult.nodeOutput).
 	captureNodeOutput?: boolean;
+	// List tests (emit TEST_LISTED) instead of running them (--list).
+	listOnly?: boolean;
 	onToken?: (token: TestToken, browser?: string) => void;
 	onStatus?: (status: string) => void;
 	onBegin?: (info: { totalTests: number; browserCount: number; browsers?: string[] }) => void;

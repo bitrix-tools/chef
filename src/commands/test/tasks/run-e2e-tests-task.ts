@@ -17,9 +17,44 @@ export function createE2eTestsTask(target: E2eTarget, args: Record<string, any>)
 	return {
 		title: 'E2E tests',
 		run: async (onUpdate): Promise<TaskResult> => {
-			checkCredentialsWarning(target.path);
-
 			const reporter = createReporter(args.reporter, onUpdate, { showSummary: false });
+
+			// --list: enumerate tests, print them, and stop — no auth check, no run.
+			if (args.list)
+			{
+				const listResult = await runE2eForTarget(target, {
+					...args,
+					listOnly: true,
+					onToken: (token, browser) => reporter.handleToken(token, browser),
+				});
+				reporter.stop();
+				reporter.clearStatus();
+
+				if (listResult.errors.length > 0)
+				{
+					return {
+						title: 'E2E tests (errored)',
+						status: 'failed',
+						details: listResult.errors.map((error: Error) => ({
+							type: 'error' as const,
+							code: 'code' in error ? (error as any).code : undefined,
+							message: error.message,
+							stack: error.stack,
+						})),
+					};
+				}
+
+				const { listing } = reporter.finish();
+				const listed = listResult.report.filter((token) => token.id === 'TEST_LISTED').length;
+
+				return {
+					title: listed > 0 ? 'E2E tests (listed)' : 'E2E tests (no test files)',
+					status: 'skipped',
+					metrics: listing ? { listing: { kind: 'e2e', ...listing } } : undefined,
+				};
+			}
+
+			checkCredentialsWarning(target.path);
 
 			const testResult = await runE2eForTarget(target, {
 				...args,
