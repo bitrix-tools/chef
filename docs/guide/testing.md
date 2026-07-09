@@ -70,6 +70,9 @@ chef test unit vendor.my-extension ./utils.test.ts
 # Тесты по паттерну
 chef test vendor.* --grep "should render"
 
+# Список тестов без прогона
+chef test vendor.my-extension --list
+
 # Watch-режим — перезапуск при изменениях
 chef test vendor.my-extension -w
 ```
@@ -88,6 +91,24 @@ chef test vendor.my-extension --project chromium
 ```
 
 В режиме `--debug` включаются source maps и открываются DevTools — можно ставить breakpoints прямо в исходном TypeScript-коде.
+
+### Листинг без прогона
+
+`--list` перечисляет тесты, которые были бы запущены, но не запускает их — удобно, чтобы быстро увидеть состав набора или подобрать паттерн для `--grep`:
+
+```bash
+chef test vendor.my-extension --list
+```
+
+Тесты сгруппированы по describe-блокам, отложенные (`skip`/`fixme`) помечены. В конце — сводка `Summary` с разбивкой по видам: отдельно unit, отдельно e2e (для модуля — только e2e), с числом тестов и сколько из них запускается / отложено:
+
+```
+  Summary
+  Unit  132 tests · 132 runnable
+  E2E   25 tests · 25 runnable
+```
+
+Работает для расширений (unit + e2e), модулей (`chef test module`) и всех репортеров (`--reporter default|json|teamcity`). С `--watch` несовместимо.
 
 ## Массовый запуск
 
@@ -119,7 +140,7 @@ chef test im.v2.** --console
 
 После прогона chef печатает агрегированный отчёт:
 
-- **Failed Tests (N)** — все упавшие тесты со стек-трейсами и code frame, сгруппированные по расширениям.
+- **Failed Tests (N)** — все упавшие тесты со стек-трейсами и code frame, сгруппированные по расширениям. Для e2e рядом печатаются пути к артефактам Playwright (screenshot, video, trace), сгруппированные по браузеру, — можно сразу открыть в редакторе.
 - **Errors (N)** — ошибки сборки и runtime-крэши, по одной строке на причину.
 - **Issues** — список расширений с количеством ошибок/предупреждений.
 - **Extensions / Tests / Time** — общие цифры: сколько расширений и тестов прошло, упало или было пропущено, сколько заняло. Для `chef test module` строка называется **Modules**.

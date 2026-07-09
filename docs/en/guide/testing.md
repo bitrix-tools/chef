@@ -70,6 +70,9 @@ chef test unit vendor.my-extension ./utils.test.ts
 # Tests matching pattern
 chef test vendor.* --grep "should render"
 
+# List tests without running them
+chef test vendor.my-extension --list
+
 # Watch mode — rerun on changes
 chef test vendor.my-extension -w
 ```
@@ -88,6 +91,24 @@ chef test vendor.my-extension --project chromium
 ```
 
 In `--debug` mode, source maps are enabled and DevTools are opened — you can set breakpoints directly in your TypeScript source code.
+
+### Listing without running
+
+`--list` enumerates the tests that would run, without running them — handy for seeing what a suite contains or picking a pattern for `--grep`:
+
+```bash
+chef test vendor.my-extension --list
+```
+
+Tests are grouped by describe block, with deferred ones (`skip`/`fixme`) marked. A `Summary` at the end breaks the counts down per kind — unit and e2e separately (a module has e2e only) — with the number of tests and how many run / are skipped:
+
+```
+  Summary
+  Unit  132 tests · 132 runnable
+  E2E   25 tests · 25 runnable
+```
+
+Works for extensions (unit + e2e), modules (`chef test module`) and every reporter (`--reporter default|json|teamcity`). It can't be combined with `--watch`.
 
 ## Bulk Runs
 
@@ -119,7 +140,7 @@ An extension or module with no tests is marked `skipped` (not `passed`) — coun
 
 After the run chef prints an aggregated report:
 
-- **Failed Tests (N)** — all failed tests with stack traces and code frames, grouped by extension.
+- **Failed Tests (N)** — all failed tests with stack traces and code frames, grouped by extension. For e2e, paths to Playwright artifacts (screenshot, video, trace) are printed alongside, grouped by browser — ready to open in your editor.
 - **Errors (N)** — build errors and runtime crashes, one line per cause.
 - **Issues** — list of extensions with error/warning counts.
 - **Extensions / Tests / Time** — totals: how many extensions and tests passed, failed or were skipped, how long it took. For `chef test module` the line is labeled **Modules**.
