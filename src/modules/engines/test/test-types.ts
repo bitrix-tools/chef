@@ -1,5 +1,39 @@
 export type BrowserType = 'chromium' | 'firefox' | 'webkit';
 
+export type TestAttachment = {
+	name: string;
+	contentType: string;
+	// Filesystem path to the artifact (screenshot / video / trace). Always present here —
+	// inline (body-only) attachments are dropped upstream since they have no path.
+	path: string;
+};
+
+/**
+ * Groups per-test attachments by browser, preserving first-seen order, so a failure's
+ * artifacts can be printed as one block per engine (Chromium/Firefox/WebKit).
+ */
+export function groupAttachmentsByBrowser<T extends { browser?: string }>(
+	attachments: T[],
+): Array<[string | undefined, T[]]>
+{
+	const groups = new Map<string | undefined, T[]>();
+
+	for (const attachment of attachments)
+	{
+		const existing = groups.get(attachment.browser);
+		if (existing)
+		{
+			existing.push(attachment);
+		}
+		else
+		{
+			groups.set(attachment.browser, [attachment]);
+		}
+	}
+
+	return [...groups.entries()];
+}
+
 export type TestToken = {
 	id: 'SUITE_START' | 'SUITE_END' | 'TEST_PASSED' | 'TEST_FAILED' | 'TEST_PENDING';
 	title?: string;
@@ -8,6 +42,7 @@ export type TestToken = {
 	duration?: number;
 	speed?: string;
 	error?: { message: string; stack?: string };
+	attachments?: TestAttachment[];
 	showDiff?: boolean;
 	actual?: unknown;
 	expected?: unknown;

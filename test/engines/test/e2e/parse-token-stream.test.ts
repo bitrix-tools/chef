@@ -50,6 +50,28 @@ describe('parseTokenStream', () => {
 		}
 	});
 
+	it('should carry per-test attachments on a token', () => {
+		const buffer = wrap({
+			id: 'TEST_FAILED',
+			title: 'fails',
+			suite: ['Suite'],
+			attachments: [
+				{ name: 'screenshot', contentType: 'image/png', path: '/tmp/x/test-failed-1.png' },
+				{ name: 'trace', contentType: 'application/zip', path: '/tmp/x/trace.zip' },
+			],
+		});
+		const { events } = parseTokenStream(buffer);
+
+		assert.equal(events.length, 1);
+		assert.equal(events[0].type, 'token');
+		if (events[0].type === 'token')
+		{
+			assert.lengthOf(events[0].token.attachments ?? [], 2);
+			assert.equal(events[0].token.attachments?.[0].name, 'screenshot');
+			assert.equal(events[0].token.attachments?.[0].path, '/tmp/x/test-failed-1.png');
+		}
+	});
+
 	it('should parse BEGIN event', () => {
 		const buffer = wrap({ id: 'BEGIN', totalTests: 42, browserCount: 3 });
 		const { events } = parseTokenStream(buffer);

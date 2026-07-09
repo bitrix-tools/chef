@@ -17,6 +17,7 @@ import type {
 	TestResult as EngineTestResult,
 	BrowserType,
 	ConsoleLog,
+	TestAttachment,
 } from '../../modules/engines/test/test-types';
 
 const KNOWN_BROWSERS: Record<string, BrowserType> = {
@@ -47,6 +48,9 @@ export type BrowserTestResult = {
 	status: TestStatus,
 	durationMs?: number,
 	failure?: TestFailure,
+	// Per-test artifacts (screenshot / video / trace) produced for this browser, so a
+	// consumer of the report has the paths directly instead of scraping them off disk.
+	attachments?: TestAttachment[],
 };
 
 export type TestFailure = {
@@ -481,6 +485,10 @@ function createMerger(): Merger
 				if (status === 'failed')
 				{
 					browserResult.failure = buildFailure(token);
+				}
+				if (token.attachments && token.attachments.length > 0)
+				{
+					browserResult.attachments = token.attachments;
 				}
 
 				entry.results[browser] = browserResult;

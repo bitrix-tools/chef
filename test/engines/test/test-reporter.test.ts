@@ -211,6 +211,42 @@ describe('TestReporter', () => {
 			// Should only have 1 failed test section
 			assert.include(output, 'Failed Tests (1)');
 		});
+
+		it('prints per-test attachments grouped by browser, with clickable `at` paths', () => {
+			const reporter = createReporter(2);
+
+			reporter.handleToken(
+				{
+					id: 'TEST_FAILED', title: 'broken', suite: ['S'], duration: 1,
+					error: { message: 'oops' },
+					attachments: [
+						{ name: 'screenshot', contentType: 'image/png', path: '/tmp/cr/test-failed-1.png' },
+						{ name: 'trace', contentType: 'application/zip', path: '/tmp/cr/trace.zip' },
+					],
+				},
+				'Chromium',
+			);
+			reporter.handleToken(
+				{
+					id: 'TEST_FAILED', title: 'broken', suite: ['S'], duration: 1,
+					error: { message: 'oops' },
+					attachments: [
+						{ name: 'screenshot', contentType: 'image/png', path: '/tmp/ff/test-failed-1.png' },
+					],
+				},
+				'Firefox',
+			);
+
+			output = '';
+			reporter.finish();
+
+			const plain = stripAnsi(output);
+			// Grouped per browser, artifact name, and a clickable `at <path>` line.
+			assert.include(plain, 'screenshot');
+			assert.include(plain, 'at /tmp/cr/test-failed-1.png');
+			assert.include(plain, 'at /tmp/cr/trace.zip');
+			assert.include(plain, 'at /tmp/ff/test-failed-1.png');
+		});
 	});
 
 	describe('finish output', () => {

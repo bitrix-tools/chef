@@ -4,6 +4,7 @@ import { pluralize } from '../utils/pluralize';
 import { formatElapsed } from '../utils/format-elapsed';
 import { formatError } from '../diagnostics/format-error';
 import { stripAnsi } from '../diagnostics/code-frame';
+import { groupAttachmentsByBrowser } from '../modules/engines/test/test-types';
 
 import type { TaskGroupResult, TaskFailure } from '../modules/task/task-types';
 
@@ -120,6 +121,26 @@ function printTestFailures(extensions: ExtensionTestFailures[]): void
 			{
 				console.log('');
 				console.log(errorLines.join('\n'));
+			}
+
+			const attachments = group.attachments ?? [];
+			if (attachments.length > 0)
+			{
+				// Separate block from the error, grouped per browser. Each path is on its own
+				// `at <path>` line so the terminal/IDE linkifies it (stack-frame convention).
+				console.log('');
+				for (const [browser, items] of groupAttachmentsByBrowser(attachments))
+				{
+					if (browser)
+					{
+						console.log(`${PREFIX}  ${chalk.cyan.bold(browser)}`);
+					}
+					for (const attachment of items)
+					{
+						console.log(`${PREFIX}    ${chalk.cyan(attachment.name)}`);
+						console.log(`${PREFIX}      at ${attachment.path}`);
+					}
+				}
 			}
 		}
 	}

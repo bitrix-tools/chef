@@ -58,6 +58,16 @@ export default class StreamingReporter implements Reporter
 			.filter(Boolean)
 			.join('\n');
 
+		// Per-test artifacts (screenshot / video / trace). Only file-backed ones are useful
+		// to a consumer of the report — inline `body` attachments have no path to hand back.
+		const attachments = result.attachments
+			.filter((attachment) => Boolean(attachment.path))
+			.map((attachment) => ({
+				name: attachment.name,
+				contentType: attachment.contentType,
+				path: attachment.path,
+			}));
+
 		if (result.status === 'passed')
 		{
 			this.#emit({
@@ -66,6 +76,7 @@ export default class StreamingReporter implements Reporter
 				title,
 				browser,
 				duration: result.duration,
+				attachments,
 			});
 		}
 		else if (result.status === 'skipped')
@@ -75,6 +86,7 @@ export default class StreamingReporter implements Reporter
 				suite: suitePath,
 				title,
 				browser,
+				attachments,
 			});
 		}
 		else
@@ -86,6 +98,7 @@ export default class StreamingReporter implements Reporter
 				browser,
 				duration: result.duration,
 				error: errorMessage ? { message: errorMessage, stack: errorStack || undefined } : undefined,
+				attachments,
 			});
 		}
 	}

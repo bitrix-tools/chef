@@ -10,6 +10,8 @@ type TaskFailure = {
 	title: string;
 	browsers: string[];
 	error?: { message: string; stack?: string };
+	// Per-test artifacts (screenshot / video / trace) with the browser they came from.
+	attachments?: Array<{ name: string; contentType: string; path: string; browser?: string }>;
 	showDiff?: boolean;
 	actual?: unknown;
 	expected?: unknown;

@@ -1,10 +1,11 @@
 import chalk from 'chalk';
 
 import { stripAnsi, hasLocalFilePath } from '../../../diagnostics/code-frame';
+import { groupAttachmentsByBrowser } from './test-types';
 import { formatError } from '../../../diagnostics/format-error';
 import { formatElapsed } from '../../../utils/format-elapsed';
 
-import type { TestToken, ConsoleLog, NodeOutputSection } from './test-types';
+import type { TestToken, ConsoleLog, NodeOutputSection, TestAttachment } from './test-types';
 
 export { stripAnsi, hasLocalFilePath };
 
@@ -31,6 +32,7 @@ type FailedTest = {
 	duration?: number;
 	browser?: string;
 	error?: { message: string; stack?: string };
+	attachments?: TestAttachment[];
 	showDiff?: boolean;
 	actual?: unknown;
 	expected?: unknown;
@@ -56,6 +58,9 @@ export type FailedTestGroup = {
 	title: string;
 	browsers: string[];
 	error?: { message: string; stack?: string };
+	// Artifacts (screenshot / video / trace) tagged with the browser they came from, so a
+	// failing test in the summary points straight at its screenshot/video/trace on disk.
+	attachments?: Array<TestAttachment & { browser?: string }>;
 	showDiff?: boolean;
 	actual?: unknown;
 	expected?: unknown;
@@ -385,6 +390,7 @@ export class TestReporter
 					duration: token.duration,
 					browser,
 					error: token.error,
+					attachments: token.attachments,
 					showDiff: token.showDiff,
 					actual: token.actual,
 					expected: token.expected,
@@ -596,6 +602,10 @@ export class TestReporter
 		{
 			const path = test.suitePath ? `${test.suitePath} > ${test.title}` : test.title;
 
+			const taggedAttachments = (test.attachments ?? []).map(
+				(attachment) => ({ ...attachment, browser: test.browser }),
+			);
+
 			if (groups.has(path))
 			{
 				const group = groups.get(path)!;
@@ -608,6 +618,11 @@ export class TestReporter
 				{
 					group.error = test.error;
 				}
+
+				if (taggedAttachments.length > 0)
+				{
+					(group.attachments ??= []).push(...taggedAttachments);
+				}
 			}
 			else
 			{
@@ -616,6 +631,7 @@ export class TestReporter
 					title: test.title,
 					browsers: test.browser ? [test.browser] : [],
 					error: test.error,
+					...(taggedAttachments.length > 0 ? { attachments: taggedAttachments } : {}),
 					showDiff: test.showDiff,
 					actual: test.actual,
 					expected: test.expected,
@@ -700,6 +716,27 @@ export class TestReporter
 				{
 					lines.push('');
 					lines.push(...errorLines);
+				}
+
+				const attachments = group.attachments ?? [];
+				if (attachments.length > 0)
+				{
+					// Separate block from the error, grouped per browser. Each path is on its
+					// own `at <path>` line so terminals/IDEs linkify it (stack-frame convention);
+					// a mid-line or dim-styled path is not linkified.
+					lines.push('');
+					for (const [browser, items] of groupAttachmentsByBrowser(attachments))
+					{
+						if (browser)
+						{
+							lines.push(`${PREFIX}   ${chalk.cyan.bold(browser)}`);
+						}
+						for (const attachment of items)
+						{
+							lines.push(`${PREFIX}     ${chalk.cyan(attachment.name)}`);
+							lines.push(`${PREFIX}       at ${attachment.path}`);
+						}
+					}
 				}
 			}
 		}
