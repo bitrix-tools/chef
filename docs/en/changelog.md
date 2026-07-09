@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.20.0 <Badge type="tip" text="7/9/2026" />
+
+chef test improvements:
+- --list — enumerate tests without running them (unit/e2e/module), with a per-kind summary
+- --console [browser|node|all] — print console.* output from tests
+- Failed e2e artifacts (screenshot, video, trace) in the report and --json, grouped by browser
+- JSON reporter for module tests; unified e2e handling for extensions and modules
+- --grep normalized to NFC (correct Cyrillic matching); a hint when a multi-word pattern is passed without quotes
+- Clear errors instead of "no tests collected": unreachable test page, broken config, failed e2e run
+
 ## v1.19.0 <Badge type="tip" text="7/6/2026" />
 
 Dropped Mercurial support. The chef flow-to-ts and chef init hooks commands now work with Git only: file moves via git mv, git hooks instead of .hg/hgrc.
