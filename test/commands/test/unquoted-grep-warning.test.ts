@@ -1,10 +1,10 @@
 import { describe, it, beforeEach, afterEach } from 'mocha';
 import { assert } from 'chai';
 
-import { warnOnLikelyUnquotedGrep } from '../../../src/commands/test/test-command';
+import { reportUnquotedGrep } from '../../../src/commands/test/test-command';
 import { stripAnsi } from '../../../src/diagnostics/code-frame';
 
-describe('warnOnLikelyUnquotedGrep', () => {
+describe('reportUnquotedGrep', () => {
 	let logs: string[];
 	let originalLog: typeof console.log;
 
@@ -23,31 +23,35 @@ describe('warnOnLikelyUnquotedGrep', () => {
 		return stripAnsi(logs.join('\n'));
 	}
 
-	it('warns when --grep is set and a stray non-slug arg is present', () => {
+	it('reports and returns true when --grep is set and a stray non-slug arg is present', () => {
 		// `chef test e2e --grep Отключить ящик с отменой` — the shell split the phrase, so
 		// "ящик"/"с"/"отменой" arrive as positional args (would fail as unknown extensions).
-		warnOnLikelyUnquotedGrep(['ящик', 'с', 'отменой'], { grep: 'Отключить' });
+		const detected = reportUnquotedGrep(['ящик', 'с', 'отменой'], { grep: 'Отключить' });
 
+		assert.isTrue(detected, 'a lost-quotes phrase must be detected (caller aborts)');
 		const text = output();
 		assert.include(text, 'ящик');
 		assert.include(text, "--grep 'Отключить ящик с отменой'", 'suggests the quoted phrase');
 	});
 
-	it('stays silent for legitimate dotted/hyphenated extension names with --grep', () => {
-		warnOnLikelyUnquotedGrep(['main.core', 'ui.icon-set.solid', 'ui.bbcode.*'], { grep: 'anything' });
+	it('returns false and stays silent for legitimate extension names with --grep', () => {
+		const detected = reportUnquotedGrep(['main.core', 'ui.icon-set.solid', 'ui.bbcode.*'], { grep: 'anything' });
 
+		assert.isFalse(detected);
 		assert.isEmpty(output(), 'real extension names must not trigger the warning');
 	});
 
-	it('stays silent when --grep is not set', () => {
-		warnOnLikelyUnquotedGrep(['ящик', 'с'], {});
+	it('returns false when --grep is not set', () => {
+		const detected = reportUnquotedGrep(['ящик', 'с'], {});
 
+		assert.isFalse(detected);
 		assert.isEmpty(output());
 	});
 
-	it('stays silent when there are no positional args', () => {
-		warnOnLikelyUnquotedGrep([], { grep: 'что-то' });
+	it('returns false when there are no positional args', () => {
+		const detected = reportUnquotedGrep([], { grep: 'что-то' });
 
+		assert.isFalse(detected);
 		assert.isEmpty(output());
 	});
 });
