@@ -497,12 +497,6 @@ export abstract class BasePackage
 		return new PackageTestRunner(this).runUnitTests(args);
 	}
 
-	async runEndToEndTests(args: Record<string, any> = {})
-	{
-		const { PackageTestRunner } = await import('../services/package-test-runner');
-		return new PackageTestRunner(this).runEndToEndTests(args);
-	}
-
 	async createMigrator()
 	{
 		const { PackageMigrator } = await import('../services/package-migrator');

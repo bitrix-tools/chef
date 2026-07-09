@@ -1,7 +1,5 @@
 import { UnitTestEngine } from '../engines/test/unit/unit-test-engine';
 import { PlaywrightUnitStrategy } from '../engines/test/unit/playwright/playwright-unit-strategy';
-import { E2ETestEngine } from '../engines/test/e2e/e2e-test-engine';
-import { PlaywrightE2EStrategy } from '../engines/test/e2e/playwright/playwright-e2e-strategy';
 import { Environment } from '../../environment/environment';
 
 import type { BasePackage } from '../packages/base-package';
@@ -39,24 +37,4 @@ export class PackageTestRunner
 		});
 	}
 
-	async runEndToEndTests(args: Record<string, any> = {}): Promise<TestResult>
-	{
-		const engine = new E2ETestEngine(new PlaywrightE2EStrategy());
-		const tests = await this.#package.getEndToEndTests();
-
-		return engine.run({
-			projectRoot: Environment.getRoot(),
-			testsDirectory: this.#package.getEndToEndTestsDirectoryPath(),
-			hasTests: tests.length > 0,
-			headed: args.headed,
-			debug: args.debug,
-			grep: args.grep,
-			project: args.project,
-			file: args.file,
-			captureNodeOutput: args.captureNodeOutput,
-			onToken: args.onToken,
-			onStatus: args.onStatus,
-			onBegin: args.onBegin,
-		});
-	}
 }

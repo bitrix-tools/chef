@@ -4,7 +4,6 @@ import * as sinon from 'sinon';
 
 import { PackageTestRunner } from '../../src/modules/services/package-test-runner';
 import { UnitTestEngine } from '../../src/modules/engines/test/unit/unit-test-engine';
-import { E2ETestEngine } from '../../src/modules/engines/test/e2e/e2e-test-engine';
 import { Environment } from '../../src/environment/environment';
 
 import type { TestResult } from '../../src/modules/engines/test/test-types';
@@ -127,55 +126,4 @@ describe('PackageTestRunner', () => {
 		});
 	});
 
-	describe('runEndToEndTests', () => {
-		it('should pass correct options to test engine', async () => {
-			const mockPackage = createMockPackage({
-				e2eTests: ['test/e2e/app.spec.ts'],
-				e2eTestsDir: '/src/ui/buttons/test/e2e',
-			});
-
-			const expectedResult = createMockTestResult();
-			const runStub = sandbox.stub(E2ETestEngine.prototype, 'run').resolves(expectedResult);
-
-			const runner = new PackageTestRunner(mockPackage);
-			const result = await runner.runEndToEndTests({
-				headed: true,
-				project: 'chromium',
-			});
-
-			assert.isTrue(runStub.calledOnce);
-
-			const options = runStub.firstCall.args[0];
-			assert.equal(options.projectRoot, '/project/root');
-			assert.equal(options.testsDirectory, '/src/ui/buttons/test/e2e');
-			assert.isTrue(options.hasTests);
-			assert.isTrue(options.headed);
-			assert.equal(options.project, 'chromium');
-
-			assert.strictEqual(result, expectedResult);
-		});
-
-		it('should set hasTests to false when no e2e tests found', async () => {
-			const mockPackage = createMockPackage({ e2eTests: [] });
-			sandbox.stub(E2ETestEngine.prototype, 'run').resolves(createMockTestResult());
-
-			const runner = new PackageTestRunner(mockPackage);
-			await runner.runEndToEndTests();
-
-			const options = (E2ETestEngine.prototype.run as sinon.SinonStub).firstCall.args[0];
-			assert.isFalse(options.hasTests);
-		});
-
-		it('should pass onBegin callback', async () => {
-			const mockPackage = createMockPackage();
-			sandbox.stub(E2ETestEngine.prototype, 'run').resolves(createMockTestResult());
-
-			const onBegin = sinon.stub();
-			const runner = new PackageTestRunner(mockPackage);
-			await runner.runEndToEndTests({ onBegin });
-
-			const options = (E2ETestEngine.prototype.run as sinon.SinonStub).firstCall.args[0];
-			assert.strictEqual(options.onBegin, onBegin);
-		});
-	});
 });

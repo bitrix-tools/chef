@@ -10,6 +10,8 @@ import { extractFrameFromStack } from './extract-frame';
 import { initializeEnvironment } from './initialize-environment';
 import { toErrorPayload } from './to-error-payload';
 import { resolveTargets, type TargetSelector } from './resolve-targets';
+import { extensionTarget, moduleTarget, runE2eForTarget, type E2eTarget } from '../../commands/test/e2e-target';
+import { detectCurrentModule, getModuleTests } from '../../commands/test/module-tests-dir';
 
 import type {
 	TestResult as EngineTestResult,
@@ -150,6 +152,97 @@ export async function test(options: TestOptions = {}): Promise<TestJsonResult>
 	};
 }
 
+/**
+ * JSON test run for module scenario suites. Mirrors `test()`, but each target is a module
+ * (name + tests dir) instead of an extension. Modules have no unit tests, so only e2e runs;
+ * everything else (merger, failure collection, summary, top-level shape) is shared.
+ */
+export async function testModules(moduleNames: string[], options: TestOptions = {}): Promise<TestJsonResult>
+{
+	const startedAt = Date.now();
+	const cwd = options.cwd ?? process.cwd();
+	const command = 'test';
+
+	const envError = initializeEnvironment(cwd);
+	if (envError)
+	{
+		return fatalResult(command, cwd, startedAt, envError);
+	}
+
+	// No module given → the one the cwd belongs to (same rule as the non-JSON path). An
+	// unresolved target is a valid JSON result, not a thrown/printed error, so tooling
+	// that reads --json always gets parseable output.
+	const targets = moduleNames.length > 0 ? moduleNames : [detectCurrentModule()].filter(Boolean) as string[];
+
+	const extensions: TestExtensionResult[] = [];
+	const notFound: JsonNotFoundEntry[] = [];
+
+	if (targets.length === 0)
+	{
+		notFound.push({ name: '<current>', reason: 'no module specified and cwd is not inside a module' });
+	}
+
+	try
+	{
+		for (const moduleName of targets)
+		{
+			extensions.push(await testModuleOne(moduleName, options));
+		}
+	}
+	catch (error)
+	{
+		return fatalResult(command, cwd, startedAt, toErrorPayload(error, CF.PACKAGE_READ_ERROR));
+	}
+
+	return {
+		...buildMeta(cwd),
+		success: notFound.length === 0 && extensions.every((extension) => extension.success),
+		command,
+		extensions,
+		notFound,
+		summary: aggregateSummary(extensions, startedAt),
+	};
+}
+
+async function testModuleOne(moduleName: string, options: TestOptions): Promise<TestExtensionResult>
+{
+	const target = moduleTarget(moduleName);
+	const taskStart = Date.now();
+
+	try
+	{
+		// Modules run e2e only; unit is always empty for them.
+		const unit = emptyKind('modules have no unit tests');
+		const e2e = options.kind === 'unit'
+			? emptyKind('filtered by --kind unit')
+			: await runE2E(target, options);
+
+		const errors: JsonErrorPayload[] = [...collectFailures(e2e)];
+
+		return {
+			name: target.name,
+			path: target.path,
+			success: e2e.failed === 0 && errors.length === 0,
+			durationMs: Date.now() - taskStart,
+			details: { unit, e2e },
+			errors,
+			warnings: [],
+		};
+	}
+	catch (error)
+	{
+		return {
+			name: target.name,
+			path: target.path,
+			success: false,
+			durationMs: Date.now() - taskStart,
+			details: { unit: emptyKind(), e2e: emptyKind() },
+			errors: [toErrorPayload(error, CF.TEST_FAILED)],
+			warnings: [],
+		};
+	}
+}
+
 async function testOne(
 	extensionPackage: BasePackage,
 	options: TestOptions,
@@ -180,7 +273,7 @@ async function testOne(
 		}
 		else
 		{
-			e2e = await runE2E(extensionPackage, options);
+			e2e = await runE2E(extensionTarget(extensionPackage), options);
 		}
 
 		const errors: JsonErrorPayload[] = [
@@ -278,9 +371,9 @@ export async function resolveUnitBrowsers(extensionPackage: BasePackage, options
 	return getBrowsersFromConfig(config);
 }
 
-async function runE2E(extensionPackage: BasePackage, options: TestOptions): Promise<TestKindDetails>
+async function runE2E(target: E2eTarget, options: TestOptions): Promise<TestKindDetails>
 {
-	const hasE2e = await extensionPackage.hasEndToEndTests();
+	const hasE2e = (await target.listTests()).length > 0;
 	if (!hasE2e)
 	{
 		return emptyKind('no e2e tests');
@@ -288,7 +381,7 @@ async function runE2E(extensionPackage: BasePackage, options: TestOptions): Prom
 
 	const merger = createMerger();
 	const runStart = Date.now();
-	const result = await extensionPackage.runEndToEndTests({
+	const result = await runE2eForTarget(target, {
 		headed: options.headed,
 		debug: options.debug,
 		grep: options.grep,

@@ -11,7 +11,8 @@ import { TaskRunner } from '../../modules/task/task-runner';
 import { runUnitTestsTask } from './tasks/run-unit-tests-task';
 import { runEndToEndTestsTask } from './tasks/run-e2e-tests-task';
 import { runModuleTestsTask } from './tasks/run-module-tests-task';
-import { detectCurrentModule, getModuleTestsDirectory, runModuleEndToEndTests } from './module-tests-dir';
+import { detectCurrentModule, getModuleTestsDirectory } from './module-tests-dir';
+import { extensionTarget, moduleTarget, runE2eForTarget } from './e2e-target';
 import { TeamcityReporter } from '../../modules/engines/test/teamcity-reporter';
 import { findPlaywrightConfig, getBrowsersFromConfig } from '../../modules/engines/test/unit/playwright/find-playwright-config';
 import { PlaywrightUnitStrategy } from '../../modules/engines/test/unit/playwright/playwright-unit-strategy';
@@ -30,7 +31,7 @@ function parseConsoleOption(value: string): string
 
 	return value;
 }
-import { test as testJson } from '../../reporters/json/test';
+import { test as testJson, testModules as testModulesJson } from '../../reporters/json/test';
 import { emitJson } from '../../reporters/json/emit';
 import { createReporterOption } from '../../shared/options/reporter-option';
 
@@ -136,7 +137,7 @@ function runTestsTeamcity({ extensions, args, type }: RunTestsOptions): void
 
 				if (type !== 'unit')
 				{
-					await extension.runEndToEndTests({
+					await runE2eForTarget(extensionTarget(extension), {
 						...args,
 						onToken: (token, browser) => reporter.handleToken(token, browser),
 					});
@@ -397,7 +398,7 @@ function runModuleTestsTeamcity(modules: string[], args: Record<string, any>): v
 		for (const moduleName of modules)
 		{
 			// eslint-disable-next-line no-await-in-loop
-			await runModuleEndToEndTests(moduleName, {
+			await runE2eForTarget(moduleTarget(moduleName), {
 				...args,
 				onToken: (token: TestToken, browser?: string) => reporter.handleToken(token, browser),
 			});
@@ -413,19 +414,51 @@ function runModuleTestsTeamcity(modules: string[], args: Record<string, any>): v
 
 async function runModuleTests(rawModules: string[], args: Record<string, any>): Promise<void>
 {
+	// JSON must always emit parseable output, so resolve modules here (without the
+	// text-printing / exit that resolveModules does) and let the JSON layer report an
+	// unresolved target as a valid result.
+	if (args.reporter === 'json')
+	{
+		if (args.watch)
+		{
+			emitJson({
+				success: false,
+				command: 'test',
+				error: { code: CF.OPTION_DENIED, message: '--watch is not supported with --reporter json' },
+				extensions: [],
+				notFound: [],
+				summary: {
+					total: 0, passed: 0, failed: 0, durationMs: 0,
+					errorCount: 1, warningCount: 0,
+					tests: { total: 0, passed: 0, failed: 0, skipped: 0 },
+				},
+			});
+			process.exit(2);
+		}
+
+		const { extensions: jsonModules, file: jsonFile } = splitExtensionsAndFile(rawModules);
+		if (reportUnquotedGrep(jsonModules, args))
+		{
+			process.exit(1);
+		}
+
+		const result = await testModulesJson(jsonModules, {
+			file: jsonFile,
+			headed: args.headed,
+			debug: args.debug,
+			grep: args.grep,
+			project: args.project,
+		});
+		emitJson(result);
+		process.exit(result.success ? 0 : 1);
+	}
+
 	const { modules, file } = resolveModules(rawModules);
 	const moduleArgs = { ...args, file };
 
 	if (reportUnquotedGrep(modules, args))
 	{
 		process.exit(1);
-	}
-
-	if (args.reporter === 'json')
-	{
-		console.log('');
-		console.log('The json reporter is not supported for module tests yet. Use the default or teamcity reporter.');
-		process.exit(2);
 	}
 
 	if (args.reporter === 'teamcity')

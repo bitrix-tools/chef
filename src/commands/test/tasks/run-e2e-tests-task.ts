@@ -1,20 +1,27 @@
 import { createReporter } from '../create-reporter';
 import { checkCredentialsWarning } from '../check-env-test';
 import { showsBrowserConsole, showsNodeOutput } from '../console-target';
+import { extensionTarget, runE2eForTarget } from '../e2e-target';
 
+import type { E2eTarget } from '../e2e-target';
 import type { BasePackage } from '../../../modules/packages/base-package';
 import type { Task, TaskResult, TaskDetail } from '../../../modules/task/task-types';
 
-export function runEndToEndTestsTask(extension: BasePackage, args: Record<string, any>): Task
+/**
+ * One e2e task for any target — a single extension or a module's scenario suite. Both used
+ * to have their own near-identical copy of this; now they share it via E2eTarget, so error
+ * handling, the "no tests" case, console output and metrics behave identically.
+ */
+export function createE2eTestsTask(target: E2eTarget, args: Record<string, any>): Task
 {
 	return {
 		title: 'E2E tests',
 		run: async (onUpdate): Promise<TaskResult> => {
-			checkCredentialsWarning(extension.getPath());
+			checkCredentialsWarning(target.path);
 
 			const reporter = createReporter(args.reporter, onUpdate, { showSummary: false });
 
-			const testResult = await extension.runEndToEndTests({
+			const testResult = await runE2eForTarget(target, {
 				...args,
 				captureNodeOutput: showsNodeOutput(args.console),
 				onToken: (token, browser) => reporter.handleToken(token, browser),
@@ -53,7 +60,7 @@ export function runEndToEndTestsTask(extension: BasePackage, args: Record<string
 				reporter.stop();
 				reporter.clearStatus();
 
-				const hasFiles = await extension.hasEndToEndTests();
+				const hasFiles = (await target.listTests()).length > 0;
 
 				return {
 					title: hasFiles ? 'E2E tests (no tests collected)' : 'E2E tests (no test files)',
@@ -77,4 +84,10 @@ export function runEndToEndTestsTask(extension: BasePackage, args: Record<string
 			};
 		},
 	};
+}
+
+/** Extension e2e task — thin wrapper over the shared target-based task. */
+export function runEndToEndTestsTask(extension: BasePackage, args: Record<string, any>): Task
+{
+	return createE2eTestsTask(extensionTarget(extension), args);
 }

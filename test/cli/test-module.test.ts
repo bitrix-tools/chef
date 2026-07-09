@@ -54,11 +54,19 @@ describe('chef test module', () => {
 		assert.include(output, '2 skipped');
 	});
 
-	it('rejects the json reporter, which is not supported yet', async () => {
+	it('supports the json reporter, emitting the same shape as extension tests', async () => {
 		const { exitCode, output } = await runChef(['test', 'module', 'crm', '--reporter', 'json'], { cwd: sourceRepo });
 
-		assert.equal(exitCode, 2);
-		assert.include(output, 'json reporter is not supported');
+		// crm has no test files → a clean, successful JSON result (not an error/exit 2).
+		assert.equal(exitCode, 0);
+		const json = JSON.parse(output);
+		assert.equal(json.command, 'test');
+		assert.isTrue(json.success);
+		assert.lengthOf(json.extensions, 1);
+		assert.equal(json.extensions[0].name, 'crm');
+		// Modules run e2e only — unit is always an empty, skipped kind.
+		assert.equal(json.extensions[0].details.unit.skipReason, 'modules have no unit tests');
+		assert.equal(json.extensions[0].details.e2e.skipReason, 'no e2e tests');
 	});
 
 	it('works on an installed Bitrix (project), resolving modules under local/', async () => {
