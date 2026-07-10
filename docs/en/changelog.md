@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.21.0 <Badge type="tip" text="7/10/2026" />
+
+chef test output improvements:
+- Single per-browser status bar: startup stages (starting/building/preparing) then N/M counters and the running test, one look from launch to finish
+- Results grouped by describe block (like --list): the suite path as a heading, tests beneath it; a multi-browser test is one line tagged with every engine
+- Retried tests are flagged as flaky, counted separately in the summary
+- Skip launching a browser when an extension has no test files
+- Ctrl+C during a run restores the terminal properly (cursor and input mode)
+
 ## v1.20.0 <Badge type="tip" text="7/9/2026" />
 
 chef test improvements:
