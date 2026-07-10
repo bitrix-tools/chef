@@ -81,6 +81,7 @@ export function parseTokenStream(buffer: string): { events: ParsedEvent[]; remai
 				file: data.file,
 				line: data.line,
 				pending: data.pending,
+				retries: data.retries,
 				browser: data.browser,
 			};
 

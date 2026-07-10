@@ -292,6 +292,7 @@ export function printSummary(
 
 	let testsPassed = 0;
 	let testsFailed = 0;
+	let testsFlaky = 0;
 	// Aggregate per-browser tallies across all extensions, preserving first-seen order.
 	const browserOrder: string[] = [];
 	const browserTotals = new Map<string, { passed: number; failed: number }>();
@@ -303,6 +304,7 @@ export function printSummary(
 			{
 				testsPassed += task.metrics.passed;
 				testsFailed += task.metrics.failed;
+				testsFlaky += task.metrics.flaky ?? 0;
 
 				for (const browser of task.metrics.browsers ?? [])
 				{
@@ -333,6 +335,10 @@ export function printSummary(
 		if (testsFailed > 0)
 		{
 			testsParts.push(chalk.red.bold(`${testsFailed} failed`));
+		}
+		if (testsFlaky > 0)
+		{
+			testsParts.push(chalk.yellow(`${testsFlaky} flaky`));
 		}
 
 		if (testsParts.length > 0)

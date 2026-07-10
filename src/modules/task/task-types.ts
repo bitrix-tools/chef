@@ -27,6 +27,8 @@ interface TaskResult
 		failed?: number;
 		failures?: TaskFailure[];
 		browsers?: Array<{ name: string; passed: number; failed: number }>;
+		// Tests that passed or failed only after being retried (flaky). Shown in the summary.
+		flaky?: number;
 		// --list only: enumerated-test counts for the combined Summary block.
 		listing?: { kind: 'unit' | 'e2e'; total: number; runnable: number; skipped: number };
 	};

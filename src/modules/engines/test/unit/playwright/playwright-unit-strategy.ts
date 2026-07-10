@@ -137,7 +137,9 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 		const browserType = options.browserType ?? 'chromium';
 		const onStatus = options.onStatus ?? (() => {});
 
-		onStatus('Loading Playwright...');
+		// Statuses are short per-engine stage words: the reporter shows them next to the
+		// engine name in the unified status bar (e.g. "○ Chromium building").
+		onStatus('starting');
 		const playwright = await import('playwright');
 		const browserLauncher = playwright[browserType];
 		if (!browserLauncher)
@@ -152,7 +154,6 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 			};
 		}
 
-		onStatus(`Launching ${browserType}...`);
 		const isDebug = !!options.debug;
 		const cdpPort = options.cdpPort;
 
@@ -224,7 +225,7 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 
 		try
 		{
-			onStatus('Building test bundle...');
+			onStatus('building');
 
 			// Subscribe to page events BEFORE goto/addScriptTag to capture all messages
 			page.on('console', async (message) => {
@@ -309,7 +310,7 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 			const testsPageUrl = new URL('/dev/ui/cli/mocha-wrapper.php', playwrightConfig.use.baseURL);
 			testsPageUrl.searchParams.set('extension', options.packageName);
 
-			onStatus('Loading test page...');
+			onStatus('preparing');
 			const response = await page.goto(testsPageUrl.toString());
 
 			// page.goto only throws on a network error or timeout — a 404/500/302 resolves
@@ -380,7 +381,7 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 				});
 			}, { grep, timeout });
 
-			onStatus('Running tests...');
+			onStatus('running');
 
 			const codeWithSourceMap = sourceMap && cdpPort
 				? embedSourceMap(testsCodeBundle, sourceMap)

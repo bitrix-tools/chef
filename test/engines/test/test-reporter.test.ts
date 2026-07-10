@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, afterEach } from 'mocha';
 import { assert } from 'chai';
 
-import { TestReporter, stripAnsi, hasLocalFilePath } from '../../../src/modules/engines/test/test-reporter';
+import { TestReporter, stripAnsi, hasLocalFilePath, truncateToWidth } from '../../../src/modules/engines/test/test-reporter';
 
 import type { TestToken } from '../../../src/modules/engines/test/test-types';
 
@@ -16,6 +16,33 @@ describe('stripAnsi', () => {
 
 	it('should handle multiple codes', () => {
 		assert.equal(stripAnsi('\x1B[1m\x1B[32mgreen bold\x1B[0m'), 'green bold');
+	});
+});
+
+describe('truncateToWidth', () => {
+	it('leaves a line that fits untouched', () => {
+		assert.equal(truncateToWidth('short line', 80), 'short line');
+	});
+
+	it('clips a line wider than the terminal and adds an ellipsis', () => {
+		const result = truncateToWidth('a'.repeat(100), 10);
+		// 9 visible chars + ellipsis, plus a trailing reset.
+		assert.equal(stripAnsi(result), 'aaaaaaaaa…');
+	});
+
+	it('counts only visible width, preserving ANSI color codes', () => {
+		const colored = '\x1B[31m' + 'x'.repeat(50) + '\x1B[0m';
+		const result = truncateToWidth(colored, 6);
+		// The color code carries no width; 5 visible chars fit before the ellipsis.
+		assert.equal(stripAnsi(result), 'xxxxx…');
+		assert.include(result, '\x1B[31m');
+	});
+
+	it('does not cut in the middle of an ANSI escape sequence', () => {
+		const colored = '\x1B[32mgreen text here\x1B[0m';
+		const result = truncateToWidth(colored, 5);
+		// Whatever is kept must still strip cleanly (no broken "[32" leaking through).
+		assert.equal(stripAnsi(result), 'gree…');
 	});
 });
 
@@ -159,6 +186,22 @@ describe('TestReporter', () => {
 
 			assert.equal(passed, 2);
 			assert.equal(failed, 0);
+		});
+
+		it('tags a test with every browser even when they report out of order (parallel unit)', () => {
+			const reporter = createReporter(3);
+			reporter.setBrowsers(['Chromium', 'Firefox', 'WebKit']);
+
+			// Unit runs browsers in parallel, so results arrive interleaved and out of order.
+			reporter.handleToken({ id: 'TEST_PASSED', title: 't', suite: ['S'], duration: 1, browser: 'WebKit' }, 'WebKit');
+			reporter.handleToken({ id: 'TEST_PASSED', title: 't', suite: ['S'], duration: 1, browser: 'Chromium' }, 'Chromium');
+			reporter.handleToken({ id: 'TEST_PASSED', title: 't', suite: ['S'], duration: 1, browser: 'Firefox' }, 'Firefox');
+
+			const plain = stripAnsi(reporter.formatGroupedResults());
+			// The grouped line carries all three engines, ordered by the run's browser order.
+			assert.match(plain, /Chromium ✓ · Firefox ✓ · WebKit ✓/);
+			// One line for the test, not three.
+			assert.equal(plain.match(/✓ t/g)?.length, 1);
 		});
 	});
 
@@ -385,6 +428,130 @@ describe('TestReporter', () => {
 			reporter.finish({});
 
 			assert.notInclude(stripAnsi(output), 'Node output');
+		});
+	});
+
+	describe('grouped results (final reprint)', () => {
+		it('prints each suite path once as a heading, tests indented beneath it', () => {
+			const reporter = createReporter();
+
+			reporter.handleToken({ id: 'TEST_PASSED', title: 'first', suite: ['Group', 'Nested'], duration: 1 });
+			reporter.handleToken({ id: 'TEST_PASSED', title: 'second', suite: ['Group', 'Nested'], duration: 1 });
+			reporter.handleToken({ id: 'TEST_PASSED', title: 'other', suite: ['Group', 'Other'], duration: 1 });
+
+			const plain = stripAnsi(reporter.formatGroupedResults());
+
+			// The suite path is a heading, printed once — not repeated on every test line.
+			assert.include(plain, 'Group > Nested');
+			assert.include(plain, 'Group > Other');
+			assert.equal(plain.match(/Group > Nested/g)?.length, 1, 'suite heading appears once');
+			// Test lines carry only the title, not the full path.
+			assert.match(plain, /✓ first/);
+			assert.notMatch(plain, /Group > Nested > first/);
+		});
+
+		it('collapses a test run in several browsers into one line with all engines', () => {
+			const reporter = createReporter(2);
+			reporter.setBrowsers(['Chromium', 'Firefox']);
+
+			// Same test reported by two engines (as multi-browser runs do).
+			reporter.handleToken({ id: 'TEST_PASSED', title: 't', suite: ['S'], duration: 1, browser: 'Chromium' }, 'Chromium');
+			reporter.handleToken({ id: 'TEST_PASSED', title: 't', suite: ['S'], duration: 1, browser: 'Firefox' }, 'Firefox');
+
+			const plain = stripAnsi(reporter.formatGroupedResults());
+
+			// One line for the test, tagged with both engines — not two separate lines.
+			assert.equal(plain.match(/✓ t/g)?.length, 1, 'test appears once');
+			assert.include(plain, 'Chromium');
+			assert.include(plain, 'Firefox');
+		});
+
+		it('marks a failed test with ✗ and a skipped one as skipped', () => {
+			const reporter = createReporter();
+
+			reporter.handleToken({ id: 'TEST_PASSED', title: 'ok', suite: ['S'], duration: 1 });
+			reporter.handleToken({ id: 'TEST_FAILED', title: 'bad', suite: ['S'], duration: 1, error: { message: 'boom' } });
+			reporter.handleToken({ id: 'TEST_PENDING', title: 'later', suite: ['S'] });
+
+			const plain = stripAnsi(reporter.formatGroupedResults());
+
+			assert.match(plain, /✓ ok/);
+			assert.match(plain, /✗ bad/);
+			assert.match(plain, /○ later\s+skipped/);
+		});
+	});
+
+	describe('retries', () => {
+		it('marks a flaky test (passed after retries) with the attempt it passed on', () => {
+			const reporter = createReporter();
+
+			reporter.handleToken({ id: 'TEST_PASSED', title: 'flaky', suite: ['S'], duration: 5, retries: 2 });
+
+			const plain = stripAnsi(reporter.formatGroupedResults());
+			// retries=2 → 3 attempts, passed on the third.
+			assert.match(plain, /flaky.*passed on attempt 3/);
+		});
+
+		it('marks a test that kept failing across retries with the attempt count', () => {
+			const reporter = createReporter();
+
+			reporter.handleToken({ id: 'TEST_FAILED', title: 'broken', suite: ['S'], duration: 5, retries: 3, error: { message: 'x' } });
+
+			const plain = stripAnsi(reporter.formatGroupedResults());
+			// retries=3 → 4 attempts, still failing.
+			assert.match(plain, /broken.*failed after 4 attempts/);
+		});
+
+		it('does not add a retry note to a test that ran once', () => {
+			const reporter = createReporter();
+
+			reporter.handleToken({ id: 'TEST_PASSED', title: 'once', suite: ['S'], duration: 1 });
+
+			const plain = stripAnsi(reporter.formatGroupedResults());
+			assert.notMatch(plain, /attempt|retried/);
+		});
+
+		it('marks browsers that have not reported a test yet as running in live mode', () => {
+			const reporter = createReporter(3);
+			reporter.setBrowsers(['Chromium', 'Firefox', 'WebKit']);
+
+			// Only Chromium has reported this test so far.
+			reporter.handleToken({ id: 'TEST_PASSED', title: 't', suite: ['S'], duration: 1, browser: 'Chromium' }, 'Chromium');
+
+			const live = stripAnsi(reporter.formatGroupedResults(true));
+			// Finished engine keeps its outcome; the others show as running (◌).
+			assert.match(live, /Chromium ✓/);
+			assert.match(live, /Firefox ◌/);
+			assert.match(live, /WebKit ◌/);
+
+			// The final report (default) never shows running — only the outcome that arrived.
+			const final = stripAnsi(reporter.formatGroupedResults());
+			assert.notInclude(final, '◌');
+			assert.match(final, /Chromium ✓/);
+		});
+
+		it('does not count a test that failed after all retries as flaky', () => {
+			const reporter = createReporter();
+
+			reporter.handleToken({ id: 'TEST_FAILED', title: 'broken', suite: ['S'], duration: 5, retries: 3, error: { message: 'x' } });
+
+			const { flaky } = reporter.finish();
+			// Retried but never passed — that's a failure, not a flaky test.
+			assert.equal(flaky, 0);
+		});
+
+		it('counts flaky tests once across browsers in the finish result', () => {
+			const reporter = createReporter(2);
+			reporter.setBrowsers(['Chromium', 'Firefox']);
+
+			// Same flaky test retried in both browsers — counts once.
+			reporter.handleToken({ id: 'TEST_PASSED', title: 'flaky', suite: ['S'], duration: 5, retries: 1, browser: 'Chromium' }, 'Chromium');
+			reporter.handleToken({ id: 'TEST_PASSED', title: 'flaky', suite: ['S'], duration: 5, retries: 1, browser: 'Firefox' }, 'Firefox');
+			reporter.handleToken({ id: 'TEST_PASSED', title: 'stable', suite: ['S'], duration: 1, browser: 'Chromium' }, 'Chromium');
+			reporter.handleToken({ id: 'TEST_PASSED', title: 'stable', suite: ['S'], duration: 1, browser: 'Firefox' }, 'Firefox');
+
+			const { flaky } = reporter.finish();
+			assert.equal(flaky, 1);
 		});
 	});
 

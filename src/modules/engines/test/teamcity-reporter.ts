@@ -153,7 +153,7 @@ export class TeamcityReporter
 		}
 	}
 
-	finish(options: { consoleLogs?: ConsoleLog[]; nodeOutput?: NodeOutputSection[] } = {}): { passed: number; failed: number; failures: never[]; browsers: never[]; listing?: ListingCounts }
+	finish(options: { consoleLogs?: ConsoleLog[]; nodeOutput?: NodeOutputSection[] } = {}): { passed: number; failed: number; failures: never[]; browsers: never[]; listing?: ListingCounts; flaky?: number }
 	{
 		const consoleLogs = options.consoleLogs ?? [];
 

@@ -50,15 +50,16 @@ export default class StreamingReporter implements Reporter
 			return;
 		}
 
-		// Neutral, localized "Running <Browser>..." — used only for the early status
-		// line before per-test results start streaming (the multi-browser status bar
-		// takes over after that). We deliberately drop the raw "chromium: suite > test"
-		// format, which looked out of place and leaked the lowercase project id.
-		const browser = this.#formatBrowserName(test.titlePath()[1]);
+		// "<Browser>: running <title>" — the reporter's status bar shows the engine's current
+		// test next to its progress counter, so a long-running spec is visible while it runs
+		// rather than the bar sitting frozen until the first result lands.
+		const titlePath = test.titlePath();
+		const browser = this.#formatBrowserName(titlePath[1]);
+		const title = titlePath[titlePath.length - 1] ?? '';
 
 		this.#emit({
 			id: 'STATUS',
-			text: browser ? `Running ${browser}...` : 'Running tests...',
+			text: browser ? `${browser}: running ${title}` : 'Running tests...',
 		});
 	}
 
@@ -111,6 +112,9 @@ export default class StreamingReporter implements Reporter
 				browser,
 				duration: result.duration,
 				attachments,
+				// result.retry on the final (passing) attempt = how many retries it took;
+				// > 0 means the test failed first and only passed on a retry (flaky).
+				retries: result.retry,
 			});
 		}
 		else if (result.status === 'skipped')
@@ -133,6 +137,8 @@ export default class StreamingReporter implements Reporter
 				duration: result.duration,
 				error: errorMessage ? { message: errorMessage, stack: errorStack || undefined } : undefined,
 				attachments,
+				// > 0 means the test kept failing through all its retries.
+				retries: result.retry,
 			});
 		}
 	}

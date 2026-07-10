@@ -205,6 +205,11 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 			}
 
 			reporter.setBrowserCount(browsers.length);
+			// Tell the reporter every browser up front (same labels used in handleToken), so a
+			// test's browser tag accumulates all engines (e.g. [Chromium ✓ · Firefox ✓]) rather
+			// than showing only the one whose token arrived. e2e does this via onBegin; unit
+			// runs browsers in parallel, so we set the full list here before they start.
+			reporter.setBrowsers(browsers.map((browserType) => BROWSER_LABEL[browserType] ?? browserType));
 			const consoleLogSets: ConsoleLog[][] = [];
 			const allErrors: Error[] = [];
 			let hasTests = false;
@@ -356,7 +361,7 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 			}
 
 			const allConsoleLogs = showsBrowserConsole(args.console) ? deduplicateConsoleLogs(consoleLogSets) : [];
-			const { passed, failed, failures } = reporter.finish({ consoleLogs: allConsoleLogs });
+			const { passed, failed, failures, flaky } = reporter.finish({ consoleLogs: allConsoleLogs });
 
 			const title = failed === 0
 				? 'Unit tests'
@@ -365,7 +370,7 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 			return {
 				title,
 				status: failed === 0 ? 'passed' : 'failed',
-				metrics: { passed, failed, failures },
+				metrics: { passed, failed, failures, flaky },
 			};
 		},
 	};

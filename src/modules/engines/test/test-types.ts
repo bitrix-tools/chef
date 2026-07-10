@@ -53,6 +53,10 @@ export type TestToken = {
 	showDiff?: boolean;
 	actual?: unknown;
 	expected?: unknown;
+	// Number of retries the test went through before this (final) result — i.e. Playwright's
+	// `result.retry` on the last attempt. 0 or absent means it ran once. A passed test with
+	// retries > 0 is flaky (failed, then passed); a failed one exhausted its retries.
+	retries?: number;
 	/**
 	 * Browser the test ran in. Populated by the strategy that produced the
 	 * token: e2e — from Playwright project name, unit — from the launched

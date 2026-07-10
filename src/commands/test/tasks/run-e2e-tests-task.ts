@@ -103,7 +103,7 @@ export function createE2eTestsTask(target: E2eTarget, args: Record<string, any>)
 				};
 			}
 
-			const { passed, failed, failures, browsers } = reporter.finish({
+			const { passed, failed, failures, browsers, flaky } = reporter.finish({
 				consoleLogs: showsBrowserConsole(args.console) ? testResult.consoleLogs : [],
 				nodeOutput: showsNodeOutput(args.console) ? testResult.nodeOutput : undefined,
 			});
@@ -115,7 +115,7 @@ export function createE2eTestsTask(target: E2eTarget, args: Record<string, any>)
 			return {
 				title,
 				status: failed === 0 ? 'passed' : 'failed',
-				metrics: { passed, failed, failures, browsers },
+				metrics: { passed, failed, failures, browsers, flaky },
 			};
 		},
 	};
