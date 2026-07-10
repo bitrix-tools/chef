@@ -77,6 +77,32 @@ chef test vendor.my-extension --list
 chef test vendor.my-extension -w
 ```
 
+### Live output
+
+During a run chef shows a single per-browser status bar — one look from start to finish. While an engine warms up you see its stage; once tests start, a counter and the test currently running:
+
+```
+○ Chromium starting  ·  ○ Firefox  ·  ○ WebKit · 0.7s
+○ Chromium 12/132  ·  ○ Firefox preparing  ·  ○ WebKit 8/132 · 5.3s
+✓ Chromium 132/132  ·  ○ Firefox 90/132  ·  ○ WebKit building · 12.1s
+```
+
+Results are grouped by describe block: the suite path is a heading printed once, tests indented beneath it. A test that ran in several browsers is one line tagged with every engine (`◌` — still running):
+
+```
+   ui.notification > Position
+     ✓ has TOP_LEFT     [Chromium ✓ · Firefox ✓ · WebKit ◌]
+     ✗ has BOTTOM_RIGHT  [Chromium ✗ · Firefox ✓ · WebKit ✓]
+```
+
+Tests that passed only after a retry (Playwright's retry) are flagged as flaky:
+
+```
+     ✓ opens the dialog  (passed on attempt 2)   [Chromium ✓]
+```
+
+And the final summary counts flaky tests separately (`Tests  130 passed · 2 flaky`).
+
 ### Debugging
 
 ```bash
@@ -143,7 +169,7 @@ After the run chef prints an aggregated report:
 - **Failed Tests (N)** — all failed tests with stack traces and code frames, grouped by extension. For e2e, paths to Playwright artifacts (screenshot, video, trace) are printed alongside, grouped by browser — ready to open in your editor.
 - **Errors (N)** — build errors and runtime crashes, one line per cause.
 - **Issues** — list of extensions with error/warning counts.
-- **Extensions / Tests / Time** — totals: how many extensions and tests passed, failed or were skipped, how long it took. For `chef test module` the line is labeled **Modules**.
+- **Extensions / Tests / Time** — totals: how many extensions and tests passed, failed or were skipped, how long it took. The **Tests** line flags flaky tests (passed after a retry) as a separate count. For `chef test module` the line is labeled **Modules**.
 
 ## Tips
 
