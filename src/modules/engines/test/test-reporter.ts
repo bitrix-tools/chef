@@ -127,6 +127,32 @@ function formatRetryTag(status: BrowserStatus, retries?: number): string
 	return ' ' + chalk.yellow(`(${note})`);
 }
 
+// The live viewport hides the terminal cursor; a Ctrl+C mid-run kills the process without
+// any cleanup, leaving the terminal with an invisible cursor and a frozen status bar — it
+// looks hung even though every child process is already dead. Restore the cursor on
+// SIGINT/SIGTERM. If chef has no other handler (normal runs), re-raise the default exit;
+// in watch mode the graceful shutdown handlers are also registered and manage the exit.
+let terminalRestoreInstalled = false;
+function installTerminalRestore(): void
+{
+	if (terminalRestoreInstalled || !isTTY)
+	{
+		return;
+	}
+	terminalRestoreInstalled = true;
+
+	for (const [signal, code] of [['SIGINT', 130], ['SIGTERM', 143]] as const)
+	{
+		process.on(signal, () => {
+			process.stdout.write('\x1B[?25h\n');
+			if (process.listenerCount(signal) === 1)
+			{
+				process.exit(code);
+			}
+		});
+	}
+}
+
 /**
  * Truncates a (possibly ANSI-colored) line to `maxWidth` visible columns, appending an
  * ellipsis when it's cut. The live TTY viewport rewrites in place by moving the cursor up N
@@ -561,6 +587,7 @@ export class TestReporter
 		if (isTTY)
 		{
 			process.stdout.write('\x1B[?25l');
+			installTerminalRestore();
 		}
 	}
 

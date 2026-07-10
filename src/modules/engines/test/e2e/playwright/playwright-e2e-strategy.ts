@@ -217,7 +217,12 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 		onStatus(browserLabel ? `Starting ${browserLabel}...` : 'Starting Playwright...');
 
 		const childProcess = spawn('npx', args, {
-			stdio: ['inherit', 'pipe', 'pipe'],
+			// Don't inherit stdin for a normal run: chef talks to Playwright over stdout
+			// tokens, not the keyboard, and an inherited terminal lets Playwright flip the
+			// tty into application-cursor-keys mode — which a Ctrl+C then leaves set, so the
+			// shell shows "^[OA" for arrow keys afterwards. Only --debug (the Inspector) has
+			// a reason to read the keyboard, so it keeps stdin.
+			stdio: [options.debug ? 'inherit' : 'ignore', 'pipe', 'pipe'],
 			cwd: options.projectRoot,
 			env: {
 				...global.process.env,
