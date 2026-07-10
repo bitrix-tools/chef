@@ -19,6 +19,13 @@ export function createE2eTestsTask(target: E2eTarget, args: Record<string, any>)
 		run: async (onUpdate): Promise<TaskResult> => {
 			const reporter = createReporter(args.reporter, onUpdate, { showSummary: false });
 
+			// Cheap up-front check: no e2e test files means nothing to run, so skip before the
+			// credentials warning and any Playwright work (also short-circuits --list).
+			if ((await target.listTests()).length === 0)
+			{
+				return { title: 'E2E tests (no test files)', status: 'skipped' };
+			}
+
 			// --list: enumerate tests, print them, and stop — no auth check, no run.
 			if (args.list)
 			{

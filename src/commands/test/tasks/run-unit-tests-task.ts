@@ -150,11 +150,21 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 		return getBrowsersFromConfig(config);
 	};
 
+	// Cheap up-front check: no unit test files means there's nothing to run, so skip before
+	// launching a browser or building the test bundle. Without this an explicitly named
+	// extension (chef test main.core) would spin up a browser only to report "no test files".
+	const noTestFiles = async (): Promise<boolean> => !(await extension.hasUnitTests());
+
 	if (args.debug)
 	{
 		return {
 			title: 'Unit tests',
 			run: async (onUpdate): Promise<TaskResult> => {
+				if (await noTestFiles())
+				{
+					return { title: 'Unit tests (no test files)', status: 'skipped' };
+				}
+
 				const browsers = await resolveBrowsers();
 				return createDebugTask(extension, args, browsers).run(onUpdate);
 			},
@@ -164,6 +174,11 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 	return {
 		title: 'Unit tests',
 		run: async (onUpdate): Promise<TaskResult> => {
+			if (await noTestFiles())
+			{
+				return { title: 'Unit tests (no test files)', status: 'skipped' };
+			}
+
 			const browsers = await resolveBrowsers();
 			const reporter = createReporter(args.reporter, onUpdate, { showSummary: false });
 
