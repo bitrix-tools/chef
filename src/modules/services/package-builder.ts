@@ -171,7 +171,7 @@ export class PackageBuilder
 			babel: enforce?.babel ?? bundleConfig.get('babel'),
 			transformClasses: bundleConfig.get('transformClasses'),
 			treeshake: bundleConfig.get('treeshake'),
-			customPlugins: bundleConfig.get('plugins'),
+			customPlugins: [...(bundleConfig.get("plugins") ?? []), ...(defaults?.plugins ?? [])],
 			production,
 			emitDeclaration: emitDeclarationStrategy.prepare(
 				enforce?.emitDeclaration
