@@ -3,6 +3,7 @@ import { Command, InvalidArgumentError } from 'commander';
 import { SequentialQueue } from '../../utils/sequential-queue';
 
 import { preparePath } from '../../utils/cli/prepare-path';
+import { routeRunnerArgs } from '../../utils/cli/runner-args';
 import { PackageFactoryProvider } from '../../modules/packages/providers/package-factory-provider';
 import { PackageResolver } from '../../modules/packages/package-resolver';
 import { findPackages } from '../../utils/package/find-packages';
@@ -432,7 +433,31 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 	}
 }
 
-const commonOptions = (cmd: Command) => cmd
+/**
+ * The Playwright options worth surfacing in `--help`. Not the full runner CLI — every
+ * option chef does not claim reaches Playwright anyway — just the ones people actually
+ * reach for, so they are discoverable without a trip to the Playwright docs.
+ */
+const PLAYWRIGHT_HELP = `
+Playwright options (e2e tests, forwarded to the runner):
+  -u, --update-snapshots     Update reference screenshots and snapshots
+  --repeat-each <N>          Run each test N times (hunting flaky tests)
+  --retries <N>              Retry a failing test up to N times
+  --workers <N>              Number of parallel workers (1 to run serially)
+  --timeout <ms>             Per-test timeout, 0 for unlimited
+  --max-failures <N>         Stop the run after N failures
+  --trace <mode>             Collect a trace: on, off, retain-on-failure, …
+  --last-failed              Re-run only the tests that failed last time
+  --only-changed [ref]       Run only tests changed since ref
+  --ignore-snapshots         Skip screenshot and snapshot comparisons
+  --forbid-only              Fail if a test.only was left in the code
+  --shard <current/all>      Run one shard of the suite, e.g. 3/5
+
+Any other Playwright option is forwarded as well — see
+https://playwright.dev/docs/test-cli
+`;
+
+const commonOptions = (cmd: Command, forwardsToRunner = true) => cmd
 	.option('-w, --watch', 'Watch files and rerun tests on changes')
 	.option('-p, --path [path]', 'Search for extensions and tests starting from this directory', preparePath, process.cwd())
 	.option('--headed', 'Run browser tests in headed mode')
@@ -442,7 +467,8 @@ const commonOptions = (cmd: Command) => cmd
 	.addOption(createReporterOption(['default', 'json', 'teamcity']))
 	.option('--console [target]', 'Print test output: browser (in-page console), node (test process stdout), or all. Bare --console means browser.', parseConsoleOption)
 	.option('--cdp-port <port>', 'Launch browser with Chrome DevTools Protocol on this port', parseInt)
-	.option('--list', 'List the tests that would run, without running them');
+	.option('--list', 'List the tests that would run, without running them')
+	.addHelpText('after', forwardsToRunner ? PLAYWRIGHT_HELP : '');
 
 function resolveModules(rawModules: string[]): { modules: string[]; file?: string }
 {
@@ -653,13 +679,46 @@ async function runModuleTestsWatch(
 
 export const testCommand = new Command('test');
 
+/**
+ * Options routed to Playwright by the parse override below, read back by the action
+ * handlers. Routing has to happen before Commander parses (it would reject the options as
+ * unknown), and Commander gives an action handler no way to see what was removed — hence
+ * the hand-off through a module-level value. One command runs per process, so a single
+ * slot is enough.
+ */
+let pendingRunnerArgs: string[] = [];
+
+function takeRunnerArgs(): string[]
+{
+	return pendingRunnerArgs;
+}
+
+/**
+ * chef owns the options that shape its own run and forwards the rest to Playwright, so
+ * `chef test e2e ui.buttons --update-snapshots` works without chef re-declaring the whole
+ * runner CLI. The split must happen before Commander sees the arguments, so parseAsync is
+ * wrapped rather than an option or hook added.
+ */
+const parseTestCommand = testCommand.parseAsync.bind(testCommand);
+testCommand.parseAsync = (argv?: readonly string[], options?: Parameters<Command['parseAsync']>[1]) => {
+	if (argv)
+	{
+		const { chefArgs, runnerArgs } = routeRunnerArgs([...argv]);
+		pendingRunnerArgs = runnerArgs;
+
+		return parseTestCommand(chefArgs, options);
+	}
+
+	return parseTestCommand(argv, options);
+};
+
 testCommand
 	.description('Run unit and end-to-end tests for extensions')
 	.argument('[extensions...]', 'Extensions to test (e.g. main.core ui.buttons)');
 
 commonOptions(testCommand)
 	.action((extensions: string[], _opts, command: Command): void => {
-		runTests({ extensions, args: command.optsWithGlobals() });
+		runTests({ extensions, args: { ...command.optsWithGlobals(), runnerArgs: takeRunnerArgs() } });
 	});
 
 function splitExtensionsAndFile(args: string[]): { extensions: string[]; file?: string }
@@ -713,9 +772,21 @@ const unitCommand = new Command('unit')
 	.description('Run only unit tests')
 	.argument('[args...]', 'Extensions to test and optionally a test file (e.g. main.core ui.buttons dom.test.ts)');
 
-commonOptions(unitCommand)
+commonOptions(unitCommand, false)
 	.action((rawArgs: string[], _opts, command: Command): void => {
 		const args = command.optsWithGlobals();
+		const runnerArgs = takeRunnerArgs();
+		if (runnerArgs.length > 0)
+		{
+			// Unit tests run in-browser under chef's own harness, not the Playwright CLI —
+			// there is no runner process to forward these to, and silently dropping them
+			// would repeat exactly the bug this routing was added to fix.
+			console.log('');
+			console.log(chalk.yellow(`Unknown option for unit tests: ${chalk.bold(runnerArgs.join(' '))}`));
+			console.log(chalk.yellow('Playwright runner options apply to e2e tests only (chef test e2e).'));
+			process.exit(1);
+		}
+
 		const { extensions, file } = splitExtensionsAndFile(rawArgs);
 		runTests({ extensions, args: { ...args, file }, type: 'unit' });
 	});
@@ -728,7 +799,7 @@ commonOptions(e2eCommand)
 	.action((rawArgs: string[], _opts, command: Command): void => {
 		const args = command.optsWithGlobals();
 		const { extensions, file } = splitExtensionsAndFile(rawArgs);
-		runTests({ extensions, args: { ...args, file }, type: 'e2e' });
+		runTests({ extensions, args: { ...args, file, runnerArgs: takeRunnerArgs() }, type: 'e2e' });
 	});
 
 const moduleCommand = new Command('module')
@@ -738,7 +809,7 @@ const moduleCommand = new Command('module')
 commonOptions(moduleCommand)
 	.action((rawArgs: string[], _opts, command: Command): void => {
 		const args = command.optsWithGlobals();
-		runModuleTests(rawArgs, args);
+		runModuleTests(rawArgs, { ...args, runnerArgs: takeRunnerArgs() });
 	});
 
 testCommand

@@ -136,6 +136,53 @@ Tests are grouped by describe block, with deferred ones (`skip`/`fixme`) marked.
 
 Works for extensions (unit + e2e), modules (`chef test module`) and every reporter (`--reporter default|json|teamcity`). It can't be combined with `--watch`.
 
+### Playwright arguments
+
+chef has its own options and deliberately does not mirror the whole Playwright CLI. Anything chef does not claim as its own goes to the runner verbatim:
+
+```bash
+# Update reference snapshots
+chef test e2e vendor.my-extension --update-snapshots
+
+# Run a test several times in a row (hunting flakes)
+chef test e2e vendor.my-extension --repeat-each=3 --workers=1
+
+# Collect a trace to investigate a failing test
+chef test e2e vendor.my-extension --trace=on
+```
+
+The common ones are listed in `chef test e2e --help`, but that list is not exhaustive: every Playwright option works, including one added in a fresh runner release — no chef update needed.
+
+This applies to e2e tests — unit tests have no separate runner process to pass options to, and chef says so explicitly.
+
+chef keeps the options that drive chef itself: `--watch`, `--path`, `--console`, `--list`, `--reporter`, `--cdp-port`, plus `--headed`, `--debug`, `--grep` and `--project`, which chef translates into runner arguments of its own. Everything else belongs to Playwright.
+
+A typo in an option name is caught by the runner, usually with a suggestion:
+
+```
+error: unknown option '--headles'
+(Did you mean --headed?)
+```
+
+Forwarded arguments are appended last, so on a conflict yours win over what chef set.
+
+### Calling Playwright directly
+
+If you need to run Playwright by hand, bypassing chef, use the **project** binary:
+
+```bash
+./node_modules/.bin/playwright test <spec>
+```
+
+The binary shipped with chef won't do: `@playwright/test` then loads twice — once from chef's tree, once from the project's — and the run fails with:
+
+```
+Playwright Test did not expect test.describe() to be called here
+You have two different versions of @playwright/test
+```
+
+`chef test` itself never hits this trap — it always starts the runner from the project root. If the Playwright versions in the project and in chef have drifted apart, an e2e run prints a warning showing both versions and the reminder to use the project binary.
+
 ## Bulk Runs
 
 `chef test` without arguments or with a glob pattern (`im.v2.**`) walks through every matching extension. Extensions without tests are skipped silently — only those with tests or problems show up in the output.

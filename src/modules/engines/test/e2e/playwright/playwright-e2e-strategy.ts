@@ -111,6 +111,15 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 			baseArgs.push(options.file);
 		}
 
+		// Options chef does not own, routed here from the command line, appended last — so
+		// one that chef also sets (say --output) is overridden by the user's, not the other
+		// way round. chef never inspects these: unknown-to-chef options are exactly the
+		// point, and validating them here would just re-create the gap they close.
+		if (options.runnerArgs?.length)
+		{
+			baseArgs.push(...options.runnerArgs);
+		}
+
 		// Decide which browser projects to run, and in how many separate processes.
 		// Running every project inside ONE `playwright test` keeps all browser engines
 		// alive at once; on a memory-constrained box that exhausts RAM and crashes

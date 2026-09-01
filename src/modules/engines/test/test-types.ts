@@ -107,6 +107,8 @@ export type E2ETestOptions = {
 	captureNodeOutput?: boolean;
 	// List tests (emit TEST_LISTED) instead of running them (--list).
 	listOnly?: boolean;
+	// Raw arguments the user put after `--`, forwarded to Playwright as-is.
+	runnerArgs?: string[];
 	onToken?: (token: TestToken, browser?: string) => void;
 	onStatus?: (status: string) => void;
 	onBegin?: (info: { totalTests: number; browserCount: number; browsers?: string[] }) => void;
