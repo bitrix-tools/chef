@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { createRequire } from 'node:module';
 
 import chalk from 'chalk';
 import boxen from 'boxen';
@@ -11,6 +12,7 @@ const DEFAULT_BASE_URL = 'http://localhost';
 
 let baseUrlWarningShown = false;
 let credentialsWarningShown = false;
+let playwrightVersionWarningShown = false;
 
 function findEnvTestPath(packageRoot: string): string | null
 {
@@ -146,4 +148,70 @@ export function checkCredentialsWarning(packageRoot: string): void
 
 	showWarning(lines);
 	credentialsWarningShown = true;
+}
+
+function readPlaywrightVersion(fromDirectory: string): string | null
+{
+	try
+	{
+		const require = createRequire(path.join(fromDirectory, 'noop.js'));
+		const manifest = require('@playwright/test/package.json');
+
+		return typeof manifest?.version === 'string' ? manifest.version : null;
+	}
+	catch
+	{
+		// Not installed there — nothing to compare against, so nothing to warn about.
+		return null;
+	}
+}
+
+/**
+ * chef runs the runner as `npx playwright` from the project root, so the version that
+ * actually executes is the project's — never the one shipped with chef. The two drifting
+ * apart is harmless for `chef test`, but it is a trap the moment someone runs Playwright
+ * by hand and reaches for chef's binary: @playwright/test then loads twice from two trees
+ * and dies with "You have two different versions of @playwright/test". Say so up front,
+ * and say which binary to use.
+ */
+export function checkPlaywrightVersionWarning(): void
+{
+	if (playwrightVersionWarningShown)
+	{
+		return;
+	}
+
+	const root = Environment.getRoot();
+	if (!root)
+	{
+		return;
+	}
+
+	const projectVersion = readPlaywrightVersion(root);
+	const chefVersion = readPlaywrightVersion(import.meta.dirname);
+
+	// Compare minor lines: Playwright's test runner and its browser protocol move together
+	// within a minor, so a patch difference is not what triggers the dual-version failure.
+	const minor = (version: string): string => version.split('.').slice(0, 2).join('.');
+	if (!projectVersion || !chefVersion || minor(projectVersion) === minor(chefVersion))
+	{
+		return;
+	}
+
+	showWarning([
+		`${chalk.bold('@playwright/test')} versions differ:`,
+		'',
+		`  project  ${chalk.cyan(projectVersion)}`,
+		`  chef     ${chalk.cyan(chefVersion)}`,
+		'',
+		`${chalk.bold('chef test')} runs the project's runner, so this does not affect it.`,
+		'',
+		'To call Playwright directly, use the project binary:',
+		'',
+		chalk.dim('  ./node_modules/.bin/playwright test <spec>'),
+		'',
+		"Using chef's own binary loads @playwright/test twice and fails with",
+		chalk.dim('  "You have two different versions of @playwright/test"'),
+	]);
+	playwrightVersionWarningShown = true;
 }

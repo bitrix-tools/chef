@@ -1,5 +1,5 @@
 import { createReporter } from '../create-reporter';
-import { checkCredentialsWarning } from '../check-env-test';
+import { checkCredentialsWarning, checkPlaywrightVersionWarning } from '../check-env-test';
 import { showsBrowserConsole, showsNodeOutput } from '../console-target';
 import { extensionTarget, runE2eForTarget } from '../e2e-target';
 
@@ -39,6 +39,18 @@ export function createE2eTestsTask(target: E2eTarget, args: Record<string, any>)
 
 				if (listResult.errors.length > 0)
 				{
+					// A --list run ends in printListingSummary, which has no error block, and
+					// the task reporter suppresses error details (on a normal run they are the
+					// test reporter's job). So the reason — e.g. an argument Playwright rejected
+					// — would vanish, leaving a bare "errored". Print it here instead, once per
+					// distinct message: listing runs one process per browser project, and a bad
+					// argument fails identically in each.
+					for (const message of new Set(listResult.errors.map((error) => error.message)))
+					{
+						console.log('');
+						console.log(message);
+					}
+
 					return {
 						title: 'E2E tests (errored)',
 						status: 'failed',
@@ -62,6 +74,7 @@ export function createE2eTestsTask(target: E2eTarget, args: Record<string, any>)
 			}
 
 			checkCredentialsWarning(target.path);
+			checkPlaywrightVersionWarning();
 
 			const testResult = await runE2eForTarget(target, {
 				...args,
