@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.22.0 <Badge type="tip" text="9/1/2026" />
+
+Playwright options can now be passed straight to chef test: anything chef does not claim as its own goes to the runner, so chef test e2e ui.buttons --update-snapshots works with no workarounds. The common options are listed in chef test e2e --help, but every Playwright option works, including ones added in fresh runner releases. When the @playwright/test versions in the project and in chef have drifted apart, an e2e run warns and points at the project binary for direct calls. A --list run now shows why it failed instead of a bare "errored".
+
 ## v1.21.0 <Badge type="tip" text="7/10/2026" />
 
 chef test output improvements:
