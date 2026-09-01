@@ -301,6 +301,7 @@ chef test --grep "should render"          # Filter by test name
 chef test main.core --debug               # Open browser with DevTools and sourcemaps
 chef test main.core --project chromium    # Run in specific browser only
 chef test module crm                      # Module-level scenario tests (several extensions)
+chef test e2e ui.buttons --update-snapshots   # Playwright options go to the runner as-is
 ```
 
 ### Test file structure
@@ -368,6 +369,9 @@ Options:
   --grep <pattern>         Run only tests matching the pattern
   --project <names>        Run tests in specific browsers (chromium, firefox, webkit)
 
+  Any option chef does not own is forwarded to the Playwright runner (e2e only) —
+  see `chef test e2e --help` for the common ones.
+
 Examples:
   chef test main.core ui.buttons              # Test specific extensions
   chef test unit main.core                           # Unit tests only
@@ -379,6 +383,7 @@ Examples:
   chef test main.core -w                      # Test and watch for changes
   chef test main.core --debug                 # Debug with DevTools and sourcemaps
   chef test main.core --project chromium firefox  # Run in specific browsers
+  chef test e2e ui.buttons --update-snapshots     # Playwright options go to the runner
 ```
 
 <br>

@@ -259,12 +259,13 @@ npx playwright install
 ```bash
 chef test main.core                       # Тестирование конкретного расширения
 chef test ui.* --headed                   # Прямые дочерние, с видимым браузером
-chef build im.v2.**                       # Все вложенные расширения
+chef test im.v2.**                        # Все вложенные расширения
 chef test main.core -w                    # Watch-режим
 chef test --grep "should render"          # Фильтр по имени теста
 chef test main.core --debug               # Открыть браузер с DevTools и sourcemaps
 chef test main.core --project chromium    # Запуск только в конкретном браузере
 chef test module crm                      # Сценарные тесты модуля (несколько расширений)
+chef test e2e ui.buttons --update-snapshots   # Опции Playwright уходят раннеру как есть
 ```
 
 <br>
