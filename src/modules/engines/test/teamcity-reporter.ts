@@ -153,7 +153,7 @@ export class TeamcityReporter
 		}
 	}
 
-	finish(options: { consoleLogs?: ConsoleLog[]; nodeOutput?: NodeOutputSection[] } = {}): { passed: number; failed: number; failures: never[]; browsers: never[]; listing?: ListingCounts; flaky?: number }
+	finish(options: { consoleLogs?: ConsoleLog[]; nodeOutput?: NodeOutputSection[] } = {}): { passed: number; failed: number; failures: never[]; browsers: never[]; listing?: ListingCounts; flaky?: number; flakyTests?: string[]; unreported?: number }
 	{
 		const consoleLogs = options.consoleLogs ?? [];
 
@@ -185,6 +185,9 @@ export class TeamcityReporter
 			this.#write(message('testingFinished'));
 		}
 
-		return { passed: this.#passed, failed: this.#failed, failures: [], browsers: [] };
+		// Flaky and unreported counts are left at 0 on purpose: TeamCity tracks retries and
+		// the selected-test count from the service messages themselves, so duplicating them
+		// in the returned metrics would double-count in the CI report.
+		return { passed: this.#passed, failed: this.#failed, failures: [], browsers: [], flaky: 0, flakyTests: [], unreported: 0 };
 	}
 }

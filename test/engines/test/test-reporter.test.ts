@@ -553,6 +553,129 @@ describe('TestReporter', () => {
 			const { flaky } = reporter.finish();
 			assert.equal(flaky, 1);
 		});
+
+		it('prints the flaky count in the summary, outside the passed/failed total', () => {
+			const reporter = createReporter();
+
+			for (let i = 1; i <= 6; i++)
+			{
+				reporter.handleToken({ id: 'TEST_PASSED', title: `clean ${i}`, suite: ['S'], duration: 1 });
+			}
+			for (let i = 1; i <= 5; i++)
+			{
+				reporter.handleToken({ id: 'TEST_PASSED', title: `shaky ${i}`, suite: ['S'], duration: 1, retries: 1 });
+			}
+
+			output = '';
+			reporter.finish();
+
+			const plain = stripAnsi(output);
+			// A green "11 passed" alone would hide that five of them needed a retry.
+			assert.include(plain, '11 passed');
+			assert.include(plain, '5 flaky');
+			// Flaky tests are already inside `passed`, so the (N) sum stays 11, not 16.
+			assert.include(plain, '(11)');
+			// Every flaky test is named, so a retried baseline can be traced to a test.
+			assert.include(plain, 'Flaky tests:');
+			assert.include(plain, 'S > shaky 3');
+			// And the run says why a retried green is weaker evidence.
+			assert.include(plain, '--ignore-snapshots');
+		});
+
+		it('does not print a flaky block when nothing was retried', () => {
+			const reporter = createReporter();
+
+			reporter.handleToken({ id: 'TEST_PASSED', title: 'ok', suite: ['S'], duration: 1 });
+
+			output = '';
+			reporter.finish();
+
+			const plain = stripAnsi(output);
+			assert.notInclude(plain, 'flaky');
+			assert.notInclude(plain, 'Flaky tests:');
+		});
+	});
+
+	describe('selected vs reported', () => {
+		it('reports the tests that produced no result and fails the run', () => {
+			const reporter = createReporter();
+			// The runner selected 11 tests but only 6 results arrived.
+			reporter.setTotalTests(11);
+
+			for (let i = 1; i <= 6; i++)
+			{
+				reporter.handleToken({ id: 'TEST_PASSED', title: `t${i}`, suite: ['S'], duration: 1 });
+			}
+
+			output = '';
+			const result = reporter.finish();
+
+			const plain = stripAnsi(output);
+			assert.include(plain, '6 passed');
+			// The gap is named instead of being hidden behind a green total.
+			assert.include(plain, 'Mismatch');
+			assert.include(plain, '5 unreported');
+			assert.equal(result.unreported, 5);
+		});
+
+		it('does not report a mismatch when every selected test reported', () => {
+			const reporter = createReporter();
+			reporter.setTotalTests(2);
+
+			reporter.handleToken({ id: 'TEST_PASSED', title: 'a', suite: ['S'], duration: 1 });
+			reporter.handleToken({ id: 'TEST_FAILED', title: 'b', suite: ['S'], duration: 1, error: { message: 'x' } });
+
+			output = '';
+			const result = reporter.finish();
+
+			assert.notInclude(stripAnsi(output), 'Mismatch');
+			assert.equal(result.unreported, 0);
+		});
+
+		it('counts each engine separately, so a multi-browser run is not a mismatch', () => {
+			const reporter = createReporter(3);
+			reporter.setBrowsers(['Chromium', 'Firefox', 'WebKit']);
+			// Playwright's suite.allTests() counts a test once per project: 4 tests x 3 engines.
+			reporter.setTotalTests(12);
+
+			for (const browser of ['Chromium', 'Firefox', 'WebKit'])
+			{
+				for (let i = 1; i <= 4; i++)
+				{
+					reporter.handleToken({ id: 'TEST_PASSED', title: `t${i}`, suite: ['S'], duration: 1, browser }, browser);
+				}
+			}
+
+			output = '';
+			const result = reporter.finish();
+
+			const plain = stripAnsi(output);
+			// The summary deduplicates to 4 unique tests — that alone must not read as a gap.
+			assert.include(plain, '4 passed');
+			assert.notInclude(plain, 'Mismatch');
+			assert.equal(result.unreported, 0);
+		});
+
+		it('reports a mismatch when one engine drops its results', () => {
+			const reporter = createReporter(3);
+			reporter.setBrowsers(['Chromium', 'Firefox', 'WebKit']);
+			reporter.setTotalTests(12);
+
+			// WebKit never reports: 8 of 12 runs accounted for, though all 4 tests "passed".
+			for (const browser of ['Chromium', 'Firefox'])
+			{
+				for (let i = 1; i <= 4; i++)
+				{
+					reporter.handleToken({ id: 'TEST_PASSED', title: `t${i}`, suite: ['S'], duration: 1, browser }, browser);
+				}
+			}
+
+			output = '';
+			const result = reporter.finish();
+
+			assert.include(stripAnsi(output), '4 unreported');
+			assert.equal(result.unreported, 4);
+		});
 	});
 
 	describe('--list output', () => {

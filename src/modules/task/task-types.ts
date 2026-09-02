@@ -27,8 +27,15 @@ interface TaskResult
 		failed?: number;
 		failures?: TaskFailure[];
 		browsers?: Array<{ name: string; passed: number; failed: number }>;
-		// Tests that passed or failed only after being retried (flaky). Shown in the summary.
+		// Tests that failed at first and passed only on a retry (flaky). A test that kept
+		// failing through its retries counts in `failed`, not here. Shown in the summary.
 		flaky?: number;
+		// Names (suite path > title) of those flaky tests, so a bulk summary can list them
+		// instead of reporting a bare count with no way to tell which tests were retried.
+		flakyTests?: string[];
+		// Tests the runner selected but never reported a result for. Non-zero means the
+		// summary does not cover the whole run, so it fails the run instead of exiting 0.
+		unreported?: number;
 		// --list only: enumerated-test counts for the combined Summary block.
 		listing?: { kind: 'unit' | 'e2e'; total: number; runnable: number; skipped: number };
 	};

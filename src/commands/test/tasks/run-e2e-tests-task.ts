@@ -123,19 +123,22 @@ export function createE2eTestsTask(target: E2eTarget, args: Record<string, any>)
 				};
 			}
 
-			const { passed, failed, failures, browsers, flaky } = reporter.finish({
+			const { passed, failed, failures, browsers, flaky, flakyTests, unreported } = reporter.finish({
 				consoleLogs: showsBrowserConsole(args.console) ? testResult.consoleLogs : [],
 				nodeOutput: showsNodeOutput(args.console) ? testResult.nodeOutput : undefined,
 			});
 
+			// Tests the runner selected but never reported on. Nothing proves they passed, so
+			// the run is not green — otherwise a lossy run exits 0 and reads as a clean one.
+			const missing = unreported ?? 0;
 			const title = failed === 0
-				? 'E2E tests'
+				? (missing > 0 ? `E2E tests (${missing} unreported)` : 'E2E tests')
 				: `E2E tests (${failed} failed)`;
 
 			return {
 				title,
-				status: failed === 0 ? 'passed' : 'failed',
-				metrics: { passed, failed, failures, browsers, flaky },
+				status: failed === 0 && missing === 0 ? 'passed' : 'failed',
+				metrics: { passed, failed, failures, browsers, flaky, flakyTests, unreported: missing },
 			};
 		},
 	};

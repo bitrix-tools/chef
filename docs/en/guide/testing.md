@@ -101,7 +101,41 @@ Tests that passed only after a retry (Playwright's retry) are flagged as flaky:
      ✓ opens the dialog  (passed on attempt 2)   [Chromium ✓]
 ```
 
-And the final summary counts flaky tests separately (`Tests  130 passed · 2 flaky`).
+The final summary counts flaky tests separately — after the total, because they are already
+counted in `passed` and are not a fourth category:
+
+```
+   Extensions  1 passed (1)
+   Tests       130 passed (130) 2 flaky
+
+   Flaky tests: failed at first, passed on a retry
+     ↻ ui.dialog › Sharing > opens the dialog
+     ↻ ui.dialog › Sharing > closes on Escape
+```
+
+Each flaky test is named and tagged with the extension it came from — a bare `2 flaky` would
+give you no way to find them.
+
+::: warning A green run with retries is weak evidence
+On the first (failed) attempt Playwright writes a missing reference screenshot, and the retry
+then compares against a baseline this very run produced. To take a baseline deliberately: run
+with `--ignore-snapshots` first — that proves the assertions pass — and only then
+`--update-snapshots`.
+:::
+
+### Mismatch with the selected test count
+
+The printed categories must add up to the number of tests the runner selected. If a test
+reported no result at all, chef prints `Mismatch` and fails the run — a summary that does not
+cover the whole set proves nothing, and exiting 0 on it is not an option:
+
+```
+   Tests       6 passed (6)
+   Mismatch    5 unreported — selected tests with no result
+```
+
+The count is in test runs, not unique tests: one test in three engines is three runs. So the
+deduplication in the output (`4 passed` for 12 runs) is not a mismatch by itself.
 
 ### Debugging
 

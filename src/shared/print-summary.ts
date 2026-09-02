@@ -293,6 +293,8 @@ export function printSummary(
 	let testsPassed = 0;
 	let testsFailed = 0;
 	let testsFlaky = 0;
+	let testsUnreported = 0;
+	const flakyTests: string[] = [];
 	// Aggregate per-browser tallies across all extensions, preserving first-seen order.
 	const browserOrder: string[] = [];
 	const browserTotals = new Map<string, { passed: number; failed: number }>();
@@ -305,6 +307,11 @@ export function printSummary(
 				testsPassed += task.metrics.passed;
 				testsFailed += task.metrics.failed;
 				testsFlaky += task.metrics.flaky ?? 0;
+				testsUnreported += task.metrics.unreported ?? 0;
+				for (const name of task.metrics.flakyTests ?? [])
+				{
+					flakyTests.push(`${group.title} › ${name}`);
+				}
 
 				for (const browser of task.metrics.browsers ?? [])
 				{
@@ -336,15 +343,39 @@ export function printSummary(
 		{
 			testsParts.push(chalk.red.bold(`${testsFailed} failed`));
 		}
-		if (testsFlaky > 0)
-		{
-			testsParts.push(chalk.yellow(`${testsFlaky} flaky`));
-		}
-
 		if (testsParts.length > 0)
 		{
 			const testsTotal = testsPassed + testsFailed;
-			console.log(`   ${chalk.bold('Tests'.padEnd(LABEL_WIDTH))}${testsParts.join(chalk.gray(' | '))} ${chalk.gray(`(${testsTotal})`)}`);
+			// Flaky tests already sit in `passed` — they are a property of those results,
+			// not a fourth category, so the note goes after the (N) sum rather than inside
+			// the passed | failed list where it would look like a separate bucket.
+			const flakyNote = testsFlaky > 0 ? ' ' + chalk.yellow(`${testsFlaky} flaky`) : '';
+			console.log(`   ${chalk.bold('Tests'.padEnd(LABEL_WIDTH))}${testsParts.join(chalk.gray(' | '))} ${chalk.gray(`(${testsTotal})`)}${flakyNote}`);
+
+			// Selected tests that produced no result anywhere in the run — the counts above
+			// don't cover them, so the total is not evidence the whole selection ran.
+			if (testsUnreported > 0)
+			{
+				console.log(`   ${chalk.bold('Mismatch'.padEnd(LABEL_WIDTH))}${chalk.red(`${testsUnreported} unreported`)} ${chalk.gray('— selected tests with no result')}`);
+			}
+
+			// A green run with retries is weaker evidence than it looks: the first attempt ran
+			// with assertions that failed, and a missing reference screenshot is written on
+			// that attempt, so the retry compares against a baseline this very run produced.
+			// Naming the tests is what makes that traceable — a bare "2 flaky" is not.
+			if (flakyTests.length > 0)
+			{
+				console.log('');
+				console.log(`   ${chalk.yellow.bold('Flaky tests:')} ${chalk.gray('failed at first, passed on a retry')}`);
+				for (const name of flakyTests)
+				{
+					console.log(`     ${chalk.yellow('↻')} ${name}`);
+				}
+				console.log('');
+				console.log(`   ${chalk.gray('A retried run can write a missing reference screenshot on the failed attempt')}`);
+				console.log(`   ${chalk.gray('and then pass against it. To take a baseline deliberately: run with')}`);
+				console.log(`   ${chalk.gray('--ignore-snapshots to prove the assertions, then --update-snapshots.')}`);
+			}
 		}
 
 		// Per-browser breakdown — only when more than one browser ran, so it adds

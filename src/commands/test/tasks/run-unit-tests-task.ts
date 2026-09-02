@@ -376,16 +376,19 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 			}
 
 			const allConsoleLogs = showsBrowserConsole(args.console) ? deduplicateConsoleLogs(consoleLogSets) : [];
-			const { passed, failed, failures, flaky } = reporter.finish({ consoleLogs: allConsoleLogs });
+			const { passed, failed, failures, flaky, flakyTests, unreported } = reporter.finish({ consoleLogs: allConsoleLogs });
 
+			// Tests selected but never reported on — nothing proves they passed, so the run
+			// is not green (see the same check in the e2e task).
+			const missing = unreported ?? 0;
 			const title = failed === 0
-				? 'Unit tests'
+				? (missing > 0 ? `Unit tests (${missing} unreported)` : 'Unit tests')
 				: `Unit tests (${failed} failed)`;
 
 			return {
 				title,
-				status: failed === 0 ? 'passed' : 'failed',
-				metrics: { passed, failed, failures, flaky },
+				status: failed === 0 && missing === 0 ? 'passed' : 'failed',
+				metrics: { passed, failed, failures, flaky, flakyTests, unreported: missing },
 			};
 		},
 	};

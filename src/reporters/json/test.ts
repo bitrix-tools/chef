@@ -53,6 +53,9 @@ export type BrowserTestResult = {
 	// Per-test artifacts (screenshot / video / trace) produced for this browser, so a
 	// consumer of the report has the paths directly instead of scraping them off disk.
 	attachments?: TestAttachment[],
+	// Retries before this result. > 0 on a passed test means it failed at first and only
+	// passed on a retry — without it a "passed" here is indistinguishable from a clean run.
+	retries?: number,
 };
 
 export type TestFailure = {
@@ -86,6 +89,9 @@ export type TestKindDetails = {
 	passed: number,
 	failed: number,
 	skipped: number,
+	// Tests counted in `passed` that failed at first and passed only on a retry. A caller
+	// reading passed/failed alone cannot tell a clean run from a retried one.
+	flaky: number,
 	total: number,
 	tests: TestEntry[],
 	consoleLogs: ConsoleLog[],
@@ -108,6 +114,7 @@ export type TestSummaryExtras = {
 		passed: number,
 		failed: number,
 		skipped: number,
+		flaky: number,
 	},
 };
 
@@ -500,6 +507,10 @@ function createMerger(): Merger
 				{
 					browserResult.attachments = token.attachments;
 				}
+				if (token.retries && token.retries > 0)
+				{
+					browserResult.retries = token.retries;
+				}
 
 				entry.results[browser] = browserResult;
 			}
@@ -512,11 +523,20 @@ function createMerger(): Merger
 			let failed = 0;
 			let skipped = 0;
 			let listed = 0;
+			let flaky = 0;
 
 			for (const entry of map.values())
 			{
 				const status = aggregateStatus(entry.results, browserList);
 				entry.status = status;
+
+				// Flaky is per unique test, not per browser: the same test retried in three
+				// engines is one flaky test. It only applies to a test that ended up passing —
+				// one that exhausted its retries is a failure.
+				if (status === 'passed' && Object.values(entry.results).some((r) => (r.retries ?? 0) > 0))
+				{
+					flaky++;
+				}
 				if (status === 'failed')
 				{
 					failed++;
@@ -544,6 +564,7 @@ function createMerger(): Merger
 				passed,
 				failed,
 				skipped,
+				flaky,
 				total: passed + failed + skipped + listed,
 				tests,
 				consoleLogs,
@@ -668,6 +689,7 @@ function emptyKind(skipReason?: string): TestKindDetails
 		passed: 0,
 		failed: 0,
 		skipped: 0,
+		flaky: 0,
 		total: 0,
 		tests: [],
 		consoleLogs: [],
@@ -687,6 +709,7 @@ function aggregateSummary(extensions: TestExtensionResult[], startedAt: number)
 	let testsPassed = 0;
 	let testsFailed = 0;
 	let testsSkipped = 0;
+	let testsFlaky = 0;
 	let errorCount = 0;
 	let warningCount = 0;
 
@@ -697,6 +720,7 @@ function aggregateSummary(extensions: TestExtensionResult[], startedAt: number)
 		testsPassed += unit.passed + e2e.passed;
 		testsFailed += unit.failed + e2e.failed;
 		testsSkipped += unit.skipped + e2e.skipped;
+		testsFlaky += (unit.flaky ?? 0) + (e2e.flaky ?? 0);
 		errorCount += extension.errors.length;
 		warningCount += extension.warnings.length;
 	}
@@ -713,6 +737,7 @@ function aggregateSummary(extensions: TestExtensionResult[], startedAt: number)
 			passed: testsPassed,
 			failed: testsFailed,
 			skipped: testsSkipped,
+			flaky: testsFlaky,
 		},
 	};
 }
@@ -733,7 +758,7 @@ function fatalResult(command: string, cwd: string, startedAt: number, error: Jso
 			durationMs: Date.now() - startedAt,
 			errorCount: 0,
 			warningCount: 0,
-			tests: { total: 0, passed: 0, failed: 0, skipped: 0 },
+			tests: { total: 0, passed: 0, failed: 0, skipped: 0, flaky: 0 },
 		},
 	};
 }

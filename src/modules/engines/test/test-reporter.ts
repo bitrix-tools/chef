@@ -244,6 +244,13 @@ export class TestReporter
 	// onBegin). 0 means "not yet known" — until then the progress falls back to
 	// the count of finished tests.
 	#totalTests = 0;
+	// The selected count is announced once per run (non-TTY only), before the first result.
+	#selectedAnnounced = false;
+	// Every result received, counting each engine separately — the same unit as #totalTests,
+	// which is Playwright's suite.allTests() (a test in 3 projects counts 3 times). The
+	// passed/failed/pending counters instead count each unique test once, so they can't be
+	// compared with the selected count directly.
+	#resultsReceived = 0;
 	// Per-browser finished count + the browser whose result arrived last. With
 	// sequential engines the overall "N of total" stops moving once a test was
 	// already counted in an earlier browser, so the bar looks frozen while the
@@ -287,6 +294,23 @@ export class TestReporter
 	setTotalTests(count: number): void
 	{
 		this.#totalTests = count;
+
+		// Announce the selected count once, before any result arrives, so the run states up
+		// front how many tests it picked up. Only outside a TTY: there the live viewport
+		// owns the screen and a stray line would tear it, and its status bar already shows
+		// N/total. A piped log keeps nothing of that bar, so this line is what makes a later
+		// mismatch with the summary visible there.
+		if (count > 0 && !this.#selectedAnnounced && this.#showSummary && !isTTY)
+		{
+			this.#selectedAnnounced = true;
+			// The count is Playwright's suite.allTests(): a test in 3 projects counts 3 times,
+			// so say "test runs" rather than "tests" when more than one engine is involved.
+			const engines = this.#allBrowsers.length;
+			const label = engines > 1
+				? `${count} test runs ${chalk.gray(`across ${engines} engines`)}`
+				: `${count} ${count === 1 ? 'test' : 'tests'}`;
+			console.log(`${PREFIX} ${chalk.bold('Selected')}  ${label}`);
+		}
 	}
 
 	#startSpinner(): void
@@ -449,6 +473,8 @@ export class TestReporter
 			const status: BrowserStatus = token.id === 'TEST_PASSED' ? 'passed'
 				: token.id === 'TEST_FAILED' ? 'failed'
 				: 'pending';
+
+			this.#resultsReceived++;
 
 			if (browser)
 			{
@@ -1028,7 +1054,7 @@ export class TestReporter
 		return { total, runnable: total - skipped, skipped };
 	}
 
-	finish(options: { consoleLogs?: ConsoleLog[]; nodeOutput?: NodeOutputSection[] } = {}): { passed: number; failed: number; failures: FailedTestGroup[]; browsers: Array<{ name: string; passed: number; failed: number }>; listing?: ListingCounts; flaky?: number }
+	finish(options: { consoleLogs?: ConsoleLog[]; nodeOutput?: NodeOutputSection[] } = {}): { passed: number; failed: number; failures: FailedTestGroup[]; browsers: Array<{ name: string; passed: number; failed: number }>; listing?: ListingCounts; flaky?: number; flakyTests?: string[]; unreported?: number }
 	{
 		const consoleLogs = options.consoleLogs ?? [];
 		const nodeOutput = options.nodeOutput ?? [];
@@ -1041,7 +1067,7 @@ export class TestReporter
 		if (this.#listedTests.length > 0)
 		{
 			const listing = this.#printListing();
-			return { passed: 0, failed: 0, failures: [], browsers: [], listing };
+			return { passed: 0, failed: 0, failures: [], browsers: [], listing, flaky: 0, flakyTests: [], unreported: 0 };
 		}
 
 		const wallTime = Date.now() - this.#startTime;
@@ -1138,13 +1164,53 @@ export class TestReporter
 			// Summary
 			lines.push('');
 
+			// Flaky is a property of tests already counted in `passed`, not a fourth
+			// category — so it is listed after the totals, outside the (N) sum, to keep
+			// "passed + failed + pending = total" true.
 			const summaryParts = [
 				this.#passed > 0 ? chalk.green.bold(`${this.#passed} passed`) : null,
 				this.#failed > 0 ? chalk.red.bold(`${this.#failed} failed`) : null,
 				this.#pending > 0 ? chalk.yellow(`${this.#pending} pending`) : null,
 			].filter(Boolean);
 
-			lines.push(`${PREFIX} ${chalk.bold('Tests')}     ${summaryParts.join(chalk.gray(' | '))} ${chalk.gray(`(${total})`)}`);
+			const flakyNote = this.#retried.size > 0
+				? ' ' + chalk.yellow(`${this.#retried.size} flaky`)
+				: '';
+
+			lines.push(`${PREFIX} ${chalk.bold('Tests')}     ${summaryParts.join(chalk.gray(' | '))} ${chalk.gray(`(${total})`)}${flakyNote}`);
+
+			// A green run with retries is weaker evidence than it looks: the first attempt
+			// ran with assertions that failed, and a missing reference screenshot is written
+			// on that attempt, so the retry then compares against a baseline this very run
+			// produced. Name the flaky tests and say what to do about it — the alternative is
+			// a clean-looking summary that quietly blesses an unreviewed snapshot.
+			if (this.#retried.size > 0)
+			{
+				lines.push('');
+				lines.push(`${PREFIX} ${chalk.yellow.bold('Flaky tests:')} ${chalk.gray('failed at first, passed on a retry')}`);
+				for (const path of this.#retried)
+				{
+					lines.push(`${PREFIX}   ${chalk.yellow('↻')} ${path}`);
+				}
+				lines.push('');
+				lines.push(`${PREFIX} ${chalk.gray('A retried run can write a missing reference screenshot on the failed attempt')}`);
+				lines.push(`${PREFIX} ${chalk.gray('and then pass against it. To take a baseline deliberately: run with')}`);
+				lines.push(`${PREFIX} ${chalk.gray('--ignore-snapshots to prove the assertions, then --update-snapshots.')}`);
+			}
+
+			// The categories must add up to the number of tests the run selected. If they
+			// don't, results were lost on the way to the reporter and a green summary would
+			// silently understate the run — say so instead of printing a clean total.
+			// The comparison is in results, not unique tests: #totalTests is Playwright's
+			// suite.allTests(), which counts a test once per engine, while `total` above counts
+			// each unique test once. #resultsReceived is in the same per-engine unit, so a
+			// difference here means results really were lost, not merely deduplicated.
+			if (this.#totalTests > 0 && this.#resultsReceived !== this.#totalTests)
+			{
+				const delta = Math.abs(this.#totalTests - this.#resultsReceived);
+				const kind = this.#resultsReceived < this.#totalTests ? 'unreported' : 'unexpected';
+				lines.push(`${PREFIX} ${chalk.red.bold('Mismatch')}  ${chalk.red(`${delta} ${kind}`)} ${chalk.gray(`— the run selected ${this.#totalTests} test runs, ${this.#resultsReceived} reported a result`)}`);
+			}
 
 			if (this.#browsers.size > 0)
 			{
@@ -1247,6 +1313,14 @@ export class TestReporter
 			.filter((name) => this.#browserStats.has(name))
 			.map((name) => ({ name, ...this.#browserStats.get(name)! }));
 
-		return { passed: this.#passed, failed: this.#failed, failures, browsers, flaky: this.#retried.size };
+		// Tests the run selected but never reported a result for. Surfaced so the caller can
+		// fail the run: a summary that does not cover every selected test proves nothing,
+		// and exiting 0 on it is what lets a lossy run pass for a green one.
+		const unreported = this.#totalTests > 0 ? Math.max(0, this.#totalTests - this.#resultsReceived) : 0;
+
+		// The flaky test names travel with the metrics, not just their count: in a bulk run
+		// the per-extension summary is suppressed and only printSummary prints, so without
+		// the names it could report "2 flaky" with no way to tell which tests they were.
+		return { passed: this.#passed, failed: this.#failed, failures, browsers, flaky: this.#retried.size, flakyTests: [...this.#retried], unreported };
 	}
 }
