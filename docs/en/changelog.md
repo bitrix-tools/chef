@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.23.0 <Badge type="tip" text="9/2/2026" />
+
+The test reporter no longer loses flaky tests: the summary shows how many passed on a retry, names them, and warns that Playwright writes a missing reference screenshot on the failed attempt — a green run with retries is no proof of the baseline. A run where some selected tests reported no result now fails with a Mismatch message instead of exiting 0 green — such a run will turn red in CI. --reporter json gained retries on the per-browser result and flaky in the counters.
+
 ## v1.22.0 <Badge type="tip" text="9/1/2026" />
 
 Playwright options can now be passed straight to chef test: anything chef does not claim as its own goes to the runner, so chef test e2e ui.buttons --update-snapshots works with no workarounds. The common options are listed in chef test e2e --help, but every Playwright option works, including ones added in fresh runner releases. When the @playwright/test versions in the project and in chef have drifted apart, an e2e run warns and points at the project binary for direct calls. A --list run now shows why it failed instead of a bare "errored".
