@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.23.1 <Badge type="tip" text="9/3/2026" />
+
+`chef test unit` now loads Playwright from the project instead of chef's own dependencies.
+
+Unit runs used to import Playwright from chef's node_modules. A global install resolves its version range without a lockfile, so chef's copy drifted ahead of the version the project pinned and the run failed with "Executable doesn't exist" for a browser revision nobody had installed — the project's `npx playwright install` only covers the version the project pinned. `chef test e2e` was unaffected because it spawns `npx playwright` from the project root.
+
+Both runners now use the same Playwright and the same browsers. When the project declares no Playwright, chef falls back to its own copy as before.
+
 ## v1.23.0 <Badge type="tip" text="9/2/2026" />
 
 The test reporter no longer loses flaky tests: the summary shows how many passed on a retry, names them, and warns that Playwright writes a missing reference screenshot on the failed attempt — a green run with retries is no proof of the baseline. A run where some selected tests reported no result now fails with a Mismatch message instead of exiting 0 green — such a run will turn red in CI. --reporter json gained retries on the per-browser result and flaky in the counters.
