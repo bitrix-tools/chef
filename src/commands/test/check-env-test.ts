@@ -167,12 +167,13 @@ function readPlaywrightVersion(fromDirectory: string): string | null
 }
 
 /**
- * chef runs the runner as `npx playwright` from the project root, so the version that
- * actually executes is the project's — never the one shipped with chef. The two drifting
- * apart is harmless for `chef test`, but it is a trap the moment someone runs Playwright
- * by hand and reaches for chef's binary: @playwright/test then loads twice from two trees
- * and dies with "You have two different versions of @playwright/test". Say so up front,
- * and say which binary to use.
+ * Both runners execute the project's Playwright: e2e spawns `npx playwright` from the
+ * project root, and unit resolves the module from there (see resolvePlaywright). So the
+ * version shipped with chef never runs, and the two drifting apart is harmless for
+ * `chef test`. It is still a trap the moment someone runs Playwright by hand and reaches
+ * for chef's binary: @playwright/test then loads twice from two trees and dies with
+ * "You have two different versions of @playwright/test". Say so up front, and say which
+ * binary to use.
  */
 export function checkPlaywrightVersionWarning(): void
 {

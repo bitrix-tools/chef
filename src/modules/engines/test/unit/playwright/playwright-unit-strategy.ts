@@ -7,6 +7,7 @@ import { PackageBuilder } from '../../../../services/package-builder';
 import { ChefError } from '../../../../../diagnostics/chef-error';
 import { CF } from '../../../../../diagnostics/diagnostic-codes';
 import { findPlaywrightConfig } from './find-playwright-config';
+import { resolvePlaywright } from './resolve-playwright';
 import { mapStack } from './map-stack';
 import { embedSourceMap } from './embed-source-map';
 import { signalReady, waitForDebugger } from './debug-signal';
@@ -140,7 +141,7 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 		// Statuses are short per-engine stage words: the reporter shows them next to the
 		// engine name in the unified status bar (e.g. "○ Chromium building").
 		onStatus('starting');
-		const playwright = await import('playwright');
+		const playwright = await resolvePlaywright(options.projectRoot);
 		const browserLauncher = playwright[browserType];
 		if (!browserLauncher)
 		{
