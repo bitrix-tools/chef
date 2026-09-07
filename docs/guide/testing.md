@@ -30,6 +30,15 @@ PASSWORD=your_password
 | `BASE_URL` | URL локальной установки Bitrix |
 | `LOGIN` | Логин тестового пользователя |
 | `PASSWORD` | Пароль тестового пользователя |
+| `MOCHA_WRAPPER` | Путь или полный URL страницы запуска unit-тестов. По умолчанию `/dev/ui/cli/mocha-wrapper.php` |
+
+Переменную `MOCHA_WRAPPER` нужно задать, если на вашей установке страница запуска
+unit-тестов доступна по другому адресу — например, `main/dev/public` смонтирована с
+другим префиксом:
+
+```env
+MOCHA_WRAPPER=/internal/dev/ui/cli/mocha-wrapper.php
+```
 
 ::: warning
 Не коммитьте `.env.test` в систему контроля версий — файл содержит конфиденциальные данные.

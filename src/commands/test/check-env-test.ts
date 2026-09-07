@@ -6,7 +6,7 @@ import chalk from 'chalk';
 import boxen from 'boxen';
 
 import { Environment } from '../../environment/environment';
-import { FileFinder } from '../../utils/file-finder';
+import { findEnvTestFile, readEnvTestFile } from '../../modules/engines/test/env-test-file';
 
 const DEFAULT_BASE_URL = 'http://localhost';
 
@@ -16,41 +16,7 @@ let playwrightVersionWarningShown = false;
 
 function findEnvTestPath(packageRoot: string): string | null
 {
-	const playwrightConfigPath = FileFinder.findUpFile({
-		fileName: 'playwright.config.ts',
-		fromDir: packageRoot,
-		rootDir: Environment.getRoot(),
-	});
-
-	if (!playwrightConfigPath)
-	{
-		return null;
-	}
-
-	return path.join(path.dirname(playwrightConfigPath), '.env.test');
-}
-
-function parseEnvFile(envPath: string): Record<string, string>
-{
-	const content = fs.readFileSync(envPath, 'utf-8');
-	const vars: Record<string, string> = {};
-
-	for (const line of content.split('\n'))
-	{
-		const trimmed = line.trim();
-		if (!trimmed || trimmed.startsWith('#'))
-		{
-			continue;
-		}
-
-		const match = trimmed.match(/^([A-Z_]+)\s*=\s*(.*)$/);
-		if (match)
-		{
-			vars[match[1]] = match[2].trim();
-		}
-	}
-
-	return vars;
+	return findEnvTestFile(packageRoot, Environment.getRoot());
 }
 
 function showWarning(lines: string[]): void
@@ -121,7 +87,7 @@ export function checkCredentialsWarning(packageRoot: string): void
 		return;
 	}
 
-	const vars = parseEnvFile(envTestPath);
+	const vars = readEnvTestFile(envTestPath);
 	if (vars.LOGIN && vars.PASSWORD)
 	{
 		return;

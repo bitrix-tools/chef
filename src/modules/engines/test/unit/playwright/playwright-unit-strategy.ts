@@ -7,6 +7,7 @@ import { PackageBuilder } from '../../../../services/package-builder';
 import { ChefError } from '../../../../../diagnostics/chef-error';
 import { CF } from '../../../../../diagnostics/diagnostic-codes';
 import { findPlaywrightConfig } from './find-playwright-config';
+import { resolveMochaWrapper } from '../../env-test-file';
 import { resolvePlaywright } from './resolve-playwright';
 import { mapStack } from './map-stack';
 import { embedSourceMap } from './embed-source-map';
@@ -308,7 +309,8 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 
 			tracer = sourceMap ? new TraceMap(sourceMap as any) : null;
 
-			const testsPageUrl = new URL('/dev/ui/cli/mocha-wrapper.php', playwrightConfig.use.baseURL);
+			const mochaWrapper = resolveMochaWrapper(options.packageRoot, options.projectRoot);
+			const testsPageUrl = new URL(mochaWrapper, playwrightConfig.use.baseURL);
 			testsPageUrl.searchParams.set('extension', options.packageName);
 
 			onStatus('preparing');
@@ -325,7 +327,8 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 					CF.TEST_PAGE_UNAVAILABLE,
 					`Could not load the test page (${status}): ${testsPageUrl.toString()}\n`
 					+ 'Check that the baseURL in playwright.config.ts points to a running Bitrix install '
-					+ 'and that /dev/ui/cli/mocha-wrapper.php exists there.',
+					+ `and that ${mochaWrapper} exists there.\n`
+					+ 'Set MOCHA_WRAPPER in .env.test if the runner page lives elsewhere.',
 				);
 			}
 
@@ -358,7 +361,7 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 				throw PlaywrightUnitStrategy.#runError(
 					CF.TEST_PAGE_UNAVAILABLE,
 					`The test page loaded but Mocha was not found on it: ${testsPageUrl.toString()}\n`
-					+ 'The page is likely not the test runner — check that /dev/ui/cli/mocha-wrapper.php is '
+					+ `The page is likely not the test runner — check that ${mochaWrapper} is `
 					+ 'served correctly and that the install does not redirect to an authorization page.',
 				);
 			}
