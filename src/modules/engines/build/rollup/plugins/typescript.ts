@@ -70,9 +70,18 @@ export async function checkTypes(options: TypeCheckOptions): Promise<TypeCheckRe
 		return { errors: [] };
 	}
 
+	// The bundle's own .d.ts sits next to the output .js in the package root, so
+	// collectDeclarationFiles would feed the previous build's output back into the
+	// program. For a namespaced package that declaration says `declare namespace BX.Main`,
+	// which turns BX from an unknown global (TS2304, deliberately ignored below) into a
+	// known type with a single member — and every other BX.* use in untouched sources
+	// starts failing with TS2339. Each successful build would then break the next one.
+	const emittedDeclarations = collectEmittedDeclarationPaths(options.exclude);
 	const rootNames = [
 		...collectSourceFiles(sourceDir, tsExtensions),
-		...collectDeclarationFiles(packageRoot),
+		...collectDeclarationFiles(packageRoot).filter((filePath) => {
+			return !emittedDeclarations.has(normalizePath(filePath));
+		}),
 	];
 	if (rootNames.length === 0)
 	{
@@ -298,6 +307,26 @@ function collectSourceFiles(directory: string, extensions: string[]): string[]
 	}
 
 	return files;
+}
+
+/**
+ * The declaration a build emits for its own bundle, derived from the output paths the
+ * caller already excludes from diagnostics. DeclarationEmitter writes it by swapping the
+ * output .js extension for .d.ts, so mirror that rule here.
+ */
+function collectEmittedDeclarationPaths(exclude?: string[]): Set<string>
+{
+	const paths = new Set<string>();
+
+	for (const filePath of exclude ?? [])
+	{
+		if (filePath.endsWith('.js'))
+		{
+			paths.add(normalizePath(path.resolve(filePath.replace(/\.js$/, '.d.ts'))));
+		}
+	}
+
+	return paths;
 }
 
 const declarationSkipDirs = new Set(['src', 'dist', 'node_modules', 'test']);
