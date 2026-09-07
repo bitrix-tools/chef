@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.24.0 <Badge type="tip" text="9/7/2026" />
+
+The unit-test runner page path is now configurable through the `MOCHA_WRAPPER` variable in `.env.test`. Previously `/dev/ui/cli/mocha-wrapper.php` was hardcoded, so unit tests could not run on installations that serve this page at a different address. Both a root-relative path and a full URL are accepted; a full URL replaces the host from `BASE_URL`. The default value is unchanged. The "test page unavailable" error now mentions this variable.
+
 ## v1.23.1 <Badge type="tip" text="9/3/2026" />
 
 `chef test unit` now loads Playwright from the project instead of chef's own dependencies.
