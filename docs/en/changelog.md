@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.24.1 <Badge type="tip" text="9/7/2026" />
+
+Fixed building TypeScript components that set a `namespace`: the `script.d.ts` file emitted by the build itself is no longer fed into the type-check program. It used to redeclare the global `BX`, so every successful build broke the next one with TS2339 errors (`BX.PopupWindow`, `BX.Loader`) in files nobody had touched. `chef typecheck` reported the same phantom errors. Declaration files from other sources are still picked up.
+
 ## v1.24.0 <Badge type="tip" text="9/7/2026" />
 
 The unit-test runner page path is now configurable through the `MOCHA_WRAPPER` variable in `.env.test`. Previously `/dev/ui/cli/mocha-wrapper.php` was hardcoded, so unit tests could not run on installations that serve this page at a different address. Both a root-relative path and a full URL are accepted; a full URL replaces the host from `BASE_URL`. The default value is unchanged. The "test page unavailable" error now mentions this variable.
