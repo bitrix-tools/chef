@@ -1,5 +1,5 @@
 import { createReporter } from '../create-reporter';
-import { checkCredentialsWarning, checkPlaywrightVersionWarning } from '../check-env-test';
+import { checkCredentialsWarning } from '../check-env-test';
 import { showsBrowserConsole, showsNodeOutput } from '../console-target';
 import { extensionTarget, runE2eForTarget } from '../e2e-target';
 
@@ -74,7 +74,6 @@ export function createE2eTestsTask(target: E2eTarget, args: Record<string, any>)
 			}
 
 			checkCredentialsWarning(target.path);
-			checkPlaywrightVersionWarning();
 
 			const testResult = await runE2eForTarget(target, {
 				...args,
