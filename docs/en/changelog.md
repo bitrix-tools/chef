@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.24.2 <Badge type="tip" text="9/14/2026" />
+
+Removed the @playwright/test version mismatch warning shown when running e2e tests. Playwright is always taken from the project, and the version bundled with chef is only used when the project has none, so differing versions are expected.
+
 ## v1.24.1 <Badge type="tip" text="9/7/2026" />
 
 Fixed building TypeScript components that set a `namespace`: the `script.d.ts` file emitted by the build itself is no longer fed into the type-check program. It used to redeclare the global `BX`, so every successful build broke the next one with TS2339 errors (`BX.PopupWindow`, `BX.Loader`) in files nobody had touched. `chef typecheck` reported the same phantom errors. Declaration files from other sources are still picked up.
