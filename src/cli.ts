@@ -29,7 +29,9 @@ function lazyCommand(name: string, description: string, loader: () => Promise<Re
 		const mod = await loader();
 		const command = Object.values(mod).find((v) => v instanceof Command) as Command;
 
-		const argv = process.argv.slice(process.argv.indexOf(name) + 1);
+		const commandNames = [name, ...lazy.aliases()];
+		const commandIndex = process.argv.findIndex((arg) => commandNames.includes(arg));
+		const argv = process.argv.slice(commandIndex + 1);
 		await command.parseAsync(argv, { from: 'user' });
 	});
 
@@ -80,7 +82,7 @@ program
 	.name('chef')
 	.version(getChefVersion())
 	.description('CLI toolkit for building, testing and maintaining Bitrix JS extensions')
-	.addCommand(lazyCommand('build', 'Build JS extensions for Bitrix', () => import('./commands/build/build-command')))
+	.addCommand(lazyCommand('build', 'Build JS extensions for Bitrix', () => import('./commands/build/build-command')).alias('cook'))
 	.addCommand(lazyCommand('lint', 'Run linting for Bitrix JS extensions', () => import('./commands/lint/lint-command')))
 	.addCommand(lazyCommand('test', 'Run unit and end-to-end tests for extensions', () => import('./commands/test/test-command')))
 	.addCommand(lazyCommand('create', 'Create a new Bitrix JS extension scaffold', () => import('./commands/create/create-command')))
