@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.25.0 <Badge type="tip" text="9/26/2026" />
+
+`cssImages` can now control inlining for individual images. The `?no-inline` marker in `url()` turns inlining off: the file is copied to `dist` even if it is smaller than `maxSize`. The `?inline` marker does the opposite and inlines the file regardless of its size, including with `type: 'copy'`. The marker is removed from the resulting URL, other query parameters are kept. For groups of files there is a new `cssImages.exclude` option with glob patterns relative to the extension root. An SVG referenced with a fragment (`sprite.svg#icon`) is no longer inlined: previously the fragment was lost and the whole file was embedded instead of the referenced part. Now such a file is copied and the fragment is kept in the URL.
+
 ## v1.24.2 <Badge type="tip" text="9/14/2026" />
 
 Removed the @playwright/test version mismatch warning shown when running e2e tests. Playwright is always taken from the project, and the version bundled with chef is only used when the project has none, so differing versions are expected.
