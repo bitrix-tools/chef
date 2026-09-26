@@ -9,6 +9,7 @@ export const cssImagesStrategy = {
 			type: 'inline',
 			maxSize: 14,
 			absolutePaths: false,
+			exclude: [],
 		};
 	},
 	prepare(value: any): BundleConfig['cssImages']

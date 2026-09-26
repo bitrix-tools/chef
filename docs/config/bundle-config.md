@@ -81,6 +81,41 @@ export default {
 | `maxSize` | `number` | `14` | Порог в КБ для инлайна (только при `type: 'inline'`) |
 | `output` | `string` | — | Директория для скопированных файлов |
 | `absolutePaths` | `boolean` | `false` | Абсолютные пути к изображениям вместо относительных |
+| `exclude` | `string[]` | `[]` | Glob-маски изображений, которые никогда не инлайнятся (пути от корня расширения) |
+
+### Управление инлайном отдельных изображений
+
+Чтобы изображение не инлайнилось, а копировалось в выходную директорию, добавьте к URL метку `?no-inline`. Метка `?inline`, наоборот, инлайнит изображение независимо от `maxSize`, `exclude` и `type: 'copy'`:
+
+```css
+.photo {
+  /* Скопируется, даже если меньше maxSize */
+  background-image: url('./images/photo.png?no-inline');
+}
+
+.logo {
+  /* Заинлайнится, даже если больше maxSize */
+  background-image: url('./images/logo.svg?inline');
+}
+```
+
+Метка удаляется из итогового URL, остальные query-параметры сохраняются: `url('./images/icon.svg?v=2&no-inline')` превратится в `url("images/icon.svg?v=2")`.
+
+Чтобы исключить сразу группу файлов, перечислите маски в `exclude`:
+
+```ts
+export default {
+  input: './src/index.ts',
+  output: './dist/my.bundle.js',
+  cssImages: {
+    exclude: ['./src/images/photos/**', '**/*.gif'],
+  },
+};
+```
+
+SVG со ссылкой на фрагмент (`url('./images/sprite.svg#icon')`) не инлайнится: фрагмент указывает на часть файла и потерялся бы при встраивании. Такой файл копируется, фрагмент в URL сохраняется.
+
+Порядок приоритетов: метка в URL → `exclude` → фрагмент SVG → `maxSize` и `type`.
 
 ### Абсолютные пути
 

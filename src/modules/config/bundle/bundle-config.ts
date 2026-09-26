@@ -26,6 +26,11 @@ export interface BundleConfig {
 		output?: string;
 		maxSize?: number;
 		absolutePaths?: boolean;
+		/**
+		 * Glob patterns (relative to the extension root) of images that are
+		 * never inlined and are always copied to the output directory.
+		 */
+		exclude?: string[];
 	};
 	resolveFilesImport?: {
 		output?: string;

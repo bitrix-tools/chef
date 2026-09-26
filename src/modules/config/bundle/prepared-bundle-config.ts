@@ -21,6 +21,7 @@ export interface PreparedBundleConfig {
 		output: string;
 		maxSize: number;
 		svgo: boolean;
+		exclude: string[];
 	};
 	resolveFilesImport: {
 		output: string;

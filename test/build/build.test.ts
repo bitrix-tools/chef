@@ -1124,6 +1124,90 @@ return [
 		});
 	});
 
+	describe('css images inline control', () => {
+		const extensionPath = path.join(fixturesPath, 'css-images-inline-control');
+
+		function findRule(content: string, selector: string): string
+		{
+			const match = content.match(new RegExp(`\\.${selector}\\s*\\{([^}]*)\\}`));
+			assert.isNotNull(match, `Rule .${selector} should exist`);
+
+			return match[1];
+		}
+
+		async function build(overrides: Partial<BuildOptions> = {}): Promise<string>
+		{
+			const bundleConfig = loadBundleConfig(extensionPath);
+			const options = { ...getBuildOptions(extensionPath, bundleConfig), ...overrides };
+			const result = await buildService.build(options);
+
+			assert.isEmpty(result.errors);
+
+			return fs.readFileSync(path.join(extensionPath, 'dist', 'bundle.css'), 'utf-8');
+		}
+
+		beforeEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		afterEach(() => {
+			cleanDist(extensionPath);
+		});
+
+		it('should still inline small images without markers', async () => {
+			const content = await build();
+
+			assert.include(findRule(content, 'small-default'), 'data:image/png;base64,');
+		});
+
+		it('should copy an image marked with ?no-inline and strip the marker', async () => {
+			const content = await build();
+
+			assert.include(findRule(content, 'no-inline-marker'), 'url("images/small.png")');
+			assert.isTrue(fs.existsSync(path.join(extensionPath, 'dist', 'images', 'small.png')));
+		});
+
+		it('should keep other query parameters next to ?no-inline', async () => {
+			const content = await build();
+
+			assert.include(findRule(content, 'no-inline-with-query'), 'url("images/icon.svg?v=2")');
+		});
+
+		it('should inline an image marked with ?inline even if it exceeds maxSize', async () => {
+			const content = await build();
+
+			assert.include(findRule(content, 'inline-marker'), 'data:image/png;base64,');
+			assert.isFalse(fs.existsSync(path.join(extensionPath, 'dist', 'images', 'large.png')));
+		});
+
+		it('should copy images matching cssImages.exclude', async () => {
+			const content = await build();
+
+			assert.include(findRule(content, 'excluded'), 'url("images/photos/photo.png")');
+			assert.isTrue(fs.existsSync(path.join(extensionPath, 'dist', 'images', 'photos', 'photo.png')));
+		});
+
+		it('should prefer ?inline over cssImages.exclude', async () => {
+			const content = await build();
+
+			assert.include(findRule(content, 'excluded-with-inline-marker'), 'data:image/png;base64,');
+		});
+
+		it('should copy an SVG referenced with a fragment and keep the fragment', async () => {
+			const content = await build();
+
+			assert.include(findRule(content, 'svg-fragment'), 'url("images/sprite.svg#second")');
+			assert.isTrue(fs.existsSync(path.join(extensionPath, 'dist', 'images', 'sprite.svg')));
+		});
+
+		it('should inline an image marked with ?inline when type is copy', async () => {
+			const content = await build({ cssImages: { type: 'copy', maxSize: 14 } });
+
+			assert.include(findRule(content, 'inline-svg-marker'), 'data:image/svg+xml;charset=utf-8,');
+			assert.include(findRule(content, 'small-default'), 'url("images/small.png")');
+		});
+	});
+
 	describe('css images complex structure', () => {
 		const extensionPath = path.join(fixturesPath, 'css-images-complex');
 

@@ -1,6 +1,8 @@
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
 
+import { createPathFilter } from '../../../../../utils/create-path-filter';
+
 import type { Plugin } from 'rollup';
 
 interface CssPluginOptions {
@@ -10,6 +12,7 @@ interface CssPluginOptions {
 		type?: 'inline' | 'copy';
 		maxSize?: number;
 		absolutePaths?: boolean;
+		exclude?: string[];
 	};
 	packageRoot: string;
 	publicPath?: string;
@@ -115,6 +118,61 @@ function splitUrlSuffix(urlValue: string): { filePath: string; suffix: string }
 	};
 }
 
+type InlineMarker = 'inline' | 'no-inline';
+
+/**
+ * Extracts the `?inline` / `?no-inline` marker from the query part of a URL suffix.
+ * The marker is removed from the returned suffix, other query parameters are kept verbatim.
+ */
+function extractInlineMarker(suffix: string): { marker: InlineMarker | null; suffix: string }
+{
+	if (!suffix.startsWith('?'))
+	{
+		return { marker: null, suffix };
+	}
+
+	const hashIndex = suffix.indexOf('#');
+	const query = hashIndex === -1 ? suffix.slice(1) : suffix.slice(1, hashIndex);
+	const hash = hashIndex === -1 ? '' : suffix.slice(hashIndex);
+
+	let marker: InlineMarker | null = null;
+	const restParams: string[] = [];
+	for (const param of query.split('&'))
+	{
+		if (param === 'inline' || param === 'no-inline')
+		{
+			marker = param;
+		}
+		else
+		{
+			restParams.push(param);
+		}
+	}
+
+	if (marker === null)
+	{
+		return { marker: null, suffix };
+	}
+
+	const restQuery = restParams.length > 0 ? `?${restParams.join('&')}` : '';
+
+	return { marker, suffix: `${restQuery}${hash}` };
+}
+
+function hasInlineMarker(css: string): boolean
+{
+	return /[?&]inline\b/.test(css);
+}
+
+/**
+ * A fragment points to a part of an SVG (a `<view>`, a glyph of an SVG font),
+ * which is lost once the whole file is inlined as a data URI.
+ */
+function isSvgFragmentUrl(filePath: string, suffix: string): boolean
+{
+	return path.extname(filePath).toLowerCase() === '.svg' && suffix.includes('#');
+}
+
 function extractExtensionPrefix(filePath: string): string | null
 {
 	// Source repo: .../module/install/js/module/ext-name/.../file
@@ -148,6 +206,7 @@ function processUrl(
 	cssFileDir: string,
 	urlValue: string,
 	maxSizeBytes: number,
+	isExcluded: (filePath: string) => boolean,
 	optimizeSvg: ((svg: string) => string) | null,
 	packageRoot: string,
 ): InlineResult | CopyResult | null
@@ -157,7 +216,8 @@ function processUrl(
 		return null;
 	}
 
-	const { filePath: relativeFilePath, suffix } = splitUrlSuffix(urlValue);
+	const { filePath: relativeFilePath, suffix: urlSuffix } = splitUrlSuffix(urlValue);
+	const { marker, suffix } = extractInlineMarker(urlSuffix);
 	const filePath = path.resolve(cssFileDir, relativeFilePath);
 
 	let fileBuffer: Buffer;
@@ -170,7 +230,12 @@ function processUrl(
 		return null;
 	}
 
-	if (fileBuffer.length >= maxSizeBytes)
+	// An explicit marker in the URL wins over the size limit and the config
+	const shouldInline = marker === null
+		? fileBuffer.length < maxSizeBytes && !isExcluded(filePath) && !isSvgFragmentUrl(filePath, suffix)
+		: marker === 'inline';
+
+	if (!shouldInline)
 	{
 		let relativeToPkg = path.relative(packageRoot, filePath);
 
@@ -226,6 +291,7 @@ function processUrls(
 	css: string,
 	cssFilePath: string,
 	maxSizeBytes: number,
+	isExcluded: (filePath: string) => boolean,
 	optimizeSvg: ((svg: string) => string) | null,
 	packageRoot: string,
 	outputCssPath: string,
@@ -237,7 +303,7 @@ function processUrls(
 	const assets: AssetToCopy[] = [];
 
 	const processed = css.replace(/url\(\s*(['"]?)(.+?)\1\s*\)/g, (match, _quote, urlValue) => {
-		const result = processUrl(cssFileDir, urlValue, maxSizeBytes, optimizeSvg, packageRoot);
+		const result = processUrl(cssFileDir, urlValue, maxSizeBytes, isExcluded, optimizeSvg, packageRoot);
 		if (!result)
 		{
 			return match;
@@ -290,6 +356,10 @@ export default function cssPlugin(options: CssPluginOptions): Plugin
 	const cssModules = new Map<string, string>();
 	const assetsToCopy = new Map<string, AssetToCopy>();
 
+	// Exclude patterns are relative to the extension root, like the other paths in bundle.config
+	const excludeFilter = createPathFilter(options.cssImages?.exclude ?? []);
+	const isExcluded = (filePath: string): boolean => excludeFilter(path.relative(options.packageRoot, filePath));
+
 	return {
 		name: 'css',
 
@@ -303,12 +373,12 @@ export default function cssPlugin(options: CssPluginOptions): Plugin
 			const shouldCopyAll = options.cssImages?.type === 'copy';
 			const maxSizeBytes = shouldCopyAll ? 0 : (options.cssImages?.maxSize ?? 14) * 1024;
 			const absolutePaths = options.cssImages?.absolutePaths === true;
-			const optimizeSvg = !shouldCopyAll ? await loadSvgo() : null;
+			const optimizeSvg = !shouldCopyAll || hasInlineMarker(code) ? await loadSvgo() : null;
 
 			let css = code;
 
 			const effectivePublicPath = absolutePaths ? options.publicPath : undefined;
-			const result = processUrls(css, id, maxSizeBytes, optimizeSvg, options.packageRoot, options.extract, effectivePublicPath);
+			const result = processUrls(css, id, maxSizeBytes, isExcluded, optimizeSvg, options.packageRoot, options.extract, effectivePublicPath);
 			css = result.css;
 
 			for (const asset of result.assets)

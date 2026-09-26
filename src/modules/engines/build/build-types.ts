@@ -51,6 +51,7 @@ export type BuildOptions = {
 		type: 'inline' | 'copy',
 		maxSize: number,
 		absolutePaths?: boolean,
+		exclude?: string[],
 	},
 	resolveFiles?: {
 		include?: string[];

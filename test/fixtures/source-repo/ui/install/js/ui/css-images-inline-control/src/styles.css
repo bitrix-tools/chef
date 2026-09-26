@@ -1,0 +1,31 @@
+.small-default {
+	background-image: url('./images/small.png');
+}
+
+.no-inline-marker {
+	background-image: url('./images/small.png?no-inline');
+}
+
+.no-inline-with-query {
+	background-image: url('./images/icon.svg?v=2&no-inline');
+}
+
+.inline-marker {
+	background-image: url('./images/large.png?inline');
+}
+
+.inline-svg-marker {
+	background-image: url('./images/icon.svg?inline');
+}
+
+.excluded {
+	background-image: url('./images/photos/photo.png');
+}
+
+.excluded-with-inline-marker {
+	background-image: url('./images/photos/photo.png?inline');
+}
+
+.svg-fragment {
+	background-image: url('./images/sprite.svg#second');
+}

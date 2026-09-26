@@ -81,6 +81,41 @@ export default {
 | `maxSize` | `number` | `14` | Size threshold in KB for inlining (only with `type: 'inline'`) |
 | `output` | `string` | — | Output directory for copied files |
 | `absolutePaths` | `boolean` | `false` | Use absolute paths for images instead of relative |
+| `exclude` | `string[]` | `[]` | Glob patterns of images that are never inlined (paths relative to the extension root) |
+
+### Controlling Inlining of Individual Images
+
+To keep an image from being inlined and copy it to the output directory instead, add the `?no-inline` marker to its URL. The `?inline` marker does the opposite: it inlines the image regardless of `maxSize`, `exclude` and `type: 'copy'`:
+
+```css
+.photo {
+  /* Copied even if smaller than maxSize */
+  background-image: url('./images/photo.png?no-inline');
+}
+
+.logo {
+  /* Inlined even if larger than maxSize */
+  background-image: url('./images/logo.svg?inline');
+}
+```
+
+The marker is removed from the resulting URL, other query parameters are kept: `url('./images/icon.svg?v=2&no-inline')` becomes `url("images/icon.svg?v=2")`.
+
+To exclude a group of files at once, list patterns in `exclude`:
+
+```ts
+export default {
+  input: './src/index.ts',
+  output: './dist/my.bundle.js',
+  cssImages: {
+    exclude: ['./src/images/photos/**', '**/*.gif'],
+  },
+};
+```
+
+An SVG referenced with a fragment (`url('./images/sprite.svg#icon')`) is not inlined: the fragment points to a part of the file and would be lost once the file is embedded. Such a file is copied and the fragment is kept in the URL.
+
+Priority order: marker in the URL → `exclude` → SVG fragment → `maxSize` and `type`.
 
 ### Absolute Paths
 
