@@ -70,7 +70,9 @@ chef build my.extension
 | `chef init build` | Инициализация TypeScript, алиасов и browserslist |
 | `chef init tests` | Инициализация тестового окружения |
 | `chef init hooks` | Установка VCS-хуков для автообновления алиасов |
+| `chef init agents` | Подключение справки chef для AI-агентов (`AGENTS.md`, `CLAUDE.md`) |
 | `chef flow-to-ts` | Миграция Flow.js в TypeScript |
+| `chef help agent` | Справка для AI-агентов под установленную версию chef |
 
 <br>
 

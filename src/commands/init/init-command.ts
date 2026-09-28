@@ -13,6 +13,7 @@ import { ProjectInitializer, SaveFileStatus } from '../../modules/services/proje
 import { formatInternalError } from '../../diagnostics/format-error';
 import { CF } from '../../diagnostics/diagnostic-codes';
 import { initHooksCommand } from './init-hooks-command';
+import { initAgentsCommand } from './init-agents-command';
 
 const initTestsCommand = new Command('tests')
 	.description('Set up Playwright config and .env.test for browser tests')
@@ -290,6 +291,7 @@ const initCommand = new Command('init')
 initCommand
 	.addCommand(initBuildCommand)
 	.addCommand(initTestsCommand)
-	.addCommand(initHooksCommand);
+	.addCommand(initHooksCommand)
+	.addCommand(initAgentsCommand);
 
 export { initCommand };

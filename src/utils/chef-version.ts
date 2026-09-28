@@ -1,19 +1,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { FileFinder } from './file-finder';
+import { getChefRoot } from './chef-root';
 
 let version: string | undefined;
-
-function getCurrentDir(): string
-{
-	if (typeof __dirname !== 'undefined')
-	{
-		return __dirname;
-	}
-
-	return import.meta.dirname;
-}
 
 export function getChefVersion(): string
 {
@@ -22,32 +12,20 @@ export function getChefVersion(): string
 		return version;
 	}
 
-	try
+	version = 'unknown';
+
+	const root = getChefRoot();
+	if (root)
 	{
-		const fromDir = getCurrentDir();
-		const pkgPath = FileFinder.findUpFile({
-			fileName: 'package.json',
-			fromDir,
-			rootDir: path.parse(fromDir).root,
-		});
-
-		if (pkgPath)
+		try
 		{
-			const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-			if (pkg.name === '@bitrix/chef')
-			{
-				version = pkg.version;
-
-				return version;
-			}
+			version = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf-8')).version;
+		}
+		catch
+		{
+			// ignore
 		}
 	}
-	catch
-	{
-		// ignore
-	}
-
-	version = 'unknown';
 
 	return version;
 }

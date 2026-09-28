@@ -320,6 +320,20 @@ chef init hooks [options]
 
 Поддерживает Git и Mercurial. Хуки запускают `chef aliases --quiet` после pull, merge, checkout и rebase, чтобы `aliases.tsconfig.json` всегда оставался актуальным.
 
+### chef init agents
+
+Подключение справки chef для AI-агентов.
+
+```bash
+chef init agents [options]
+```
+
+| Параметр | Описание |
+|----------|----------|
+| `-p, --path [path]` | Корень проекта, куда будут записаны инструкции |
+
+Добавляет в `AGENTS.md` (и в существующий `CLAUDE.md`) блок, который отправляет агента к `chef help agent`. Подробнее — в разделе [AI-агенты](/guide/ai-agents).
+
 ## chef baseline
 
 Проверка доступности веб-фич для текущих browser targets проекта.
@@ -387,3 +401,20 @@ chef flow-to-ts [extensions...] [options]
 - Обновляет `bundle.config.js` → `bundle.config.ts`
 
 Подробнее — в разделе [Flow.js → TypeScript](/guide/flow-to-ts).
+
+## chef help
+
+Справка по командам и справка для AI-агентов.
+
+```bash
+chef help [command...]
+```
+
+```bash
+chef help                    # Список команд
+chef help build              # Все опции команды
+chef help test unit          # Опции подкоманды
+chef help agent              # Справка для AI-агентов
+```
+
+`chef help agent` печатает справку для AI-агентов, которая соответствует установленной версии chef. Подробнее — в разделе [AI-агенты](/guide/ai-agents).

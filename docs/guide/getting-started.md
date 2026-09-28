@@ -111,3 +111,4 @@ chef test my.extension
 - [JS-расширение](/guide/extension) — структура расширения и конфигурация
 - [TypeScript](/guide/typescript) — подробнее об алиасах и `tsconfig.json`
 - [Тестирование](/guide/testing) — как писать и запускать тесты
+- [AI-агенты](/guide/ai-agents) — как подключить справку chef для Claude Code, Codex и других агентов

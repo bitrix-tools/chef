@@ -111,3 +111,4 @@ chef test my.extension
 - [JS Extension](/en/guide/extension) — extension structure and configuration
 - [TypeScript](/en/guide/typescript) — more about aliases and `tsconfig.json`
 - [Testing](/en/guide/testing) — how to write and run tests
+- [AI Agents](/en/guide/ai-agents) — how to connect the chef guide for Claude Code, Codex and other agents

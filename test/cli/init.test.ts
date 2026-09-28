@@ -59,6 +59,39 @@ describe('chef init', () => {
 		});
 	});
 
+	describe('init agents', () => {
+		it('should write agent instructions to AGENTS.md', async () => {
+			const { exitCode, output } = await runChef(
+				['init', 'agents'],
+				{ cwd: tmpProject },
+			);
+
+			assert.equal(exitCode, 0);
+			assert.include(output, 'AGENTS.md — created');
+			assert.include(fs.readFileSync(path.join(tmpProject, 'AGENTS.md'), 'utf-8'), 'chef help agent');
+		});
+
+		it('should fail outside a Bitrix project', async () => {
+			const tmpDirectory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chef-init-')));
+
+			try
+			{
+				const { exitCode, output } = await runChef(
+					['init', 'agents'],
+					{ cwd: tmpDirectory },
+				);
+
+				assert.equal(exitCode, 1);
+				assert.include(output, 'CF5004');
+				assert.isFalse(fs.existsSync(path.join(tmpDirectory, 'AGENTS.md')));
+			}
+			finally
+			{
+				fs.rmSync(tmpDirectory, { recursive: true, force: true });
+			}
+		});
+	});
+
 	describe('init hooks', () => {
 		it('should create hooks in a git repo', async () => {
 			const tmpGitProject = createTmpProject();
