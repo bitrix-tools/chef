@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.26.0 <Badge type="tip" text="9/28/2026" />
+
+Chef now explains to AI coding agents how to work with it. `chef help agent` prints a Markdown guide: what an extension is and how names work, what chef can do and which aspects of its behavior matter, plus every command with its options, the error codes and the documentation index. The guide imposes no working rules — those are up to the project, in its own instructions and in `chef.config`. Commands, options and error codes are generated from chef itself, so the guide always matches the installed version. The English documentation now ships inside the npm package, and the guide points to its files, so the agent needs no internet access. `chef init agents` adds a short block to the project's `AGENTS.md` (and to an existing `CLAUDE.md`) that sends agents to `chef help agent`; there is no need to rerun it after updating chef. `chef help <command>` now shows every option of a command and its subcommands — previously it printed only the description line.
+
 ## v1.25.0 <Badge type="tip" text="9/26/2026" />
 
 `cssImages` can now control inlining for individual images. The `?no-inline` marker in `url()` turns inlining off: the file is copied to `dist` even if it is smaller than `maxSize`. The `?inline` marker does the opposite and inlines the file regardless of its size, including with `type: 'copy'`. The marker is removed from the resulting URL, other query parameters are kept. For groups of files there is a new `cssImages.exclude` option with glob patterns relative to the extension root. An SVG referenced with a fragment (`sprite.svg#icon`) is no longer inlined: previously the fragment was lost and the whole file was embedded instead of the referenced part. Now such a file is copied and the fragment is kept in the URL.
