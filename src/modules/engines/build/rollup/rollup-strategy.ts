@@ -31,7 +31,7 @@ import stripCommentsPlugin from './plugins/strip-comments';
 import safeNamespacesPlugin from './plugins/safe-namespaces';
 import tabIndentPlugin from './plugins/tab-indent';
 
-import type { ParsedCommandLine } from 'typescript';
+import type { ParsedCommandLine } from 'typescript/unstable/sync';
 import type {
 	BuildDiagnostic,
 	BuildResult,
@@ -1197,12 +1197,11 @@ export class RollupBuildStrategy extends BuildStrategy
 			packageRoot,
 			compilerOptions: {
 				paths: tsConfig.options.paths,
-				baseUrl: tsConfig.options.baseUrl,
 				types: typesPath ? [typesPath] : [],
 			},
 			include: overrides?.include,
 			exclude: [
-				...(tsConfig?.raw?.exclude ?? []),
+				...((tsConfig?.raw as { exclude?: string[] } | undefined)?.exclude ?? []),
 				`${normalizePath(packageRoot)}/dist/**`,
 			],
 		});
@@ -1218,7 +1217,7 @@ export class RollupBuildStrategy extends BuildStrategy
 			rootDir: Environment.getRoot() ?? undefined,
 		});
 
-		let compilerOptions: import('typescript').CompilerOptions | undefined;
+		let compilerOptions: import('typescript/unstable/sync').CompilerOptions | undefined;
 		if (typeof tsConfigPath === 'string' && tsConfigPath.length > 0)
 		{
 			const tsConfig = await this.#loadTsConfig(tsConfigPath, options.packageRoot);
@@ -1628,7 +1627,7 @@ export class RollupBuildStrategy extends BuildStrategy
 					}
 
 					return await this.#createTypeScriptPlugin(
-						{ options: { paths: undefined, baseUrl: undefined }, raw: {} } as any,
+						{ options: { paths: undefined }, raw: {} } as any,
 						options.packageRoot,
 						{ include: ['**'] },
 					);

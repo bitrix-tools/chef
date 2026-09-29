@@ -65,7 +65,6 @@ Auto-generated based on all extensions in the project:
 ```json
 {
   "compilerOptions": {
-    "baseUrl": "/path/to/project",
     "types": ["./bitrix/js/ui/dev/src/ui.dev.ts"],
     "paths": {
       "main.core": ["./bitrix/js/main/core/src"],
@@ -74,6 +73,8 @@ Auto-generated based on all extensions in the project:
   }
 }
 ```
+
+Paths in `paths` are resolved against the directory that contains `aliases.tsconfig.json`, so `baseUrl` is not needed — TypeScript 7 no longer supports it. If the file still has a `baseUrl` left by an earlier Chef version, regenerate the aliases.
 
 This makes extension imports by name work both in the editor and during type checking:
 
@@ -225,3 +226,11 @@ chef typecheck                                 # Check all in current directory
 ```
 
 Type checking uses settings from `tsconfig.json` — including `lib`, `strict` and other `compilerOptions`. This ensures that errors in the IDE and during build are consistent.
+
+Type checking is done by the TypeScript 7 compiler. If your IDE runs TypeScript 5.x, some errors may differ: TypeScript 7 infers types from the JS files of dependencies differently.
+
+Some errors are not reported, because Bitrix globals are only partially typed:
+
+- `Cannot find name` (TS2304) — a reference to an undeclared global name;
+- `Cannot use namespace 'BX' as a value` (TS2708) — `BX` is used as a value while some extension declared only types in it;
+- an unresolved side-effect import (TS2882), such as `import 'ui.forms'` — unless `noUncheckedSideEffectImports` is enabled in `tsconfig.json`.

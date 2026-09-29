@@ -2,8 +2,9 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
-import { parseSource } from './parse-source';
+import { parseJsFile } from './parse-babel';
 
+import type { File, Statement } from '@babel/types';
 import type { BasePackage } from '../../modules/packages/base-package';
 
 export type ImportLocation = {
@@ -27,7 +28,6 @@ export async function findImportLocation(
 	partnerName: string,
 ): Promise<ImportLocation | null>
 {
-	const { default: ts } = await import('typescript');
 	const sourceFiles = extension.getSourceFiles();
 
 	for (const file of sourceFiles)
@@ -42,41 +42,20 @@ export async function findImportLocation(
 			continue;
 		}
 
-		const sourceFile = await parseSource(file, content);
-		if (!sourceFile)
+		const ast = parseJsFile(content, file) as File | null;
+		if (!ast)
 		{
 			continue;
 		}
 
-		for (const statement of sourceFile.statements)
+		for (const statement of ast.program.body)
 		{
-			const moduleSpecifier = (() => {
-				if (ts.isImportDeclaration(statement))
-				{
-					return statement.moduleSpecifier;
-				}
-				if (ts.isExportDeclaration(statement) && statement.moduleSpecifier)
-				{
-					return statement.moduleSpecifier;
-				}
-
-				return null;
-			})();
-
-			if (!moduleSpecifier || !ts.isStringLiteral(moduleSpecifier))
+			if (getModuleSpecifier(statement) !== partnerName)
 			{
 				continue;
 			}
 
-			if (moduleSpecifier.text !== partnerName)
-			{
-				continue;
-			}
-
-			const pos = statement.getStart(sourceFile);
-			const { line, character } = sourceFile.getLineAndCharacterOfPosition(pos);
-
-			return { file, line: line + 1, column: character + 1 };
+			return { file, ...positionOf(statement) };
 		}
 	}
 
@@ -97,8 +76,6 @@ export async function findRelativeImportLocation(
 	targetFile: string,
 ): Promise<ImportLocation | null>
 {
-	const { default: ts } = await import('typescript');
-
 	let content: string;
 	try
 	{
@@ -109,36 +86,18 @@ export async function findRelativeImportLocation(
 		return null;
 	}
 
-	const sourceFile = await parseSource(importerFile, content);
-	if (!sourceFile)
+	const ast = parseJsFile(content, importerFile) as File | null;
+	if (!ast)
 	{
 		return null;
 	}
 
 	const importerDir = path.dirname(importerFile);
 
-	for (const statement of sourceFile.statements)
+	for (const statement of ast.program.body)
 	{
-		const moduleSpecifier = (() => {
-			if (ts.isImportDeclaration(statement))
-			{
-				return statement.moduleSpecifier;
-			}
-			if (ts.isExportDeclaration(statement) && statement.moduleSpecifier)
-			{
-				return statement.moduleSpecifier;
-			}
-
-			return null;
-		})();
-
-		if (!moduleSpecifier || !ts.isStringLiteral(moduleSpecifier))
-		{
-			continue;
-		}
-
-		const specifier = moduleSpecifier.text;
-		if (!specifier.startsWith('.'))
+		const specifier = getModuleSpecifier(statement);
+		if (!specifier || !specifier.startsWith('.'))
 		{
 			continue;
 		}
@@ -148,13 +107,41 @@ export async function findRelativeImportLocation(
 			continue;
 		}
 
-		const pos = statement.getStart(sourceFile);
-		const { line, character } = sourceFile.getLineAndCharacterOfPosition(pos);
-
-		return { file: importerFile, line: line + 1, column: character + 1 };
+		return { file: importerFile, ...positionOf(statement) };
 	}
 
 	return null;
+}
+
+/**
+ * Module specifier of an `import ... from '...'` or `export ... from '...'` statement.
+ */
+function getModuleSpecifier(statement: Statement): string | null
+{
+	if (statement.type === 'ImportDeclaration' || statement.type === 'ExportAllDeclaration')
+	{
+		return statement.source.value;
+	}
+
+	if (statement.type === 'ExportNamedDeclaration' && statement.source)
+	{
+		return statement.source.value;
+	}
+
+	return null;
+}
+
+/**
+ * 1-based position of the statement start. Babel columns are 0-based.
+ */
+function positionOf(statement: Statement): { line: number; column: number }
+{
+	const start = statement.loc?.start;
+
+	return {
+		line: start?.line ?? 1,
+		column: (start?.column ?? 0) + 1,
+	};
 }
 
 function resolvesTo(importerDir: string, specifier: string, targetFile: string): boolean

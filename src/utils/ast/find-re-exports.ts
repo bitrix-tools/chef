@@ -1,13 +1,17 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { parseSource } from './parse-source';
+import { parseJsFile } from './parse-babel';
 
 import type {
-	SourceFile,
-	ExportDeclaration,
+	ExportAllDeclaration,
+	ExportNamedDeclaration,
+	File,
+	Identifier,
 	ImportDeclaration,
-} from 'typescript';
+	Statement,
+	StringLiteral,
+} from '@babel/types';
 import type { BasePackage } from '../../modules/packages/base-package';
 
 export type ReExportEntry = {
@@ -31,8 +35,6 @@ export async function findReExports(
 	knownExtensions: ReadonlySet<string>,
 ): Promise<ReExportEntry[]>
 {
-	const { default: ts } = await import('typescript');
-
 	const entries: ReExportEntry[] = [];
 	const sourceFiles = extension.getSourceFiles();
 	const packageRoot = extension.getPath();
@@ -49,22 +51,21 @@ export async function findReExports(
 			continue;
 		}
 
-		const sourceFile = await parseSource(file, content);
-		if (!sourceFile)
+		const ast = parseJsFile(content, file) as File | null;
+		if (!ast)
 		{
 			continue;
 		}
 
 		const relFile = path.relative(packageRoot, file) || file;
-		collectFromSourceFile(ts, sourceFile, knownExtensions, relFile, entries);
+		collectFromStatements(ast.program.body, knownExtensions, relFile, entries);
 	}
 
 	return mergeBySource(entries);
 }
 
-function collectFromSourceFile(
-	ts: typeof import('typescript'),
-	sourceFile: SourceFile,
+function collectFromStatements(
+	statements: Statement[],
 	knownExtensions: ReadonlySet<string>,
 	relFile: string,
 	out: ReExportEntry[],
@@ -73,41 +74,48 @@ function collectFromSourceFile(
 	const importsByExtension = new Map<string, Set<string>>();
 	const bareExports: Array<{ names: string[]; line: number }> = [];
 
-	for (const statement of sourceFile.statements)
+	for (const statement of statements)
 	{
-		if (ts.isImportDeclaration(statement))
+		if (statement.type === 'ImportDeclaration')
 		{
-			if (statement.importClause?.isTypeOnly)
+			if (isTypeOnlyKind(statement.importKind))
 			{
 				continue;
 			}
 
-			recordImport(ts, statement, knownExtensions, importsByExtension);
+			recordImport(statement, knownExtensions, importsByExtension);
 			continue;
 		}
 
-		if (ts.isExportDeclaration(statement))
+		if (statement.type === 'ExportAllDeclaration')
 		{
-			if (statement.isTypeOnly)
+			if (!isTypeOnlyKind(statement.exportKind))
+			{
+				recordDirectReExport(statement, statement.source.value, knownExtensions, relFile, out);
+			}
+
+			continue;
+		}
+
+		if (statement.type === 'ExportNamedDeclaration')
+		{
+			if (isTypeOnlyKind(statement.exportKind))
 			{
 				continue;
 			}
 
-			const moduleSpecifier = statement.moduleSpecifier;
-			if (moduleSpecifier && ts.isStringLiteral(moduleSpecifier))
+			if (statement.source)
 			{
-				recordDirectReExport(ts, statement, moduleSpecifier.text, knownExtensions, sourceFile, relFile, out);
+				recordDirectReExport(statement, statement.source.value, knownExtensions, relFile, out);
 			}
-			else if (statement.exportClause && ts.isNamedExports(statement.exportClause))
+			else
 			{
-				const names = statement.exportClause.elements
-					.filter((el) => !el.isTypeOnly)
-					.map((el) => el.name.text);
+				const names = collectExportedNames(statement);
 				if (names.length > 0)
 				{
 					bareExports.push({
 						names,
-						line: lineOfPos(sourceFile, statement.getStart(sourceFile)),
+						line: lineOf(statement),
 					});
 				}
 			}
@@ -141,54 +149,41 @@ function collectFromSourceFile(
 }
 
 function recordImport(
-	ts: typeof import('typescript'),
 	node: ImportDeclaration,
 	knownExtensions: ReadonlySet<string>,
 	importsByExtension: Map<string, Set<string>>,
 ): void
 {
-	const moduleSpecifier = node.moduleSpecifier;
-	if (!ts.isStringLiteral(moduleSpecifier))
-	{
-		return;
-	}
-
-	const source = moduleSpecifier.text;
+	const source = node.source.value;
 	if (!isKnownExtension(source, knownExtensions))
 	{
 		return;
 	}
 
-	const importClause = node.importClause;
-	if (!importClause || !importClause.namedBindings)
-	{
-		return;
-	}
-
-	if (!ts.isNamedImports(importClause.namedBindings))
+	// Only named imports can be re-exported by name; default and namespace imports are skipped.
+	const namedSpecifiers = node.specifiers.filter((specifier) => specifier.type === 'ImportSpecifier');
+	if (namedSpecifiers.length === 0)
 	{
 		return;
 	}
 
 	const bucket = importsByExtension.get(source) ?? new Set<string>();
-	for (const element of importClause.namedBindings.elements)
+	for (const specifier of namedSpecifiers)
 	{
-		if (element.isTypeOnly)
+		if (isTypeOnlyKind(specifier.importKind))
 		{
 			continue;
 		}
 
-		bucket.add(element.name.text);
+		bucket.add(specifier.local.name);
 	}
 	importsByExtension.set(source, bucket);
 }
 
 function recordDirectReExport(
-	ts: typeof import('typescript'),
-	node: ExportDeclaration,
+	node: ExportNamedDeclaration | ExportAllDeclaration,
 	source: string,
 	knownExtensions: ReadonlySet<string>,
-	sourceFile: SourceFile,
 	relFile: string,
 	out: ReExportEntry[],
 ): void
@@ -198,20 +193,21 @@ function recordDirectReExport(
 		return;
 	}
 
-	const line = lineOfPos(sourceFile, node.getStart(sourceFile));
+	const line = lineOf(node);
 
-	if (!node.exportClause)
+	if (node.type === 'ExportAllDeclaration')
 	{
 		out.push({ source, symbols: ['*'], wildcard: true, file: relFile, line });
 
 		return;
 	}
 
-	if (ts.isNamespaceExport(node.exportClause))
+	const namespaceSpecifier = node.specifiers.find((specifier) => specifier.type === 'ExportNamespaceSpecifier');
+	if (namespaceSpecifier)
 	{
 		out.push({
 			source,
-			symbols: [`* as ${node.exportClause.name.text}`],
+			symbols: [`* as ${nameOf(namespaceSpecifier.exported)}`],
 			wildcard: true,
 			file: relFile,
 			line,
@@ -220,16 +216,36 @@ function recordDirectReExport(
 		return;
 	}
 
-	if (ts.isNamedExports(node.exportClause))
+	const symbols = collectExportedNames(node);
+	if (symbols.length > 0)
 	{
-		const symbols = node.exportClause.elements
-			.filter((el) => !el.isTypeOnly)
-			.map((el) => el.name.text);
-		if (symbols.length > 0)
+		out.push({ source, symbols, wildcard: false, file: relFile, line });
+	}
+}
+
+function collectExportedNames(node: ExportNamedDeclaration): string[]
+{
+	const names: string[] = [];
+
+	for (const specifier of node.specifiers)
+	{
+		if (specifier.type === 'ExportSpecifier' && !isTypeOnlyKind(specifier.exportKind))
 		{
-			out.push({ source, symbols, wildcard: false, file: relFile, line });
+			names.push(nameOf(specifier.exported));
 		}
 	}
+
+	return names;
+}
+
+function isTypeOnlyKind(kind: string | null | undefined): boolean
+{
+	return kind === 'type' || kind === 'typeof';
+}
+
+function nameOf(node: Identifier | StringLiteral): string
+{
+	return node.type === 'Identifier' ? node.name : node.value;
 }
 
 function isKnownExtension(source: string, knownExtensions: ReadonlySet<string>): boolean
@@ -242,9 +258,9 @@ function isKnownExtension(source: string, knownExtensions: ReadonlySet<string>):
 	return knownExtensions.has(source);
 }
 
-function lineOfPos(sourceFile: SourceFile, pos: number): number
+function lineOf(node: Statement): number
 {
-	return sourceFile.getLineAndCharacterOfPosition(pos).line + 1;
+	return node.loc?.start.line ?? 1;
 }
 
 function mergeBySource(entries: ReExportEntry[]): ReExportEntry[]

@@ -4,35 +4,14 @@ import { describe, it } from 'mocha';
 import { assert } from 'chai';
 
 import {
-	isBareFilePath,
 	stripKnownExtension,
-	isInsideDirectory,
 	sharesDirectoryPrefix,
 } from '../../src/modules/engines/build/declaration/declaration-bundler';
 
 // These helpers back the cross-extension import-type resolution in the declaration
-// bundler: recognising the bare file paths TS emits for a type reached through a
-// container class, and narrowing which extension entries to inspect.
+// bundler: matching the file an import type points at, and narrowing which extension
+// entries to inspect.
 describe('declaration bundler path helpers', () => {
-	describe('isBareFilePath', () => {
-		it('accepts a bare file-like path', () => {
-			assert.isTrue(isBareFilePath('main/install/js/main/core/src/lib/cache/memory-cache'));
-		});
-
-		it('rejects a relative path', () => {
-			assert.isFalse(isBareFilePath('./memory-cache'));
-			assert.isFalse(isBareFilePath('../lib/memory-cache'));
-		});
-
-		it('rejects a scoped npm package', () => {
-			assert.isFalse(isBareFilePath('@vue/runtime-core'));
-		});
-
-		it('rejects a bare specifier without a slash (looks like a package)', () => {
-			assert.isFalse(isBareFilePath('typescript'));
-		});
-	});
-
 	describe('stripKnownExtension', () => {
 		it('drops .d.ts, .ts and .js so paths compare equal', () => {
 			const base = '/repo/main/core/src/lib/cache/memory-cache';
@@ -43,20 +22,6 @@ describe('declaration bundler path helpers', () => {
 
 		it('leaves a path without a known extension untouched', () => {
 			assert.equal(stripKnownExtension('/repo/foo/bar'), '/repo/foo/bar');
-		});
-	});
-
-	describe('isInsideDirectory', () => {
-		it('detects a file inside the directory', () => {
-			assert.isTrue(isInsideDirectory(path.join('/repo/ext', 'src', 'index.ts'), '/repo/ext'));
-		});
-
-		it('rejects a file outside the directory', () => {
-			assert.isFalse(isInsideDirectory('/repo/other/index.ts', '/repo/ext'));
-		});
-
-		it('rejects the directory itself', () => {
-			assert.isFalse(isInsideDirectory('/repo/ext', '/repo/ext'));
 		});
 	});
 

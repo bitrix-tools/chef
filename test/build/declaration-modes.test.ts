@@ -6,6 +6,7 @@ import { describe, it, beforeEach, afterEach } from 'mocha';
 import { assert } from 'chai';
 
 import { DeclarationEmitter } from '../../src/modules/engines/build/declaration-emitter';
+import { getSemanticErrors } from '../test-utils/semantic-errors';
 import type { DeclarationMode } from '../../src/modules/engines/build/declaration/declaration-printer';
 
 let tmpDir: string;
@@ -180,15 +181,7 @@ describe('DeclarationEmitter — declaration modes', () => {
 				+ `t1.status = s1;\n`,
 			);
 
-			const ts = await import('typescript');
-			const program = ts.default.createProgram([testFile], {
-				strict: true,
-				noEmit: true,
-				skipLibCheck: true,
-				target: ts.default.ScriptTarget.ESNext,
-				module: ts.default.ModuleKind.ESNext,
-			});
-			const diagnostics = program.getSemanticDiagnostics().map((d) => ts.default.flattenDiagnosticMessageText(d.messageText, '\n'));
+			const diagnostics = await getSemanticErrors([testFile]);
 
 			assert.deepEqual(diagnostics, [], `Type errors in bundle.d.ts:\n${content}\n@ ${dtsFile}`);
 		});

@@ -65,7 +65,6 @@ chef create ui.buttons    # создаст bundle.config.ts и src/ui.buttons.ts
 ```json
 {
   "compilerOptions": {
-    "baseUrl": "/path/to/project",
     "types": ["./bitrix/js/ui/dev/src/ui.dev.ts"],
     "paths": {
       "main.core": ["./bitrix/js/main/core/src"],
@@ -74,6 +73,8 @@ chef create ui.buttons    # создаст bundle.config.ts и src/ui.buttons.ts
   }
 }
 ```
+
+Пути в `paths` отсчитываются от папки, в которой лежит `aliases.tsconfig.json`, поэтому `baseUrl` не нужен — TypeScript 7 его больше не поддерживает. Если в файле остался `baseUrl` от прошлых версий Chef, перегенерируйте алиасы.
 
 Благодаря этому импорты расширений по имени работают и в редакторе, и при проверке типов:
 
@@ -225,3 +226,11 @@ chef typecheck                                 # Проверить всё в т
 ```
 
 При проверке используются настройки из `tsconfig.json` — включая `lib`, `strict` и другие `compilerOptions`. Это гарантирует, что ошибки в IDE и при сборке совпадают.
+
+Проверку выполняет компилятор TypeScript 7. Если IDE работает на TypeScript 5.x, часть ошибок может отличаться: TypeScript 7 иначе выводит типы из JS-файлов зависимостей.
+
+Некоторые ошибки не выводятся, потому что глобальные объекты Bitrix типизированы не полностью:
+
+- `Cannot find name` (TS2304) — обращение к необъявленному глобальному имени;
+- `Cannot use namespace 'BX' as a value` (TS2708) — `BX` используется как значение, а какое-то расширение объявило в нём только типы;
+- неразрешённый side-effect-импорт (TS2882), например `import 'ui.forms'` — если в `tsconfig.json` не включён `noUncheckedSideEffectImports`.

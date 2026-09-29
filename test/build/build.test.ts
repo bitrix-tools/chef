@@ -11,6 +11,7 @@ import { PhpConfigManager } from '../../src/modules/config/php/php-config-manage
 import { DeclarationEmitter } from '../../src/modules/engines/build/declaration-emitter';
 import { transformIifeLine } from '../../src/modules/engines/build/rollup/plugins/safe-namespaces';
 import { transformClassesStrategy } from '../../src/modules/config/bundle/strategies/transform-classes-strategy';
+import { getSemanticErrors } from '../test-utils/semantic-errors';
 
 import type { BuildOptions } from '../../src/modules/engines/build/build-types';
 
@@ -519,17 +520,7 @@ describe('build', () => {
 				`const searchResult: SearchResult = svc.findByName('test');`,
 			].join('\n'), 'utf-8');
 
-			const ts = await import('typescript');
-			const program = ts.default.createProgram([testFile], {
-				strict: true,
-				noEmit: true,
-				skipLibCheck: true,
-				target: ts.default.ScriptTarget.ESNext,
-				module: ts.default.ModuleKind.ESNext,
-			});
-
-			const diagnostics = program.getSemanticDiagnostics();
-			const errors = diagnostics.map((d) => ts.default.flattenDiagnosticMessageText(d.messageText, '\n'));
+			const errors = await getSemanticErrors([testFile]);
 
 			assert.deepEqual(errors, [], `Generated .d.ts has type errors:\n${content}`);
 		});

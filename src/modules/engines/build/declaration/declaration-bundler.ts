@@ -1,9 +1,30 @@
 import path from 'node:path';
 import fs from 'node:fs';
 
-import type ts from 'typescript';
+import type * as ts from 'typescript/unstable/ast';
+import type {
+	API,
+	Checker,
+	CompilerOptions,
+	Diagnostic,
+	ModuleResolutionEntry,
+	ModuleResolver,
+	Program,
+	ScriptKind,
+	Symbol as TypeScriptSymbol,
+	Type,
+} from 'typescript/unstable/sync';
 
 import { PackageResolver } from '../../../packages/package-resolver';
+import { createPackageName } from '../../../../utils/package/create-package-name';
+import { flattenDiagnosticText, getTypeScriptApi } from '../../../../utils/typescript-api';
+
+/**
+ * AST helpers, compiler enums and filesystem helpers of the TypeScript API in one namespace.
+ */
+type TypeScript = typeof import('typescript/unstable/ast')
+	& typeof import('typescript/unstable/sync')
+	& typeof import('typescript/unstable/fs');
 
 export interface DeclarationBundleOptions
 {
@@ -11,12 +32,11 @@ export interface DeclarationBundleOptions
 	input: string;
 	namespace: string;
 	extensionName?: string;
-	compilerOptions?: ts.CompilerOptions;
+	compilerOptions?: CompilerOptions;
 }
 
 export interface DeclarationBundle
 {
-	ts: typeof ts;
 	topLevelMembers: DeclarationMember[];
 	namespaceMembers: DeclarationMember[];
 	namespaceMemberNames: Set<string>;
@@ -49,9 +69,10 @@ export interface NpmModule
 
 export async function bundleDeclarations(options: DeclarationBundleOptions): Promise<DeclarationBundleResult>
 {
-	const { default: tsModule } = await import('typescript');
+	const api = await getTypeScriptApi();
+	const tsModule = await loadTypeScript();
 
-	const emitted = await emitSourceDeclarations(tsModule, options);
+	const emitted = emitSourceDeclarations(api, tsModule, options);
 	if (!emitted)
 	{
 		return { bundle: null, diagnostics: [] };
@@ -59,61 +80,79 @@ export async function bundleDeclarations(options: DeclarationBundleOptions): Pro
 
 	const diagnostics = emitted.diagnostics;
 
-	const entryDtsPath = findEntryDeclarationPath(
-		options.input,
-		options.packageRoot,
-		emitted.commonSourceDirectory,
+	if (!emitted.entryDtsPath)
+	{
+		return { bundle: null, diagnostics };
+	}
+
+	const dtsProgram = createDtsProgram(
+		api,
+		tsModule,
 		emitted.declarations,
+		emitted.sourceToDts,
+		emitted.npmTypesResolutions,
 	);
-
-	if (!entryDtsPath)
-	{
-		return { bundle: null, diagnostics };
-	}
-
-	const dtsProgram = createDtsProgram(tsModule, emitted.declarations, entryDtsPath, emitted.sourceToDts);
-	const checker = dtsProgram.getTypeChecker();
-	const entryFile = dtsProgram.getSourceFile(entryDtsPath);
-
-	if (!entryFile)
-	{
-		return { bundle: null, diagnostics };
-	}
-
-	const collector = new SymbolCollector(tsModule, dtsProgram, checker, {
+	const collector = new SymbolCollector(tsModule, api, dtsProgram.program, {
 		packageRoot: options.packageRoot,
 		extensionName: options.extensionName ?? null,
-		tsconfigPaths: options.compilerOptions?.paths as Record<string, string[]> | undefined,
-		tsconfigBaseUrl: options.compilerOptions?.baseUrl as string | undefined,
+		tsconfigPaths: options.compilerOptions?.paths,
 		sourceImports: emitted.sourceImports,
 		sourceToDts: emitted.sourceToDts,
+		declarationSources: emitted.declarationSources,
+		bundleSources: emitted.bundleSources,
 		entrySourcePath: options.input,
 	});
-	const members = collector.collectFromEntry(entryFile, options.namespace);
 
-	if (members.length === 0)
+	try
 	{
-		return { bundle: null, diagnostics };
-	}
+		const entryFile = dtsProgram.program.getSourceFile(emitted.entryDtsPath);
+		if (!entryFile)
+		{
+			return { bundle: null, diagnostics };
+		}
 
-	const inlineDetections = collector.detectInlinedSiblingTypes();
-	const inlineDiagnostics = inlineDetections.map((detection): DeclarationDiagnostic => {
-		const rendered = formatInlinedSiblingMessage(detection);
+		const members = collector.collectFromEntry(entryFile, options.namespace);
+
+		if (members.length === 0)
+		{
+			return { bundle: null, diagnostics };
+		}
+
+		const inlineDetections = collector.detectInlinedSiblingTypes();
+		const inlineDiagnostics = inlineDetections.map((detection): DeclarationDiagnostic => {
+			const rendered = formatInlinedSiblingMessage(detection);
+			return {
+				code: 0,
+				message: rendered.heading,
+				details: rendered.details,
+				severity: 'warning',
+				file: detection.sourceFile ?? options.input,
+				line: detection.line,
+				column: detection.column,
+			};
+		});
+
 		return {
-			code: 0,
-			message: rendered.heading,
-			details: rendered.details,
-			severity: 'warning',
-			file: detection.sourceFile ?? options.input,
-			line: detection.line,
-			column: detection.column,
+			bundle: splitMembers(members, collector.getNpmModules()),
+			diagnostics: [...diagnostics, ...inlineDiagnostics],
 		};
-	});
+	}
+	finally
+	{
+		collector.dispose();
+		dtsProgram.dispose();
+	}
+}
 
-	return {
-		bundle: splitMembers(tsModule, members, collector.getNpmModules()),
-		diagnostics: [...diagnostics, ...inlineDiagnostics],
-	};
+async function loadTypeScript(): Promise<TypeScript>
+{
+	const [ast, compiler, fileSystem] = await Promise.all([
+		import('typescript/unstable/ast'),
+		import('typescript/unstable/sync'),
+		import('typescript/unstable/fs'),
+	]);
+
+	return { ...ast, ...compiler, ...fileSystem };
 }
 
 const DTS_INLINING_DOCS_URL = 'https://bitrix-tools.github.io/chef/guide/dts-inlining';
@@ -204,9 +243,12 @@ interface SymbolCollectorOptions
 	packageRoot: string;
 	extensionName: string | null;
 	tsconfigPaths?: Record<string, string[]>;
-	tsconfigBaseUrl?: string;
 	sourceImports?: Set<string>;
 	sourceToDts?: Map<string, string>;
+	/** Maps an emitted .d.ts back to the source it was emitted from. */
+	declarationSources?: Map<string, string>;
+	/** Sources that end up in this extension's own bundle (see `collectBundleSources`). */
+	bundleSources?: Set<string>;
 	/** Absolute path of the original entry .ts file. Used to locate inline warnings in source. */
 	entrySourcePath?: string;
 }
@@ -219,20 +261,21 @@ interface NpmPackageBuffer
 
 class SymbolCollector
 {
-	readonly #ts: typeof ts;
-	readonly #program: ts.Program;
-	readonly #checker: ts.TypeChecker;
+	readonly #ts: TypeScript;
+	readonly #api: API;
+	readonly #program: Program;
+	readonly #checker: Checker;
 	readonly #seen = new Set<string>();
 	readonly #seenSourceDecls = new Set<ts.Node>();
 	readonly #result: CollectedMember[] = [];
-	readonly #visitingSymbols = new Set<ts.Symbol>();
-	readonly #siblingReplacements = new Map<ts.Symbol, string>();
-	readonly #siblingNamespaces = new Map<ts.Symbol, string>();
+	readonly #visitingSymbols = new Set<TypeScriptSymbol>();
+	readonly #siblingReplacements = new Map<TypeScriptSymbol, string>();
+	readonly #siblingNamespaces = new Map<TypeScriptSymbol, string>();
 	readonly #options: SymbolCollectorOptions;
 	readonly #npmPackages = new Map<string, NpmPackageBuffer>();
-	readonly #npmReplacements = new Map<ts.Symbol, string>();
+	readonly #npmReplacements = new Map<TypeScriptSymbol, string>();
 	/** Maps a symbol originating from an npm package to that package's internal module name. */
-	readonly #npmPackageOfSymbol = new Map<ts.Symbol, string>();
+	readonly #npmPackageOfSymbol = new Map<TypeScriptSymbol, string>();
 	/** Cache: siblingName → set of npm package names it re-exports from its own entry. */
 	readonly #siblingNpmOwnership = new Map<string, Set<string>>();
 	/** Sibling extensions whose entry we've seen imported by the current bundle. */
@@ -243,12 +286,122 @@ class SymbolCollector
 	readonly #pathOwningExtension = new Map<string, { namespace: string; exportedName: string } | null>();
 	#currentNamespace = '';
 
-	constructor(tsModule: typeof ts, program: ts.Program, checker: ts.TypeChecker, options: SymbolCollectorOptions)
+	/** Files parsed outside the dts program; they live in the compiler process until disposed. */
+	readonly #standaloneSourceFiles: Array<{ dispose(): void }> = [];
+	readonly #defaultLibraryFiles = new Map<ts.SourceFile, boolean>();
+	#moduleResolver: ModuleResolver | null = null;
+
+	constructor(tsModule: TypeScript, api: API, program: Program, options: SymbolCollectorOptions)
 	{
 		this.#ts = tsModule;
+		this.#api = api;
 		this.#program = program;
-		this.#checker = checker;
+		this.#checker = program.getProject().checker;
 		this.#options = options;
+	}
+
+	dispose(): void
+	{
+		for (const sourceFile of this.#standaloneSourceFiles)
+		{
+			sourceFile.dispose();
+		}
+
+		this.#moduleResolver?.dispose();
+	}
+
+	/**
+	 * Parses a file that is not part of the dts program. Only its syntax is inspected:
+	 * the checker knows nothing about these nodes.
+	 */
+	#parseStandaloneSourceFile(fileName: string, text: string, scriptKind?: ScriptKind): ts.SourceFile
+	{
+		const retained = this.#api.createSourceFile(fileName, text, scriptKind === undefined ? undefined : { scriptKind });
+		this.#standaloneSourceFiles.push(retained);
+
+		return retained.sourceFile;
+	}
+
+	readonly #symbolsAtLocation = new Map<ts.Node, TypeScriptSymbol | undefined>();
+
+	/**
+	 * Every checker call is a round trip to the compiler process, and the same identifiers
+	 * are looked up by several passes over the collected members.
+	 */
+	#getSymbolAtLocation(node: ts.Node): TypeScriptSymbol | undefined
+	{
+		if (!this.#symbolsAtLocation.has(node))
+		{
+			this.#symbolsAtLocation.set(node, this.#checker.getSymbolAtLocation(node));
+		}
+
+		return this.#symbolsAtLocation.get(node);
+	}
+
+	#getModuleResolver(): ModuleResolver
+	{
+		this.#moduleResolver ??= this.#api.createModuleResolver(this.#program.getCompilerOptions());
+
+		return this.#moduleResolver;
+	}
+
+	#isBuiltinLibFile(sourceFile: ts.SourceFile): boolean
+	{
+		if (sourceFile.fileName.includes('node_modules/@types/node/'))
+		{
+			return true;
+		}
+
+		let isDefaultLibrary = this.#defaultLibraryFiles.get(sourceFile);
+		if (isDefaultLibrary === undefined)
+		{
+			isDefaultLibrary = this.#program.isSourceFileDefaultLibrary(sourceFile);
+			this.#defaultLibraryFiles.set(sourceFile, isDefaultLibrary);
+		}
+
+		return isDefaultLibrary;
+	}
+
+	/**
+	 * Whether a file of the dts program was emitted from a source of this extension's bundle.
+	 * Sources of other extensions get into the program through aliases and import types;
+	 * their declarations are referenced, never copied into this bundle.
+	 */
+	#isBundleDeclarationFile(sourceFile: ts.SourceFile): boolean
+	{
+		const source = this.#options.declarationSources?.get(path.normalize(sourceFile.fileName));
+
+		return source !== undefined && this.#isBundleSource(source);
+	}
+
+	/**
+	 * Whether declarations may be copied into this bundle. Types (interfaces and type aliases)
+	 * are always copied: bundles declare them at the top level, not under a namespace, so there
+	 * is nothing to reference. Values are copied only from this extension's own bundle files;
+	 * values of other extensions live under their namespace and are referenced there.
+	 */
+	#canCopyDeclarations(declarations: readonly ts.Declaration[]): boolean
+	{
+		const ts = this.#ts;
+
+		return declarations.some((d) => this.#isBundleDeclarationFile(d.getSourceFile()))
+			|| declarations.every((d) => ts.isInterfaceDeclaration(d) || ts.isTypeAliasDeclaration(d));
+	}
+
+	#bundleSourceStems: Set<string> | null = null;
+
+	/**
+	 * `sourcePath` may come without an extension: TS writes import specifiers without one.
+	 */
+	#isBundleSource(sourcePath: string): boolean
+	{
+		this.#bundleSourceStems ??= new Set(
+			[...(this.#options.bundleSources ?? [])].map((source) => stripKnownExtension(source)),
+		);
+
+		const stem = stripKnownExtension(sourcePath);
+
+		return this.#bundleSourceStems.has(stem) || this.#bundleSourceStems.has(path.join(stem, 'index'));
 	}
 
 	getNpmModules(): NpmModule[]
@@ -271,7 +424,7 @@ class SymbolCollector
 	{
 		this.#currentNamespace = namespace;
 
-		const moduleSymbol = this.#checker.getSymbolAtLocation(entryFile);
+		const moduleSymbol = this.#getSymbolAtLocation(entryFile);
 		if (!moduleSymbol)
 		{
 			return [];
@@ -283,7 +436,7 @@ class SymbolCollector
 		// sibling-aliased identifier in the emitted dts.
 		this.#registerSiblingsFromSourceImports();
 
-		const exports = this.#checker.getExportsOfModule(moduleSymbol);
+		const exports = this.#sortBySourceOrder(entryFile, this.#checker.getExportsOfModule(moduleSymbol));
 
 		for (const exportSymbol of exports)
 		{
@@ -293,6 +446,57 @@ class SymbolCollector
 		this.#applyCollectedReplacements(namespace);
 
 		return this.#result;
+	}
+
+	/**
+	 * Exports in the order they are written in the entry, which decides the order of the whole
+	 * bundle. TypeScript 7 returns module exports in an order of its own. Names that come through
+	 * `export * from` take the place of that statement.
+	 */
+	#sortBySourceOrder(entryFile: ts.SourceFile, exports: readonly TypeScriptSymbol[]): TypeScriptSymbol[]
+	{
+		const ts = this.#ts;
+
+		const reExportIndexByFile = new Map<string, number>();
+		entryFile.statements.forEach((statement, index) => {
+			if (!ts.isExportDeclaration(statement) || statement.exportClause || !statement.moduleSpecifier) return;
+
+			const moduleSymbol = this.#getSymbolAtLocation(statement.moduleSpecifier);
+			const moduleFile = moduleSymbol ? getDeclarations(moduleSymbol)[0]?.getSourceFile() : undefined;
+			if (moduleFile && !reExportIndexByFile.has(moduleFile.fileName))
+			{
+				reExportIndexByFile.set(moduleFile.fileName, index);
+			}
+		});
+
+		const getStatementIndex = (node: ts.Node): number => {
+			let current = node;
+			while (current.parent && current.parent !== entryFile)
+			{
+				current = current.parent;
+			}
+
+			return entryFile.statements.indexOf(current as ts.Statement);
+		};
+
+		const getSortKey = (symbol: TypeScriptSymbol): [number, number] => {
+			const declaration = getDeclarations(symbol)[0];
+			if (!declaration) return [Infinity, 0];
+
+			const sourceFile = declaration.getSourceFile();
+			if (sourceFile === entryFile) return [getStatementIndex(declaration), declaration.pos];
+
+			return [reExportIndexByFile.get(sourceFile.fileName) ?? Infinity, declaration.pos];
+		};
+
+		const keys = new Map(exports.map((symbol) => [symbol, getSortKey(symbol)]));
+
+		return [...exports].sort((a, b) => {
+			const [statementA, positionA] = keys.get(a)!;
+			const [statementB, positionB] = keys.get(b)!;
+
+			return statementA - statementB || positionA - positionB;
+		});
 	}
 
 	/**
@@ -362,7 +566,7 @@ class SymbolCollector
 					}
 				}
 
-				ts.forEachChild(node, visit);
+				node.forEachChild(visit);
 			};
 
 			visit(member.sourceDecl);
@@ -385,7 +589,7 @@ class SymbolCollector
 		}
 
 		const text = fs.readFileSync(entryPath, 'utf-8');
-		this.#entrySourceFile = this.#ts.createSourceFile(entryPath, text, this.#ts.ScriptTarget.Latest, true);
+		this.#entrySourceFile = this.#parseStandaloneSourceFile(entryPath, text);
 		return this.#entrySourceFile;
 	}
 
@@ -434,7 +638,7 @@ class SymbolCollector
 				}
 			}
 
-			ts.forEachChild(node, visit);
+			node.forEachChild(visit);
 		};
 
 		visit(exportDecl);
@@ -554,10 +758,10 @@ class SymbolCollector
 
 		// Direct symbol match: works when the literal is e.g. `IconClass` (named class
 		// declaration) — the symbol's declarations point at the sibling .d.ts file.
-		const symbol = type.aliasSymbol ?? type.symbol;
+		const symbol = type.getAliasSymbol() ?? type.getSymbol();
 		if (symbol)
 		{
-			const decls = symbol.getDeclarations() ?? [];
+			const decls = getDeclarations(symbol);
 			for (const decl of decls)
 			{
 				const siblingName = siblingDtsToName.get(decl.getSourceFile());
@@ -575,15 +779,15 @@ class SymbolCollector
 		return this.#matchAnonymousAgainstSiblingExports(type, siblingDtsToName);
 	}
 
-	#siblingExportTypes: Array<{ type: ts.Type; siblingName: string; symbolName: string }> | null = null;
+	#siblingExportTypes: Array<{ type: Type; siblingName: string; symbolName: string }> | null = null;
 
-	#getSiblingExportTypes(siblingDtsToName: Map<ts.SourceFile, string>): Array<{ type: ts.Type; siblingName: string; symbolName: string }>
+	#getSiblingExportTypes(siblingDtsToName: Map<ts.SourceFile, string>): Array<{ type: Type; siblingName: string; symbolName: string }>
 	{
 		if (this.#siblingExportTypes) return this.#siblingExportTypes;
 
-		const result: Array<{ type: ts.Type; siblingName: string; symbolName: string }> = [];
+		const result: Array<{ type: Type; siblingName: string; symbolName: string }> = [];
 		const visited = new Set<ts.SourceFile>();
-		const seenSymbols = new Set<ts.Symbol>();
+		const seenSymbols = new Set<TypeScriptSymbol>();
 
 		const ts = this.#ts;
 
@@ -591,7 +795,7 @@ class SymbolCollector
 			if (visited.has(dtsFile)) return;
 			visited.add(dtsFile);
 
-			const moduleSymbol = this.#checker.getSymbolAtLocation(dtsFile);
+			const moduleSymbol = this.#getSymbolAtLocation(dtsFile);
 			if (moduleSymbol)
 			{
 				const exports = this.#checker.getExportsOfModule(moduleSymbol);
@@ -600,13 +804,13 @@ class SymbolCollector
 					if (seenSymbols.has(exportSymbol)) continue;
 					seenSymbols.add(exportSymbol);
 
-					const decls = exportSymbol.getDeclarations() ?? [];
+					const decls = getDeclarations(exportSymbol);
 					if (decls.length === 0) continue;
 
 					const type = this.#checker.getTypeOfSymbolAtLocation(exportSymbol, decls[0]);
 					// Skip primitive / trivially-named types — matching them is too prone to
 					// false positives (e.g. `any`, `string`, simple unions).
-					const flags = type.getFlags();
+					const flags = type.flags;
 					if (flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown | ts.TypeFlags.Never)) continue;
 					if (flags & (ts.TypeFlags.String | ts.TypeFlags.Number | ts.TypeFlags.Boolean)) continue;
 
@@ -653,31 +857,17 @@ class SymbolCollector
 	 * other empty shape, so comparing them via `isTypeAssignableTo` produces meaningless
 	 * matches.
 	 */
-	#isStructurallyEmpty(type: ts.Type): boolean
+	#isStructurallyEmpty(type: Type): boolean
 	{
-		const ts = this.#ts;
-
-		if (type.isUnionOrIntersection())
+		if (type.isUnionType() || type.isIntersectionType())
 		{
-			return type.types.every((part) => this.#isStructurallyEmpty(part));
+			return type.getTypes().every((part) => this.#isStructurallyEmpty(part));
 		}
 
 		if (this.#checker.getPropertiesOfType(type).length > 0) return false;
 		if (type.getCallSignatures().length > 0) return false;
 		if (type.getConstructSignatures().length > 0) return false;
-
-		const checker = this.#checker as unknown as {
-			getIndexInfosOfType?: (type: ts.Type) => ReadonlyArray<unknown>;
-		};
-		if (typeof checker.getIndexInfosOfType === 'function')
-		{
-			if (checker.getIndexInfosOfType(type).length > 0) return false;
-		}
-		else
-		{
-			if (this.#checker.getIndexTypeOfType(type, ts.IndexKind.String)) return false;
-			if (this.#checker.getIndexTypeOfType(type, ts.IndexKind.Number)) return false;
-		}
+		if (this.#checker.getIndexInfosOfType(type).length > 0) return false;
 
 		return true;
 	}
@@ -694,7 +884,7 @@ class SymbolCollector
 	}
 
 	#matchAnonymousAgainstSiblingExports(
-		type: ts.Type,
+		type: Type,
 		siblingDtsToName: Map<ts.SourceFile, string>,
 	): InlinedSiblingMatch | null
 	{
@@ -711,15 +901,9 @@ class SymbolCollector
 		// Strict identity (`===`) doesn't survive the round-trip through declaration emit
 		// (the literal is reconstructed as a fresh anonymous type), and string comparison
 		// breaks on render differences like `Readonly<{...}>` vs the expanded `{readonly ...}`.
-		const checker = this.#checker as unknown as {
-			isTypeAssignableTo?: (a: ts.Type, b: ts.Type) => boolean;
-		};
-
-		if (typeof checker.isTypeAssignableTo !== 'function') return null;
-
 		for (const candidate of candidates)
 		{
-			if (checker.isTypeAssignableTo(type, candidate.type) && checker.isTypeAssignableTo(candidate.type, type))
+			if (this.#checker.isTypeAssignableTo(type, candidate.type) && this.#checker.isTypeAssignableTo(candidate.type, type))
 			{
 				return { siblingName: candidate.siblingName, symbolName: candidate.symbolName };
 			}
@@ -750,10 +934,10 @@ class SymbolCollector
 		const namespaceMemberSymbols = this.#collectNamespaceMemberSymbols();
 		const hasExternal = this.#siblingReplacements.size > 0 || this.#npmReplacements.size > 0;
 		// A cross-extension type reached through a container (e.g. `Cache.MemoryCache`) is
-		// emitted as a bare-path import type with no registered sibling/npm replacement.
-		// Detect those separately so extensions without any sibling/npm edits keep their
-		// previous output untouched (only bare cross-extension paths are rewritten).
-		const resolvesBareImports = Boolean(this.#options.tsconfigPaths);
+		// emitted as an import type of the other extension's source file, with no registered
+		// sibling/npm replacement. Such import types are detected separately; the owning
+		// extension is looked up through tsconfig `paths`.
+		const resolvesCrossExtensionImports = Boolean(this.#options.tsconfigPaths);
 		const needsNamespaceQualification = namespaceMemberSymbols.size > 0;
 
 		for (const member of this.#result)
@@ -768,9 +952,9 @@ class SymbolCollector
 				? this.#findExternalEdits(member.sourceDecl, member.sourceTextStart)
 				: [];
 
-			if (resolvesBareImports)
+			if (resolvesCrossExtensionImports)
 			{
-				externalEdits.push(...this.#findBareImportTypeEdits(member.sourceDecl, member.sourceTextStart));
+				externalEdits.push(...this.#findCrossExtensionEdits(member.sourceDecl, member.sourceTextStart));
 			}
 
 			const renames = member.renames ?? [];
@@ -806,35 +990,35 @@ class SymbolCollector
 		}
 	}
 
-	#collectNamespaceMemberSymbols(): Set<ts.Symbol>
+	#collectNamespaceMemberSymbols(): Set<TypeScriptSymbol>
 	{
 		const ts = this.#ts;
-		const result = new Set<ts.Symbol>();
+		const result = new Set<TypeScriptSymbol>();
 
 		for (const member of this.#result)
 		{
 			if (member.kind !== 'namespaceMember' || !member.sourceDecl) continue;
 
 			const decl = member.sourceDecl;
-			let nameNode: ts.Identifier | null = null;
+			const nameNodes: ts.Identifier[] = [];
 
 			if (ts.isClassDeclaration(decl) || ts.isFunctionDeclaration(decl))
 			{
-				nameNode = decl.name ?? null;
+				if (decl.name) nameNodes.push(decl.name);
 			}
 			else if (ts.isEnumDeclaration(decl))
 			{
-				nameNode = decl.name;
+				nameNodes.push(decl.name);
 			}
 			else if (ts.isVariableStatement(decl))
 			{
 				const first = decl.declarationList.declarations[0];
-				if (first && ts.isIdentifier(first.name)) nameNode = first.name;
+				if (first) nameNodes.push(...getBindingIdentifiers(ts, first.name));
 			}
 
-			if (nameNode)
+			for (const nameNode of nameNodes)
 			{
-				const sym = this.#checker.getSymbolAtLocation(nameNode);
+				const sym = this.#getSymbolAtLocation(nameNode);
 				if (sym) result.add(sym);
 			}
 		}
@@ -845,7 +1029,7 @@ class SymbolCollector
 	#findNamespaceQualificationEdits(
 		decl: ts.Node,
 		textStart: number,
-		namespaceMemberSymbols: Set<ts.Symbol>,
+		namespaceMemberSymbols: Set<TypeScriptSymbol>,
 		namespace: string,
 	): Array<{ start: number; end: number; replacement: string }>
 	{
@@ -856,7 +1040,7 @@ class SymbolCollector
 		const visit = (node: ts.Node): void => {
 			if (ts.isIdentifier(node) && this.#isReferencePosition(node))
 			{
-				const symbol = this.#checker.getSymbolAtLocation(node);
+				const symbol = this.#getSymbolAtLocation(node);
 				const resolved = symbol ? (this.#resolveAliasDeep(symbol) ?? symbol) : null;
 				if (resolved && namespaceMemberSymbols.has(resolved))
 				{
@@ -866,7 +1050,7 @@ class SymbolCollector
 				}
 			}
 
-			ts.forEachChild(node, visit);
+			node.forEachChild(visit);
 		};
 
 		visit(decl);
@@ -891,7 +1075,7 @@ class SymbolCollector
 
 			if (ts.isIdentifier(node) && this.#isReferencePosition(node))
 			{
-				const symbol = this.#checker.getSymbolAtLocation(node);
+				const symbol = this.#getSymbolAtLocation(node);
 				if (symbol)
 				{
 					const replacement = this.#siblingReplacements.get(symbol) ?? this.#npmReplacements.get(symbol);
@@ -904,7 +1088,7 @@ class SymbolCollector
 				}
 			}
 
-			ts.forEachChild(node, visit);
+			node.forEachChild(visit);
 		};
 
 		visit(decl);
@@ -913,50 +1097,59 @@ class SymbolCollector
 	}
 
 	/**
-	 * Rewrites bare-path import types that point at another extension's sources into a
-	 * namespace reference. TS emits these for a type reached through a container class (e.g.
-	 * `new Cache.MemoryCache()` → `import("main/install/js/main/core/src/lib/cache/memory-cache").default`).
-	 * Only bare file paths outside this extension are touched, so declarations that stay
-	 * within the extension (relative import types) are left exactly as they were.
+	 * Rewrites references to values of other extensions into a namespace reference:
+	 * - import types TS emits for a type reached through a container class (e.g.
+	 *   `new Cache.MemoryCache()` → `import("../../../core/src/lib/cache/memory-cache").default`);
+	 * - plain names inside types copied from another extension (e.g. `Button` in `PopupButton`).
+	 * References to this extension's own bundle files and to copied types stay as they are.
 	 */
-	#findBareImportTypeEdits(decl: ts.Node, textStart: number): Array<{ start: number; end: number; replacement: string }>
+	#findCrossExtensionEdits(decl: ts.Node, textStart: number): Array<{ start: number; end: number; replacement: string }>
 	{
 		const ts = this.#ts;
 		const edits: Array<{ start: number; end: number; replacement: string }> = [];
 		const sourceFile = decl.getSourceFile();
-		const baseUrl = this.#options.tsconfigBaseUrl ?? this.#options.packageRoot;
 
 		const visit = (node: ts.Node): void => {
 			if (ts.isImportTypeNode(node)
 				&& node.qualifier
 				&& ts.isLiteralTypeNode(node.argument)
-				&& ts.isStringLiteral(node.argument.literal))
+				&& ts.isStringLiteral(node.argument.literal)
+				&& node.argument.literal.text.startsWith('.'))
 			{
-				const modulePath = node.argument.literal.text;
-				if (isBareFilePath(modulePath))
+				const targetFile = this.#resolveImportTypeSource(sourceFile, node.argument.literal.text);
+				if (targetFile && !this.#isBundleSource(targetFile) && !this.#isCopiedImportType(node))
 				{
-					const targetFile = path.resolve(baseUrl, modulePath);
-					if (!isInsideDirectory(targetFile, this.#options.packageRoot))
+					const qualifierText = node.qualifier.getText(sourceFile);
+					const owningExtension = this.#findExtensionReExportingPath(targetFile, qualifierText);
+					if (owningExtension)
 					{
-						const qualifierText = node.qualifier.getText(sourceFile);
-						const owningExtension = this.#findExtensionReExportingPath(targetFile, qualifierText);
-						if (owningExtension)
-						{
-							const headStart = node.getStart(sourceFile, false) - textStart;
-							const headEnd = node.typeArguments && node.typeArguments.length > 0
-								? (node.typeArguments.pos - 1) - textStart
-								: node.getEnd() - textStart;
-							edits.push({
-								start: headStart,
-								end: headEnd,
-								replacement: `${owningExtension.namespace}.${owningExtension.exportedName}`,
-							});
-						}
+						const headStart = node.getStart(sourceFile, false) - textStart;
+						const headEnd = node.typeArguments && node.typeArguments.length > 0
+							? (node.typeArguments.pos - 1) - textStart
+							: node.getEnd() - textStart;
+						edits.push({
+							start: headStart,
+							end: headEnd,
+							replacement: `${owningExtension.namespace}.${owningExtension.exportedName}`,
+						});
 					}
 				}
 			}
 
-			ts.forEachChild(node, visit);
+			if (ts.isIdentifier(node) && this.#isReferencePosition(node))
+			{
+				const replacement = this.#findCrossExtensionReference(node);
+				if (replacement)
+				{
+					edits.push({
+						start: node.getStart(sourceFile, false) - textStart,
+						end: node.getEnd() - textStart,
+						replacement,
+					});
+				}
+			}
+
+			node.forEachChild(visit);
 		};
 
 		visit(decl);
@@ -964,9 +1157,99 @@ class SymbolCollector
 		return edits;
 	}
 
+	/**
+	 * Namespace reference for a name that points at a value declared in another extension's
+	 * source, or null when the name is this bundle's own or cannot be attributed.
+	 */
+	#findCrossExtensionReference(node: ts.Identifier): string | null
+	{
+		const symbol = this.#getSymbolAtLocation(node);
+		if (!symbol) return null;
+
+		const resolved = this.#resolveAliasDeep(symbol) ?? symbol;
+		const declarations = getDeclarations(resolved);
+		if (declarations.length === 0 || this.#canCopyDeclarations(declarations)) return null;
+
+		// Only emitted declarations have a source; npm packages and lib files are handled elsewhere.
+		const source = this.#options.declarationSources?.get(path.normalize(declarations[0].getSourceFile().fileName));
+		if (!source) return null;
+
+		const owningExtension = this.#findExtensionReExportingPath(source, resolved.name);
+		if (owningExtension)
+		{
+			return `${owningExtension.namespace}.${owningExtension.exportedName}`;
+		}
+
+		// Not exported by name: a value reached through another extension's public types is
+		// still declared under that extension's namespace in its own bundle.
+		const namespace = resolved.name === 'default' ? null : this.#findOwningNamespace(source);
+
+		return namespace ? `${namespace}.${resolved.name}` : null;
+	}
+
+	readonly #owningNamespaces = new Map<string, string | null>();
+
+	/**
+	 * Namespace of the extension a source file belongs to: the nearest directory above the
+	 * file that has a bundle config.
+	 */
+	#findOwningNamespace(sourcePath: string): string | null
+	{
+		const sourceDirectory = path.dirname(sourcePath);
+		if (this.#owningNamespaces.has(sourceDirectory))
+		{
+			return this.#owningNamespaces.get(sourceDirectory) ?? null;
+		}
+
+		let namespace: string | null = null;
+		for (let directory = sourceDirectory; directory !== path.dirname(directory); directory = path.dirname(directory))
+		{
+			const hasBundleConfig = BUNDLE_CONFIG_FILES.some((fileName) => fs.existsSync(path.join(directory, fileName)));
+			if (!hasBundleConfig) continue;
+
+			const extensionName = createPackageName(directory);
+			const pkg = extensionName ? PackageResolver.resolve(extensionName) : null;
+			const extensionNamespace = pkg?.getGlobal()[pkg.getName()];
+			namespace = extensionNamespace && extensionNamespace !== 'window' ? extensionNamespace : null;
+			break;
+		}
+
+		this.#owningNamespaces.set(sourceDirectory, namespace);
+
+		return namespace;
+	}
+
+	/**
+	 * Whether the symbol an import type names is copied into this bundle (a type), so the
+	 * import type is rewritten to the copy instead of a namespace reference.
+	 */
+	#isCopiedImportType(node: ts.ImportTypeNode): boolean
+	{
+		const leftmost = getEntityNameLeft(this.#ts, node.qualifier!);
+		const symbol = leftmost ? this.#getSymbolAtLocation(leftmost) : undefined;
+		if (!symbol) return false;
+
+		const resolved = this.#resolveAliasDeep(symbol) ?? symbol;
+		const declarations = getDeclarations(resolved);
+
+		return declarations.length > 0 && this.#canCopyDeclarations(declarations);
+	}
+
+	/**
+	 * The source file a relative `import("...")` inside an emitted declaration points at,
+	 * resolved against the source that declaration was emitted from.
+	 */
+	#resolveImportTypeSource(dtsFile: ts.SourceFile, specifier: string): string | null
+	{
+		const source = this.#options.declarationSources?.get(path.normalize(dtsFile.fileName));
+		if (!source) return null;
+
+		return path.resolve(path.dirname(source), specifier);
+	}
+
 	#buildLocalImportTypeEdit(
 		node: ts.ImportTypeNode,
-		resolved: ts.Symbol,
+		resolved: TypeScriptSymbol,
 		headStart: number,
 		headEnd: number,
 		qualifierText: string,
@@ -980,17 +1263,17 @@ class SymbolCollector
 		if (!node.argument.literal.text.startsWith('.')) return null;
 
 		// Symbol must be backed by declarations inside our own dts program (i.e. our extension's source).
-		const declarations = resolved.getDeclarations() ?? [];
+		const declarations = getDeclarations(resolved);
 		if (declarations.length === 0) return null;
 
 		const isLocal = declarations.some((d) => {
 			const src = d.getSourceFile();
 			if (src.fileName.includes('node_modules')) return false;
-			if (isBuiltinLibFile(src)) return false;
+			if (this.#isBuiltinLibFile(src)) return false;
 
 			return this.#program.getSourceFile(src.fileName) === src;
 		});
-		if (!isLocal) return null;
+		if (!isLocal || !this.#canCopyDeclarations(declarations)) return null;
 
 		// Use the leftmost identifier of the qualifier as the public name.
 		// For `import("./x").Foo` → "Foo"; for `import("./x").Foo.Bar` → still rooted at "Foo".
@@ -1015,7 +1298,7 @@ class SymbolCollector
 		return { start: headStart, end: headEnd, replacement };
 	}
 
-	#hasCollectedMember(symbol: ts.Symbol): boolean
+	#hasCollectedMember(symbol: TypeScriptSymbol): boolean
 	{
 		const key = `:${getSymbolKey(symbol)}`;
 		for (const seenKey of this.#seen)
@@ -1026,10 +1309,10 @@ class SymbolCollector
 		return false;
 	}
 
-	#findCollectedMember(symbol: ts.Symbol): CollectedMember | null
+	#findCollectedMember(symbol: TypeScriptSymbol): CollectedMember | null
 	{
 		const ts = this.#ts;
-		const declarations = symbol.getDeclarations() ?? [];
+		const declarations = getDeclarations(symbol);
 		if (declarations.length === 0) return null;
 
 		const targetFile = declarations[0].getSourceFile().fileName;
@@ -1070,7 +1353,7 @@ class SymbolCollector
 			: node.getEnd() - textStart;
 		const qualifierText = node.qualifier.getText(sourceFile);
 
-		const symbol = this.#checker.getSymbolAtLocation(qualifierLeft);
+		const symbol = this.#getSymbolAtLocation(qualifierLeft);
 		if (!symbol) return null;
 
 		const resolved = this.#resolveAliasDeep(symbol) ?? symbol;
@@ -1136,7 +1419,7 @@ class SymbolCollector
 		return false;
 	}
 
-	#collectExportSymbol(symbol: ts.Symbol, publicName: string): void
+	#collectExportSymbol(symbol: TypeScriptSymbol, publicName: string): void
 	{
 		const resolved = this.#resolveAliasDeep(symbol);
 		if (!resolved)
@@ -1152,7 +1435,7 @@ class SymbolCollector
 
 		this.#seen.add(key);
 
-		const declarations = resolved.getDeclarations() ?? [];
+		const declarations = getDeclarations(resolved);
 
 		if (declarations.length === 0)
 		{
@@ -1184,9 +1467,15 @@ class SymbolCollector
 		}
 	}
 
-	#buildMemberFromDeclaration(decl: ts.Declaration, publicName: string, _symbol: ts.Symbol): CollectedMember | null
+	#buildMemberFromDeclaration(declaration: ts.Declaration, publicName: string, _symbol: TypeScriptSymbol): CollectedMember | null
 	{
 		const ts = this.#ts;
+
+		// TypeScript 7 keeps destructuring in declarations (`export declare const { a, b }: {...}`),
+		// so a name exported this way is declared by a binding element of the variable declaration.
+		const decl = ts.isBindingElement(declaration)
+			? getBindingRootDeclaration(ts, declaration) ?? declaration
+			: declaration;
 
 		if (ts.isVariableDeclaration(decl))
 		{
@@ -1297,7 +1586,7 @@ class SymbolCollector
 				}
 			}
 
-			ts.forEachChild(node, visit);
+			node.forEachChild(visit);
 		};
 
 		visit(decl);
@@ -1320,7 +1609,7 @@ class SymbolCollector
 	#tryCollectReferencedName(node: ts.EntityName | ts.Identifier): void
 	{
 		const ts = this.#ts;
-		const symbol = this.#checker.getSymbolAtLocation(node);
+		const symbol = this.#getSymbolAtLocation(node);
 		if (!symbol)
 		{
 			return;
@@ -1345,24 +1634,24 @@ class SymbolCollector
 			return;
 		}
 
-		const declarations = resolved.getDeclarations() ?? [];
+		const declarations = getDeclarations(resolved);
 		if (declarations.length === 0)
 		{
 			if (nodeName)
 			{
-				this.#collectBuiltinAlias(symbol, nodeName, node);
+				this.#collectTypeAlias(symbol, nodeName, node);
 			}
 
 			return;
 		}
 
-		const isBuiltin = declarations.some((d) => isBuiltinLibFile(d.getSourceFile()));
+		const isBuiltin = declarations.some((d) => this.#isBuiltinLibFile(d.getSourceFile()));
 
 		if (isBuiltin)
 		{
 			if (nodeName && symbol.name !== resolved.name)
 			{
-				this.#collectBuiltinAlias(symbol, nodeName, node);
+				this.#collectTypeAlias(symbol, nodeName, node);
 			}
 
 			return;
@@ -1396,10 +1685,23 @@ class SymbolCollector
 			return;
 		}
 
+		if (!this.#canCopyDeclarations(declarations))
+		{
+			return;
+		}
+
 		const name = this.#extractDeclarationName(resolved, declarations);
 		if (!name)
 		{
 			return;
+		}
+
+		// A type re-exported under another name (`export type { User as ImModelUser }`) is copied
+		// under its own name, so the name the reference uses becomes an alias of the copy.
+		const isType = declarations.every((d) => ts.isInterfaceDeclaration(d) || ts.isTypeAliasDeclaration(d));
+		if (nodeName && nodeName !== name && isType)
+		{
+			this.#collectTypeAlias(symbol, nodeName, node);
 		}
 
 		const key = `${name}:${getSymbolKey(resolved)}`;
@@ -1424,7 +1726,7 @@ class SymbolCollector
 		this.#visitingSymbols.delete(resolved);
 	}
 
-	#tryRegisterNpmPackage(symbol: ts.Symbol, resolved: ts.Symbol, nodeName: string, declarations: readonly ts.Declaration[]): void
+	#tryRegisterNpmPackage(symbol: TypeScriptSymbol, resolved: TypeScriptSymbol, nodeName: string, declarations: readonly ts.Declaration[]): void
 	{
 		if (!this.#options.extensionName) return;
 
@@ -1467,7 +1769,7 @@ class SymbolCollector
 		for (const decl of declarations)
 		{
 			const src = decl.getSourceFile();
-			if (isBuiltinLibFile(src)) continue;
+			if (this.#isBuiltinLibFile(src)) continue;
 
 			const match = /node_modules[\\/]((?:@[^\\/]+[\\/])?[^\\/]+)[\\/]/.exec(src.fileName);
 			if (match)
@@ -1494,10 +1796,10 @@ class SymbolCollector
 		return buffer;
 	}
 
-	#inlineNpmDeclarations(symbol: ts.Symbol, buffer: NpmPackageBuffer, publicName: string): void
+	#inlineNpmDeclarations(symbol: TypeScriptSymbol, buffer: NpmPackageBuffer, publicName: string): void
 	{
 		const ts = this.#ts;
-		const declarations = symbol.getDeclarations() ?? [];
+		const declarations = getDeclarations(symbol);
 		if (declarations.length === 0) return;
 
 		const key = `${publicName}:${getSymbolKey(symbol)}`;
@@ -1597,7 +1899,7 @@ class SymbolCollector
 				this.#tryInlineReferencedNpmSymbol(node.expression, buffer);
 			}
 
-			ts.forEachChild(node, visit);
+			node.forEachChild(visit);
 		};
 
 		visit(decl);
@@ -1606,14 +1908,14 @@ class SymbolCollector
 	#tryInlineReferencedNpmSymbol(node: ts.Identifier, buffer: NpmPackageBuffer): void
 	{
 		const ts = this.#ts;
-		const symbol = this.#checker.getSymbolAtLocation(node);
+		const symbol = this.#getSymbolAtLocation(node);
 		if (!symbol) return;
 
 		const resolved = this.#resolveAliasDeep(symbol) ?? symbol;
-		const declarations = resolved.getDeclarations() ?? [];
+		const declarations = getDeclarations(resolved);
 		if (declarations.length === 0) return;
 
-		const isBuiltin = declarations.some((d) => isBuiltinLibFile(d.getSourceFile()));
+		const isBuiltin = declarations.some((d) => this.#isBuiltinLibFile(d.getSourceFile()));
 		if (isBuiltin) return;
 
 		// Only inline if symbol lives in node_modules (even across packages — we duplicate everything).
@@ -1624,7 +1926,7 @@ class SymbolCollector
 		this.#inlineNpmDeclarations(resolved, buffer, name);
 	}
 
-	#tryRegisterSiblingExtension(symbol: ts.Symbol): boolean
+	#tryRegisterSiblingExtension(symbol: TypeScriptSymbol): boolean
 	{
 		const ts = this.#ts;
 
@@ -1633,8 +1935,8 @@ class SymbolCollector
 			return false;
 		}
 
-		const decls = symbol.getDeclarations();
-		if (!decls || decls.length === 0) return false;
+		const decls = getDeclarations(symbol);
+		if (decls.length === 0) return false;
 
 		for (const decl of decls)
 		{
@@ -1682,7 +1984,7 @@ class SymbolCollector
 		const mapped = paths[siblingName];
 		if (!mapped || mapped.length === 0) return null;
 
-		const baseUrl = this.#options.tsconfigBaseUrl ?? this.#options.packageRoot;
+		const baseUrl = this.#options.packageRoot;
 		const ts = this.#ts;
 
 		for (const p of mapped)
@@ -1699,7 +2001,7 @@ class SymbolCollector
 			{
 				const text = fs.readFileSync(absolute, 'utf-8');
 
-				return ts.createSourceFile(absolute, text, ts.ScriptTarget.ESNext, true, ts.ScriptKind.TS);
+				return this.#parseStandaloneSourceFile(absolute, text, this.#ts.ScriptKind.TS);
 			}
 		}
 
@@ -1766,16 +2068,7 @@ class SymbolCollector
 
 	#resolveModuleFromFile(moduleSpecifier: string, containingFile: string): string | null
 	{
-		const ts = this.#ts;
-		const compilerOptions = this.#program.getCompilerOptions();
-
-		const result = ts.resolveModuleName(
-			moduleSpecifier,
-			containingFile,
-			compilerOptions,
-			ts.sys,
-		);
-
+		const result = this.#getModuleResolver().resolveModuleName(moduleSpecifier, path.dirname(containingFile));
 		const fileName = result.resolvedModule?.resolvedFileName;
 		if (!fileName) return null;
 
@@ -1798,10 +2091,10 @@ class SymbolCollector
 
 		const text = fs.readFileSync(fileName, 'utf-8');
 		const scriptKind = fileName.endsWith('.d.ts') || fileName.endsWith('.ts')
-			? ts.ScriptKind.TS
-			: ts.ScriptKind.JS;
+			? this.#ts.ScriptKind.TS
+			: this.#ts.ScriptKind.JS;
 
-		return ts.createSourceFile(fileName, text, ts.ScriptTarget.ESNext, true, scriptKind);
+		return this.#parseStandaloneSourceFile(fileName, text, scriptKind);
 	}
 
 	#findSiblingOwnerForPackage(pkgName: string): { siblingName: string; namespace: string } | null
@@ -1880,7 +2173,7 @@ class SymbolCollector
 		const paths = this.#options.tsconfigPaths;
 		if (!paths) return null;
 
-		const baseUrl = this.#options.tsconfigBaseUrl ?? this.#options.packageRoot;
+		const baseUrl = this.#options.packageRoot;
 		const targetDir = path.dirname(targetFile);
 
 		for (const extensionName of Object.keys(paths))
@@ -1922,6 +2215,14 @@ class SymbolCollector
 	{
 		const ts = this.#ts;
 		const entryDir = path.dirname(entry.fileName);
+
+		// The target is the entry itself, which exports the symbol directly under this name.
+		const entryStem = stripKnownExtension(entry.fileName);
+		const targetStem = stripKnownExtension(targetFile);
+		if (entryStem === targetStem || entryStem === path.join(targetStem, 'index'))
+		{
+			return qualifierText === 'default' ? null : qualifierText;
+		}
 
 		const resolvesToTarget = (specifier: string): boolean => {
 			if (!specifier.startsWith('.')) return false;
@@ -1994,7 +2295,7 @@ class SymbolCollector
 		return null;
 	}
 
-	#collectBuiltinAlias(originalSymbol: ts.Symbol, aliasName: string, referenceNode: ts.Node): void
+	#collectTypeAlias(originalSymbol: TypeScriptSymbol, aliasName: string, referenceNode: ts.Node): void
 	{
 		const ts = this.#ts;
 
@@ -2020,7 +2321,7 @@ class SymbolCollector
 			return;
 		}
 
-		const key = `${aliasName}:builtin:${targetName}`;
+		const key = `${aliasName}:alias:${targetName}`;
 		if (this.#seen.has(key))
 		{
 			return;
@@ -2036,7 +2337,7 @@ class SymbolCollector
 		this.#result.push({ text, name: aliasName, kind: 'type' });
 	}
 
-	#extractDeclarationName(symbol: ts.Symbol, declarations: readonly ts.Declaration[]): string | null
+	#extractDeclarationName(symbol: TypeScriptSymbol, declarations: readonly ts.Declaration[]): string | null
 	{
 		const ts = this.#ts;
 
@@ -2065,13 +2366,13 @@ class SymbolCollector
 		return null;
 	}
 
-	#resolveAliasDeep(symbol: ts.Symbol): ts.Symbol | null
+	#resolveAliasDeep(symbol: TypeScriptSymbol): TypeScriptSymbol | null
 	{
 		const ts = this.#ts;
 		const SymbolFlags = ts.SymbolFlags;
 
-		let current: ts.Symbol | undefined = symbol;
-		const seen = new Set<ts.Symbol>();
+		let current: TypeScriptSymbol | undefined = symbol;
+		const seen = new Set<TypeScriptSymbol>();
 
 		while (current && (current.flags & SymbolFlags.Alias) !== 0)
 		{
@@ -2095,7 +2396,7 @@ class SymbolCollector
 	}
 }
 
-function splitMembers(tsModule: typeof ts, members: CollectedMember[], npmModules: NpmModule[]): DeclarationBundle
+function splitMembers(members: CollectedMember[], npmModules: NpmModule[]): DeclarationBundle
 {
 	const topLevelMembers: DeclarationMember[] = [];
 	const namespaceMembers: DeclarationMember[] = [];
@@ -2118,7 +2419,6 @@ function splitMembers(tsModule: typeof ts, members: CollectedMember[], npmModule
 	}
 
 	return {
-		ts: tsModule,
 		topLevelMembers,
 		namespaceMembers,
 		namespaceMemberNames,
@@ -2137,7 +2437,7 @@ function renderDeclaration(
 	const sourceFile = statement.getSourceFile();
 	const source = sourceFile.text;
 
-	const jsdocStart = findJsDocStart(tsModule, statement);
+	const jsdocStart = findJsDocStart(statement);
 	const start = jsdocStart ?? statement.getStart(sourceFile, false);
 	const end = statement.getEnd();
 
@@ -2244,16 +2544,13 @@ function stripLeadingKeywordsAfterJsdoc(text: string): string
 	return text.slice(0, jsdocEnd) + rest;
 }
 
-function findJsDocStart(tsModule: typeof ts, node: ts.Node): number | null
+function findJsDocStart(node: ts.Node): number | null
 {
-	const nodeWithJsdoc = node as unknown as { jsDoc?: ts.JSDoc[] };
-	const jsdocs = nodeWithJsdoc.jsDoc;
+	const jsdocs = node.jsDoc;
 	if (jsdocs && jsdocs.length > 0)
 	{
 		return jsdocs[0].getStart(node.getSourceFile(), false);
 	}
-
-	void tsModule;
 
 	return null;
 }
@@ -2279,9 +2576,16 @@ interface EmitResult
 {
 	declarations: Map<string, string>;
 	sourceImports: Set<string>;
-	commonSourceDirectory: string;
 	/** Maps original .ts source file path → emitted .d.ts path inside `declarations`. */
 	sourceToDts: Map<string, string>;
+	/** Maps every emitted .d.ts back to the source it was emitted from. */
+	declarationSources: Map<string, string>;
+	/** Sources that end up in this extension's own bundle. */
+	bundleSources: Set<string>;
+	/** Emitted .d.ts of the extension entry, or null when TS produced none. */
+	entryDtsPath: string | null;
+	/** npm imports redirected from plain `.js` to the package typings; reused by the dts program. */
+	npmTypesResolutions: ModuleResolutionEntry[];
 	diagnostics: DeclarationDiagnostic[];
 }
 
@@ -2329,10 +2633,11 @@ interface InlinedSiblingMatch
 	symbolName: string;
 }
 
-async function emitSourceDeclarations(
-	tsModule: typeof ts,
+function emitSourceDeclarations(
+	api: API,
+	tsModule: TypeScript,
 	options: DeclarationBundleOptions,
-): Promise<EmitResult | null>
+): EmitResult | null
 {
 	const { packageRoot, compilerOptions: externalOptions } = options;
 	const sourceDir = path.join(packageRoot, 'src');
@@ -2350,7 +2655,7 @@ async function emitSourceDeclarations(
 		return null;
 	}
 
-	const compilerOptions: ts.CompilerOptions = {
+	const compilerOptions: CompilerOptions = {
 		...externalOptions,
 		target: tsModule.ScriptTarget.ESNext,
 		module: tsModule.ModuleKind.ESNext,
@@ -2373,8 +2678,8 @@ async function emitSourceDeclarations(
 		// `import` paths inside emitted .d.ts consistent with the source tree.
 		//
 		// `outDir` is virtual: TS uses it only to compute output paths it passes
-		// to `host.writeFile`, which we override to capture into an in-memory
-		// Map below. Nothing is written to disk here — the user's actual
+		// to the emitted files, which
+		// `emitToString` hands back in memory. Nothing is written to disk here — the user's actual
 		// `bundle.config.output` is honoured separately by the `DeclarationEmitter`
 		// facade, which writes the final bundled .d.ts next to the .js bundle.
 		// `<packageRoot>/dist` is just a stable virtual namespace.
@@ -2382,101 +2687,155 @@ async function emitSourceDeclarations(
 		noEmitOnError: false,
 	};
 
-	const host = tsModule.createCompilerHost(compilerOptions, true);
-	const declarations = new Map<string, string>();
+	let program = api.createProgram(rootNames, compilerOptions);
+	let moduleResolver: ModuleResolver | null = null;
 
-	host.writeFile = (fileName: string, text: string) => {
-		if (fileName.endsWith('.d.ts'))
+	try
+	{
+		// Collect module specifiers from source files so we know about sibling imports,
+		// even when TS strips them during declaration emit.
+		const sourceImports = new Set<string>();
+		const npmImports: Array<{ moduleName: string; containingDirectory: string }> = [];
+		for (const rootName of rootNames)
 		{
-			declarations.set(path.normalize(fileName), text);
-		}
-	};
-
-	host.resolveModuleNameLiterals = (moduleLiterals, containingFile) => {
-		return moduleLiterals.map((literal) => {
-			const moduleName = literal.text;
-			const resolution = tsModule.resolveModuleName(moduleName, containingFile, compilerOptions, host);
-			const resolved = resolution.resolvedModule;
-
-			if (!resolved) return { resolvedModule: undefined };
-
-			if (resolved.extension === tsModule.Extension.Js && resolved.isExternalLibraryImport)
+			const src = program.getSourceFile(rootName);
+			if (!src) continue;
+			for (const stmt of src.statements)
 			{
-				const patched = resolveNpmTypesFallback(tsModule, resolved.resolvedFileName, resolved.packageId?.name);
-				if (patched)
+				const spec = getTopLevelModuleSpecifier(tsModule, stmt);
+				if (!spec) continue;
+
+				sourceImports.add(spec);
+				if (!spec.startsWith('.') && !compilerOptions.paths?.[spec])
 				{
-					return {
-						resolvedModule: {
-							...resolved,
-							resolvedFileName: patched,
-							extension: tsModule.Extension.Dts,
-						},
-					};
+					npmImports.push({ moduleName: spec, containingDirectory: path.dirname(rootName) });
 				}
 			}
+		}
 
-			return { resolvedModule: resolved };
-		});
-	};
-
-	const program = tsModule.createProgram(rootNames, compilerOptions, host);
-	const emitResult = program.emit();
-
-	const ownSourceFiles = new Set(rootNames.map((name) => path.normalize(name)));
-	const diagnostics = collectOwnDiagnostics(tsModule, program, emitResult, ownSourceFiles);
-
-	// Collect module specifiers from source files so we know about sibling imports,
-	// even when TS strips them during declaration emit.
-	const sourceImports = new Set<string>();
-	for (const rootName of rootNames)
-	{
-		const src = program.getSourceFile(rootName);
-		if (!src) continue;
-		for (const stmt of src.statements)
+		// Rare case: an npm import resolves to plain `.js`. The program is rebuilt with those
+		// imports pinned to the package typings.
+		const npmTypesResolutions = collectNpmTypesResolutions(api, compilerOptions, npmImports);
+		if (npmTypesResolutions.length > 0)
 		{
-			const spec = getTopLevelModuleSpecifier(tsModule, stmt);
-			if (spec) sourceImports.add(spec);
+			program.dispose();
+			moduleResolver = api.createModuleResolver(compilerOptions, {
+				moduleResolutions: { fallback: 'resolve', entries: npmTypesResolutions },
+			});
+			program = api.createProgram(rootNames, compilerOptions, { moduleResolver });
+		}
+
+		const output = program.emitToString(tsModule.EmitOnly.OnlyDts);
+
+		const declarations = new Map<string, string>();
+		const dtsBySource = new Map<string, string>();
+		const declarationSources = new Map<string, string>();
+		for (const [fileName, file] of output.outputFiles)
+		{
+			if (!fileName.endsWith('.d.ts')) continue;
+
+			const dtsPath = path.normalize(fileName);
+			declarations.set(dtsPath, file.text);
+
+			if (file.sourceFileName)
+			{
+				const sourcePath = path.normalize(file.sourceFileName);
+				dtsBySource.set(sourcePath, dtsPath);
+				declarationSources.set(dtsPath, sourcePath);
+			}
+		}
+
+		// The dts program resolves `import` paths written relative to the original .ts source
+		// location through this mapping; declarations emitted for .js sources are not needed there.
+		const sourceToDts = new Map<string, string>();
+		for (const [sourcePath, dtsPath] of dtsBySource)
+		{
+			if (/\.(?:tsx?|mts|cts)$/.test(sourcePath))
+			{
+				sourceToDts.set(sourcePath, dtsPath);
+			}
+		}
+
+		const ownSourceFiles = new Set(rootNames.map((name) => path.normalize(name)));
+		const diagnostics = collectOwnDiagnostics(tsModule, output.diagnostics, ownSourceFiles);
+
+		if (declarations.size === 0 && diagnostics.length === 0)
+		{
+			return null;
+		}
+
+		const entryDtsPath = findEntryDeclarationPath(options.input, packageRoot, dtsBySource, declarations);
+
+		const bundleSources = collectBundleSources(tsModule, program, rootNames);
+
+		return {
+			declarations,
+			sourceImports,
+			sourceToDts,
+			declarationSources,
+			bundleSources,
+			entryDtsPath,
+			npmTypesResolutions,
+			diagnostics,
+		};
+	}
+	finally
+	{
+		program.dispose();
+		moduleResolver?.dispose();
+	}
+}
+
+/**
+ * Sources that end up in the extension's own bundle: its root files plus everything they reach
+ * through relative imports, as the bundler does. Files reached only through an alias
+ * (`main.core`) belong to other extensions, even though their declarations are emitted too.
+ */
+function collectBundleSources(tsModule: TypeScript, program: Program, rootNames: string[]): Set<string>
+{
+	const programFiles = new Set(program.getSourceFileNames().map((fileName) => path.normalize(fileName)));
+	const bundleSources = new Set<string>();
+	const queue = rootNames.map((fileName) => path.normalize(fileName));
+
+	while (queue.length > 0)
+	{
+		const fileName = queue.pop()!;
+		if (bundleSources.has(fileName)) continue;
+		bundleSources.add(fileName);
+
+		const sourceFile = program.getSourceFile(fileName);
+		if (!sourceFile) continue;
+
+		for (const statement of sourceFile.statements)
+		{
+			const specifier = getTopLevelModuleSpecifier(tsModule, statement);
+			if (!specifier?.startsWith('.')) continue;
+
+			const target = resolveRelativeProgramFile(path.dirname(fileName), specifier, programFiles);
+			if (target && !bundleSources.has(target))
+			{
+				queue.push(target);
+			}
 		}
 	}
 
-	// `getCommonSourceDirectory` is internal API, not on the public Program type.
-	const commonSourceDirectory = (program as unknown as { getCommonSourceDirectory(): string })
-		.getCommonSourceDirectory();
+	return bundleSources;
+}
 
-	// Build source-to-dts mapping: for each input .ts file, compute where TS would emit
-	// the corresponding .d.ts. This lets the secondary dts program resolve `import`
-	// paths that are written relative to the original source location.
-	const sourceToDts = new Map<string, string>();
-	for (const sourceFile of program.getSourceFiles())
-	{
-		if (sourceFile.isDeclarationFile) continue;
-		const fileName = sourceFile.fileName;
-		if (!fileName.endsWith('.ts') && !fileName.endsWith('.tsx') && !fileName.endsWith('.mts') && !fileName.endsWith('.cts')) continue;
+function resolveRelativeProgramFile(directory: string, specifier: string, programFiles: Set<string>): string | null
+{
+	const base = stripKnownExtension(path.resolve(directory, specifier));
+	const candidates = [
+		...KNOWN_MODULE_EXTENSIONS.map((extension) => base + extension),
+		...KNOWN_MODULE_EXTENSIONS.map((extension) => path.join(base, `index${extension}`)),
+	];
 
-		const relative = path.relative(commonSourceDirectory, fileName);
-		if (relative.startsWith('..')) continue;
-
-		const dtsRelative = relative.replace(/\.(?:tsx?|mts|cts)$/, '.d.ts');
-		const dtsPath = path.normalize(path.join(compilerOptions.outDir!, dtsRelative));
-
-		if (declarations.has(dtsPath))
-		{
-			sourceToDts.set(path.normalize(fileName), dtsPath);
-		}
-	}
-
-	if (declarations.size === 0 && diagnostics.length === 0)
-	{
-		return null;
-	}
-
-	return { declarations, sourceImports, commonSourceDirectory, sourceToDts, diagnostics };
+	return candidates.find((candidate) => programFiles.has(candidate)) ?? null;
 }
 
 function collectOwnDiagnostics(
-	tsModule: typeof ts,
-	_program: ts.Program,
-	emitResult: ts.EmitResult,
+	tsModule: TypeScript,
+	emitDiagnostics: readonly Diagnostic[],
 	ownSourceFiles: Set<string>,
 ): DeclarationDiagnostic[]
 {
@@ -2488,18 +2847,17 @@ function collectOwnDiagnostics(
 	// Pre-emit / typecheck errors are surfaced through `chef typecheck` instead, and
 	// pulling them in here would turn every legacy type error in the project into a build
 	// warning.
-	for (const diagnostic of emitResult.diagnostics)
+	for (const diagnostic of emitDiagnostics)
 	{
-		const file = diagnostic.file;
-		if (!file) continue;
-		if (!ownSourceFiles.has(path.normalize(file.fileName))) continue;
+		const fileName = diagnostic.fileName;
+		if (!fileName) continue;
+		if (!ownSourceFiles.has(path.normalize(fileName))) continue;
 
-		const start = diagnostic.start ?? 0;
-		const { line, character } = file.getLineAndCharacterOfPosition(start);
-		const message = tsModule.flattenDiagnosticMessageText(diagnostic.messageText, '\n');
+		const { line, character } = diagnostic.startPosition ?? { line: 0, character: 0 };
+		const message = flattenDiagnosticText(diagnostic);
 		const severity = diagnostic.category === tsModule.DiagnosticCategory.Error ? 'error' : 'warning';
 
-		const key = `${file.fileName}:${line}:${character}:${diagnostic.code}:${message}`;
+		const key = `${fileName}:${line}:${character}:${diagnostic.code}:${message}`;
 		if (seen.has(key)) continue;
 		seen.add(key);
 
@@ -2507,7 +2865,7 @@ function collectOwnDiagnostics(
 			code: diagnostic.code,
 			message,
 			severity,
-			file: file.fileName,
+			file: fileName,
 			line: line + 1,
 			column: character + 1,
 		});
@@ -2516,7 +2874,54 @@ function collectOwnDiagnostics(
 	return result;
 }
 
-function resolveNpmTypesFallback(tsModule: typeof ts, jsFilePath: string, packageName: string | undefined): string | null
+/**
+ * Pins npm imports that standard resolution maps to plain `.js` (typically a subpath exported
+ * without a `types` condition, like `vue/dist/*`) to the `.d.ts` the package ships.
+ *
+ * The pins are computed up front instead of in a resolution callback: the compiler resolves
+ * modules in parallel, and calling back into the API from inside such a callback is not safe.
+ */
+function collectNpmTypesResolutions(
+	api: API,
+	compilerOptions: CompilerOptions,
+	imports: Array<{ moduleName: string; containingDirectory: string }>,
+): ModuleResolutionEntry[]
+{
+	if (imports.length === 0)
+	{
+		return [];
+	}
+
+	const resolver = api.createModuleResolver(compilerOptions);
+	const entries: ModuleResolutionEntry[] = [];
+	const seen = new Set<string>();
+
+	try
+	{
+		for (const { moduleName, containingDirectory } of imports)
+		{
+			if (seen.has(moduleName)) continue;
+			seen.add(moduleName);
+
+			const resolved = resolver.resolveModuleName(moduleName, containingDirectory).resolvedModule;
+			if (!resolved || resolved.extension !== '.js' || !resolved.isExternalLibraryImport) continue;
+
+			const patched = resolveNpmTypesFallback(resolved.resolvedFileName, resolved.packageId?.name);
+			if (patched)
+			{
+				entries.push({ moduleName, result: { resolvedFileName: patched, packageId: resolved.packageId } });
+			}
+		}
+	}
+	finally
+	{
+		resolver.dispose();
+	}
+
+	return entries;
+}
+
+function resolveNpmTypesFallback(jsFilePath: string, packageName: string | undefined): string | null
 {
 	const candidates = [
 		jsFilePath.replace(/\.js$/, '.d.ts'),
@@ -2564,31 +2969,26 @@ function resolveNpmTypesFallback(tsModule: typeof ts, jsFilePath: string, packag
 		dir = path.dirname(dir);
 	}
 
-	void tsModule;
-
 	return null;
 }
 
 function findEntryDeclarationPath(
 	input: string,
 	packageRoot: string,
-	commonSourceDirectory: string,
+	dtsBySource: Map<string, string>,
 	declarations: Map<string, string>,
 ): string | null
 {
 	const outDir = path.join(packageRoot, 'dist');
 	const sourceExtRe = /\.(?:tsx?|mts|cts|jsx?|mjs|cjs)$/;
 
-	// TS emits files at `outDir/<path-relative-to-commonSourceDirectory>/<file>.d.ts`.
-	// When `rootDir` is not set, TS infers `commonSourceDirectory` from all input files
-	// (the deepest common ancestor). For `main.core.minimal` whose entry imports from
-	// `../../src/lib/...`, this becomes the parent extension's root, not the minimal's.
-	const relative = path.relative(commonSourceDirectory, input).replace(sourceExtRe, '.d.ts');
-	const expected = path.normalize(path.join(outDir, relative));
-
-	if (declarations.has(expected))
+	// When `rootDir` is not set, TS lays emitted files out relative to the deepest common
+	// ancestor of all inputs. For `main.core.minimal` whose entry imports from `../../src/lib/...`,
+	// that is the parent extension's root, so the path is taken from the emit itself.
+	const emitted = dtsBySource.get(path.normalize(input));
+	if (emitted && declarations.has(emitted))
 	{
-		return expected;
+		return emitted;
 	}
 
 	// Fallback: legacy layout where rootDir was packageRoot.
@@ -2612,14 +3012,25 @@ function findEntryDeclarationPath(
 	return null;
 }
 
-function createDtsProgram(
-	tsModule: typeof ts,
-	declarations: Map<string, string>,
-	_entryPath: string,
-	sourceToDts: Map<string, string>,
-): ts.Program
+interface DtsProgram
 {
-	const compilerOptions: ts.CompilerOptions = {
+	program: Program;
+	dispose(): void;
+}
+
+/**
+ * A program over the declarations emitted in memory. They are served to the compiler as a
+ * filesystem layer on top of the real disk, so npm packages and lib files still resolve.
+ */
+function createDtsProgram(
+	api: API,
+	tsModule: TypeScript,
+	declarations: Map<string, string>,
+	sourceToDts: Map<string, string>,
+	npmTypesResolutions: ModuleResolutionEntry[],
+): DtsProgram
+{
+	const compilerOptions: CompilerOptions = {
 		target: tsModule.ScriptTarget.ESNext,
 		module: tsModule.ModuleKind.ESNext,
 		moduleResolution: tsModule.ModuleResolutionKind.Bundler,
@@ -2632,139 +3043,76 @@ function createDtsProgram(
 		allowImportingTsExtensions: true,
 	};
 
-	const sources = new Map<string, ts.SourceFile>();
-	for (const [fileName, text] of declarations)
-	{
-		const source = tsModule.createSourceFile(
-			fileName,
-			text,
-			tsModule.ScriptTarget.ESNext,
-			true,
-			tsModule.ScriptKind.TS,
-		);
-		sources.set(path.normalize(fileName), source);
-	}
+	const entries = [...npmTypesResolutions, ...collectSourceRelativeResolutions(declarations, sourceToDts)];
+	const moduleResolver = entries.length > 0
+		? api.createModuleResolver(compilerOptions, { moduleResolutions: { fallback: 'resolve', entries } })
+		: null;
 
-	const defaultHost = tsModule.createCompilerHost(compilerOptions, true);
+	const snapshot = api.createSnapshot({
+		fileSystem: tsModule.createFileSystemLayer([...declarations]),
+		createPrograms: [{
+			rootFiles: [...declarations.keys()],
+			compilerOptions,
+			options: moduleResolver ? { moduleResolver } : undefined,
+		}],
+	});
 
-	const host: ts.CompilerHost = {
-		...defaultHost,
-		getSourceFile: (fileName, languageVersion, onError, shouldCreateNewSourceFile) => {
-			const normalized = path.normalize(fileName);
-			if (sources.has(normalized))
-			{
-				return sources.get(normalized);
-			}
-
-			return defaultHost.getSourceFile(fileName, languageVersion, onError, shouldCreateNewSourceFile);
-		},
-		fileExists: (fileName) => {
-			const normalized = path.normalize(fileName);
-			if (sources.has(normalized))
-			{
-				return true;
-			}
-
-			return defaultHost.fileExists(fileName);
-		},
-		readFile: (fileName) => {
-			const normalized = path.normalize(fileName);
-			const source = sources.get(normalized);
-			if (source)
-			{
-				return source.text;
-			}
-
-			return defaultHost.readFile(fileName);
-		},
-		writeFile: () => {},
-		resolveModuleNameLiterals: (moduleLiterals, containingFile) => {
-			return moduleLiterals.map((literal) => {
-				const moduleName = literal.text;
-				if (!moduleName.startsWith('.'))
-				{
-					const fallback = tsModule.resolveModuleName(
-						moduleName,
-						containingFile,
-						compilerOptions,
-						defaultHost,
-					);
-					const resolved = fallback.resolvedModule;
-
-					if (resolved && resolved.extension === tsModule.Extension.Js && resolved.isExternalLibraryImport)
-					{
-						const patched = resolveNpmTypesFallback(tsModule, resolved.resolvedFileName, resolved.packageId?.name);
-						if (patched)
-						{
-							return {
-								resolvedModule: {
-									...resolved,
-									resolvedFileName: patched,
-									extension: tsModule.Extension.Dts,
-								},
-							};
-						}
-					}
-
-					return { resolvedModule: resolved };
-				}
-
-				const containingDir = path.dirname(containingFile);
-				const baseResolved = path.resolve(containingDir, moduleName);
-
-				const candidates = [
-					baseResolved + '.d.ts',
-					baseResolved + '.ts',
-					path.join(baseResolved, 'index.d.ts'),
-					path.join(baseResolved, 'index.ts'),
-				];
-
-				// First pass: direct lookup in our in-memory dts map.
-				for (const candidate of candidates)
-				{
-					const normalized = path.normalize(candidate);
-					if (sources.has(normalized))
-					{
-						return {
-							resolvedModule: {
-								resolvedFileName: normalized,
-								extension: tsModule.Extension.Dts,
-								isExternalLibraryImport: false,
-							},
-						};
-					}
-				}
-
-				// Second pass: the path the import is written against may correspond
-				// to the *original* source location (TS emits relative paths from the
-				// source file's perspective). Check if any candidate maps via
-				// sourceToDts to an emitted .d.ts that we have in memory.
-				for (const candidate of candidates)
-				{
-					const normalized = path.normalize(candidate);
-					const dtsPath = sourceToDts.get(normalized);
-					if (dtsPath && sources.has(dtsPath))
-					{
-						return {
-							resolvedModule: {
-								resolvedFileName: dtsPath,
-								extension: tsModule.Extension.Dts,
-								isExternalLibraryImport: false,
-							},
-						};
-					}
-				}
-
-				return { resolvedModule: undefined };
-			});
+	return {
+		program: snapshot.operation.createdPrograms[0],
+		dispose: () => {
+			snapshot.dispose();
+			moduleResolver?.dispose();
 		},
 	};
+}
 
-	return tsModule.createProgram({
-		rootNames: [...sources.keys()],
-		options: compilerOptions,
-		host,
-	});
+const RELATIVE_SPECIFIER_PATTERN = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(['"])(\.\.?(?:\/[^'"]*)?)\1/g;
+
+/**
+ * Relative imports inside the emitted declarations resolve against the in-memory files by
+ * standard resolution. The exception is a path TS wrote relative to the *original* source
+ * location; it is mapped to the emitted .d.ts of that source through `sourceToDts`.
+ */
+function collectSourceRelativeResolutions(
+	declarations: Map<string, string>,
+	sourceToDts: Map<string, string>,
+): ModuleResolutionEntry[]
+{
+	const entries: ModuleResolutionEntry[] = [];
+
+	for (const [fileName, text] of declarations)
+	{
+		const containingDirectory = path.dirname(fileName);
+		const seen = new Set<string>();
+
+		for (const match of text.matchAll(RELATIVE_SPECIFIER_PATTERN))
+		{
+			const moduleName = match[2];
+			if (seen.has(moduleName)) continue;
+			seen.add(moduleName);
+
+			const baseResolved = path.resolve(containingDirectory, moduleName);
+			const candidates = [
+				baseResolved + '.d.ts',
+				baseResolved + '.ts',
+				path.join(baseResolved, 'index.d.ts'),
+				path.join(baseResolved, 'index.ts'),
+			].map((candidate) => path.normalize(candidate));
+
+			if (candidates.some((candidate) => declarations.has(candidate))) continue;
+
+			const dtsPath = candidates
+				.map((candidate) => sourceToDts.get(candidate))
+				.find((mapped) => mapped && declarations.has(mapped));
+
+			if (dtsPath)
+			{
+				entries.push({ moduleName, containingDirectory, result: { resolvedFileName: dtsPath } });
+			}
+		}
+	}
+
+	return entries;
 }
 
 function collectSourceFiles(directory: string, extensions: string[]): string[]
@@ -2786,16 +3134,6 @@ function collectSourceFiles(directory: string, extensions: string[]): string[]
 	}
 
 	return files;
-}
-
-function isBuiltinLibFile(src: ts.SourceFile): boolean
-{
-	if (src.hasNoDefaultLib) return true;
-
-	const fileName = src.fileName;
-
-	return fileName.includes('typescript/lib/lib.')
-		|| fileName.includes('node_modules/@types/node/');
 }
 
 const EXTENSION_NAME_PATTERN = /^[a-zA-Z0-9_-]+(\.[a-zA-Z0-9_-]+)+$/;
@@ -2835,18 +3173,9 @@ function isSiblingExtensionName(name: string): boolean
 	return EXTENSION_NAME_PATTERN.test(name);
 }
 
+const BUNDLE_CONFIG_FILES = ['bundle.config.js', 'bundle.config.ts'];
+
 const KNOWN_MODULE_EXTENSIONS = ['.d.ts', '.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'];
-
-/**
- * Whether `filePath` lives inside `dir` — used to tell a type reaching this extension's own
- * sources apart from one reaching another extension.
- */
-export function isInsideDirectory(filePath: string, dir: string): boolean
-{
-	const relative = path.relative(dir, filePath);
-
-	return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
-}
 
 /**
  * Whether two directories share a prefix deep enough that one could re-export files from
@@ -2877,16 +3206,6 @@ export function sharesDirectoryPrefix(dirA: string, dirB: string): boolean
 
 	// Fallback for non-standard layouts: any non-trivial shared prefix.
 	return common >= 3;
-}
-
-/**
- * A `import("...")` specifier that looks like a file path (`a/b/c`) rather than a package
- * (`main.core.cache`) or a relative import (`./x`). These bare paths are what TS emits for
- * cross-extension types reached through a container.
- */
-export function isBareFilePath(specifier: string): boolean
-{
-	return specifier.includes('/') && !specifier.startsWith('.') && !specifier.startsWith('@');
 }
 
 /**
@@ -2998,6 +3317,43 @@ function inferGenericParams(tsModule: typeof ts, aliasName: string, referenceNod
 	return null;
 }
 
+/**
+ * The variable declaration a (possibly nested) binding element belongs to.
+ */
+function getBindingRootDeclaration(tsModule: typeof ts, element: ts.BindingElement): ts.VariableDeclaration | null
+{
+	let current: ts.Node = element.parent;
+
+	while (tsModule.isObjectBindingPattern(current) || tsModule.isArrayBindingPattern(current) || tsModule.isBindingElement(current))
+	{
+		current = current.parent;
+	}
+
+	return tsModule.isVariableDeclaration(current) ? current : null;
+}
+
+/**
+ * Every identifier a declaration name binds: the name itself, or all names of a destructuring pattern.
+ */
+function getBindingIdentifiers(tsModule: typeof ts, name: ts.BindingName): ts.Identifier[]
+{
+	if (tsModule.isIdentifier(name))
+	{
+		return [name];
+	}
+
+	const identifiers: ts.Identifier[] = [];
+	for (const element of name.elements)
+	{
+		if (tsModule.isBindingElement(element))
+		{
+			identifiers.push(...getBindingIdentifiers(tsModule, element.name));
+		}
+	}
+
+	return identifiers;
+}
+
 function getDeclarationNameNode(tsModule: typeof ts, decl: ts.Declaration): ts.Identifier | null
 {
 	if (tsModule.isClassDeclaration(decl) || tsModule.isFunctionDeclaration(decl))
@@ -3025,9 +3381,9 @@ function getEntityNameLeft(tsModule: typeof ts, name: ts.EntityName): ts.Identif
 	return tsModule.isIdentifier(current) ? current : null;
 }
 
-function getSymbolKey(symbol: ts.Symbol): string
+function getSymbolKey(symbol: TypeScriptSymbol): string
 {
-	const declarations = symbol.getDeclarations() ?? [];
+	const declarations = getDeclarations(symbol);
 	if (declarations.length === 0)
 	{
 		return symbol.name;
@@ -3036,4 +3392,11 @@ function getSymbolKey(symbol: ts.Symbol): string
 	const d = declarations[0];
 
 	return `${d.getSourceFile().fileName}:${d.pos}:${d.end}`;
+}
+
+function getDeclarations(symbol: TypeScriptSymbol): ts.Declaration[]
+{
+	return symbol.declarations
+		.map((handle) => handle.resolve())
+		.filter((declaration) => declaration !== undefined);
 }

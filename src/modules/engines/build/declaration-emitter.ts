@@ -13,7 +13,7 @@ export interface DeclarationEmitOptions
 	extensionName?: string;
 	mode?: DeclarationMode;
 	moduleName?: string;
-	compilerOptions?: import('typescript').CompilerOptions;
+	compilerOptions?: import('typescript/unstable/sync').CompilerOptions;
 }
 
 export class DeclarationEmitter

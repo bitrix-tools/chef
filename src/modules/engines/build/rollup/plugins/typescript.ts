@@ -4,12 +4,13 @@ import fs from 'node:fs';
 import { createFilter } from '@rollup/pluginutils';
 
 import type { Plugin } from 'rollup';
-import type { CompilerOptions, Diagnostic } from 'typescript';
+import type { CompilerOptions, Diagnostic } from 'typescript/unstable/sync';
 import type { BuildDiagnostic } from '../../build-types';
 
 import { CF } from '../../../../../diagnostics/diagnostic-codes';
 import { createPathFilter } from '../../../../../utils/create-path-filter';
 import { normalizePath } from '../../../../../utils/path/normalize';
+import { flattenDiagnosticText, getTypeScriptApi } from '../../../../../utils/typescript-api';
 
 export interface TypeScriptPluginOptions
 {
@@ -58,8 +59,6 @@ function normalizeIndent(code: string): string
 	});
 }
 
-let oldProgram: import('typescript').Program | undefined;
-
 export async function checkTypes(options: TypeCheckOptions): Promise<TypeCheckResult>
 {
 	const { packageRoot, compilerOptions = {} } = options;
@@ -88,13 +87,18 @@ export async function checkTypes(options: TypeCheckOptions): Promise<TypeCheckRe
 		return { errors: [] };
 	}
 
-	const { default: ts } = await import('typescript');
+	const api = await getTypeScriptApi();
+	const { DiagnosticCategory, ModuleKind, ModuleResolutionKind } = await import('typescript/unstable/sync');
+	const { ScriptTarget } = await import('typescript/unstable/ast');
 
 	const typeCheckCompilerOptions: CompilerOptions = {
+		// TS 6+ reports side-effect imports it cannot resolve (TS2882). Bitrix extensions import
+		// CSS-only extensions this way (`import 'ui.forms'`) and leave them to the bundler.
+		noUncheckedSideEffectImports: false,
 		...compilerOptions,
-		target: ts.ScriptTarget.ESNext,
-		module: ts.ModuleKind.ESNext,
-		moduleResolution: ts.ModuleResolutionKind.Bundler,
+		target: ScriptTarget.ESNext,
+		module: ModuleKind.ESNext,
+		moduleResolution: ModuleResolutionKind.Bundler,
 		allowJs: true,
 		checkJs: false,
 		strict: true,
@@ -104,28 +108,35 @@ export async function checkTypes(options: TypeCheckOptions): Promise<TypeCheckRe
 		declarationMap: false,
 	};
 
-	const host = ts.createCompilerHost(typeCheckCompilerOptions, true);
-	const program = ts.createProgram(rootNames, typeCheckCompilerOptions, host, oldProgram);
-	oldProgram = program;
-
 	const excludePatterns = options.exclude?.map((f) => path.resolve(f)) ?? [];
 	const isExcluded = createPathFilter(excludePatterns);
-
 	const packageRootPosix = normalizePath(packageRoot);
-	const sourceFiles = program.getSourceFiles().filter((file) => {
-		const fileNamePosix = normalizePath(file.fileName);
-		return fileNamePosix.startsWith(packageRootPosix)
-			&& !fileNamePosix.includes('/node_modules/')
-			&& !isExcluded(file.fileName);
-	});
 
+	const program = api.createProgram(rootNames, typeCheckCompilerOptions);
 	const diagnostics: Diagnostic[] = [];
-	for (const sourceFile of sourceFiles)
+
+	try
 	{
-		diagnostics.push(
-			...program.getSyntacticDiagnostics(sourceFile),
-			...program.getSemanticDiagnostics(sourceFile),
-		);
+		const sourceFiles = program.getSourceFileNames().filter((fileName) => {
+			const fileNamePosix = normalizePath(fileName);
+			return fileNamePosix.startsWith(packageRootPosix)
+				&& !fileNamePosix.includes('/node_modules/')
+				&& !isExcluded(fileName);
+		});
+
+		// Only the extension's own files are asked for diagnostics. Dependencies written in Flow
+		// are parsed as `.js` and produce syntax errors that must not leak into the result.
+		for (const sourceFile of sourceFiles)
+		{
+			diagnostics.push(
+				...program.getSyntacticDiagnostics(sourceFile),
+				...program.getSemanticDiagnostics(sourceFile),
+			);
+		}
+	}
+	finally
+	{
+		program.dispose();
 	}
 
 	// TS2304: Cannot find name — expected for global variables from external Bitrix extensions (e.g. BX)
@@ -133,14 +144,14 @@ export async function checkTypes(options: TypeCheckOptions): Promise<TypeCheckRe
 	const filterFiles = options.files?.map((f) => normalizePath(path.resolve(f)));
 
 	const errors = diagnostics.filter((d) => {
-		if (d.category !== ts.DiagnosticCategory.Error || ignoredCodes.has(d.code))
+		if (d.category !== DiagnosticCategory.Error || ignoredCodes.has(d.code) || isUntypedBitrixGlobal(d))
 		{
 			return false;
 		}
 
-		if (filterFiles && d.file)
+		if (filterFiles && d.fileName)
 		{
-			const fileNamePosix = normalizePath(d.file.fileName);
+			const fileNamePosix = normalizePath(d.fileName);
 			return filterFiles.some((f) => fileNamePosix === f);
 		}
 
@@ -153,13 +164,15 @@ export async function checkTypes(options: TypeCheckOptions): Promise<TypeCheckRe
 	}
 
 	return {
-		errors: diagnosticsToErrors(ts, errors),
+		errors: diagnosticsToErrors(errors),
 	};
 }
 
 export default async function typescriptPlugin(options: TypeScriptPluginOptions): Promise<Plugin>
 {
-	const { default: ts } = await import('typescript');
+	const api = await getTypeScriptApi();
+	const { ModuleKind, ModuleResolutionKind } = await import('typescript/unstable/sync');
+	const { ScriptTarget } = await import('typescript/unstable/ast');
 
 	const {
 		packageRoot,
@@ -173,11 +186,15 @@ export default async function typescriptPlugin(options: TypeScriptPluginOptions)
 
 	const filter = createFilter(include, exclude);
 
+	// Every transpile call sends its options to the compiler process. `paths` and `types` do not
+	// affect a single-file transpile, and `paths` holds every alias of the project (thousands of
+	// entries in a large repository), so they are left out.
+	const { paths, types, ...transpileBaseOptions } = compilerOptions;
 	const transpileCompilerOptions: CompilerOptions = {
-		...compilerOptions,
-		target: ts.ScriptTarget.ESNext,
-		module: ts.ModuleKind.ESNext,
-		moduleResolution: ts.ModuleResolutionKind.Bundler,
+		...transpileBaseOptions,
+		target: ScriptTarget.ESNext,
+		module: ModuleKind.ESNext,
+		moduleResolution: ModuleResolutionKind.Bundler,
 		allowJs: true,
 		checkJs: false,
 		strict: true,
@@ -252,7 +269,7 @@ export default async function typescriptPlugin(options: TypeScriptPluginOptions)
 		{
 			if (/\.vue\?.*&lang\.ts/.test(id))
 			{
-				const result = ts.transpileModule(code, {
+				const result = api.transpileModule(code, {
 					compilerOptions: transpileCompilerOptions,
 					fileName: id,
 				});
@@ -275,7 +292,7 @@ export default async function typescriptPlugin(options: TypeScriptPluginOptions)
 				return null;
 			}
 
-			const result = ts.transpileModule(code, {
+			const result = api.transpileModule(code, {
 				compilerOptions: transpileCompilerOptions,
 				fileName: normalizedId,
 			});
@@ -355,23 +372,33 @@ function collectDeclarationFiles(directory: string): string[]
 	return files;
 }
 
-function diagnosticsToErrors(ts: typeof import('typescript'), diagnostics: Diagnostic[]): BuildDiagnostic[]
+/**
+ * The TS2304 case for BX in another form: when some declaration adds types under
+ * `declare global { namespace BX }`, BX becomes a type-only namespace, and using it as a value
+ * reports TS2708 instead of TS2304.
+ */
+function isUntypedBitrixGlobal(diagnostic: Diagnostic): boolean
+{
+	return diagnostic.code === 2708 && diagnostic.text.includes('\'BX\'');
+}
+
+function diagnosticsToErrors(diagnostics: Diagnostic[]): BuildDiagnostic[]
 {
 	return diagnostics.map((diagnostic) => {
-		const message = `TS${diagnostic.code} ${ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')}`;
+		const message = `TS${diagnostic.code} ${flattenDiagnosticText(diagnostic)}`;
 
-		if (!diagnostic.file || diagnostic.start === undefined)
+		if (!diagnostic.fileName || !diagnostic.startPosition)
 		{
 			return { code: CF.TS_TYPE_ERROR, message };
 		}
 
-		const { line, character } = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start);
+		const { line, character } = diagnostic.startPosition;
 
 		return {
 			code: CF.TS_TYPE_ERROR,
 			message,
 			loc: {
-				file: diagnostic.file.fileName,
+				file: diagnostic.fileName,
 				line: line + 1,
 				column: character + 1,
 			},

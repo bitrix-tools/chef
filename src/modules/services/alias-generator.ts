@@ -6,11 +6,13 @@ import { PackageResolver } from '../packages/package-resolver';
 import { findPackages } from '../../utils/package/find-packages';
 import { normalizePath } from '../../utils/path/normalize';
 
-import type { CompilerOptions } from 'typescript';
 import type { BasePackage } from '../packages/base-package';
 
 type TSConfig = {
-	compilerOptions: CompilerOptions;
+	compilerOptions: {
+		types: string[];
+		paths: Record<string, string[]>;
+	};
 };
 
 export type UpdateResult = {
@@ -43,9 +45,10 @@ export class AliasGenerator
 			return '';
 		})();
 
+		// No `baseUrl`: relative `paths` resolve against the directory of this file, and
+		// TypeScript 7 rejects `baseUrl` altogether.
 		const tsconfig: TSConfig = {
 			compilerOptions: {
-				baseUrl: rootPath,
 				types: [typesPath],
 				paths: {},
 			},
@@ -61,7 +64,7 @@ export class AliasGenerator
 
 					const aliasTarget = extension.getTypesPath() ?? extension.getInputPath();
 					const relativePath = normalizePath(path.relative(rootPath, aliasTarget));
-					tsconfig.compilerOptions.paths![extension.getName()] = [`./${relativePath}`];
+					tsconfig.compilerOptions.paths[extension.getName()] = [`./${relativePath}`];
 
 					aliasesCount++;
 					onProgress?.(aliasesCount);

@@ -117,7 +117,7 @@ async function typecheckOne(
 			rootDir: Environment.getRoot() ?? undefined,
 		});
 
-		let compilerOptions: import('typescript').CompilerOptions | undefined;
+		let compilerOptions: import('typescript/unstable/sync').CompilerOptions | undefined;
 		if (typeof tsConfigPath === 'string' && tsConfigPath.length > 0)
 		{
 			const tsConfig = await loadTsConfig(tsConfigPath, packageRoot);

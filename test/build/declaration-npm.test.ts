@@ -6,6 +6,7 @@ import { describe, it, beforeEach, afterEach } from 'mocha';
 import { assert } from 'chai';
 
 import { DeclarationEmitter } from '../../src/modules/engines/build/declaration-emitter';
+import { getSemanticErrors } from '../test-utils/semantic-errors';
 
 let tmpDir: string;
 
@@ -184,15 +185,7 @@ describe('DeclarationEmitter — npm types inline', () => {
 			+ `const http: BX.Http.HttpClient = new BX.Http.HttpClient();\n`
 			+ `const c = http.client.get('url');\n`);
 
-		const ts = await import('typescript');
-		const program = ts.default.createProgram([testFile], {
-			strict: true,
-			noEmit: true,
-			skipLibCheck: true,
-			target: ts.default.ScriptTarget.ESNext,
-			module: ts.default.ModuleKind.ESNext,
-		});
-		const diagnostics = program.getSemanticDiagnostics().map((d) => ts.default.flattenDiagnosticMessageText(d.messageText, '\n'));
+		const diagnostics = await getSemanticErrors([testFile]);
 
 		assert.deepEqual(diagnostics, [], `Type errors in bundle.d.ts:\n${content}\n@ ${dtsFile}`);
 	});

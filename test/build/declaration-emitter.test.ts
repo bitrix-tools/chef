@@ -6,6 +6,7 @@ import { describe, it, beforeEach, afterEach } from 'mocha';
 import { assert } from 'chai';
 
 import { DeclarationEmitter } from '../../src/modules/engines/build/declaration-emitter';
+import { getSemanticErrors } from '../test-utils/semantic-errors';
 
 let tmpDir: string;
 let emitter: DeclarationEmitter;
@@ -59,18 +60,7 @@ async function validateDeclarations(content: string, validationCode: string): Pr
 	fs.writeFileSync(dtsFile, content, 'utf-8');
 	fs.writeFileSync(testFile, `/// <reference path="./bundle.d.ts" />\n${validationCode}`, 'utf-8');
 
-	const ts = await import('typescript');
-	const program = ts.default.createProgram([testFile], {
-		strict: true,
-		noEmit: true,
-		skipLibCheck: true,
-		target: ts.default.ScriptTarget.ESNext,
-		module: ts.default.ModuleKind.ESNext,
-	});
-
-	const diagnostics = program.getSemanticDiagnostics();
-
-	return diagnostics.map((d) => ts.default.flattenDiagnosticMessageText(d.messageText, '\n'));
+	return getSemanticErrors([testFile]);
 }
 
 describe('DeclarationEmitter', () => {
@@ -1769,6 +1759,31 @@ readonly tags?: string[];
 				const job: Job = { name: 'task', priority: 'low' };
 				const proc: BX.Test.Processor = new BX.Test.Processor();
 				proc.run(job);
+			`);
+
+			assert.deepEqual(errors, [], `Type errors in generated .d.ts:\n${content}`);
+		});
+
+		it('should produce valid declarations for a type re-exported under another name', async () => {
+			const content = await emitAndRead({
+				'index.ts': `
+					import type { ModelUser } from './model';
+					export class UserService {
+						get(): ModelUser { return { id: 1 }; }
+					}
+				`,
+				'model.ts': `
+					type User = { id: number };
+					export type { User as ModelUser };
+				`,
+			});
+
+			// The reference keeps the re-exported name, so it must be declared as an alias of the copy.
+			assert.include(content, 'type ModelUser = User;');
+
+			const errors = await validateDeclarations(content, `
+				const service: BX.Test.UserService = new BX.Test.UserService();
+				const user: { id: number } = service.get();
 			`);
 
 			assert.deepEqual(errors, [], `Type errors in generated .d.ts:\n${content}`);

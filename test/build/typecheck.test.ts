@@ -79,6 +79,29 @@ describe('checkTypes', () => {
 		assert.isEmpty(result.errors);
 	});
 
+	it('should ignore value use of BX when a declaration makes it a type-only namespace', async () => {
+		const extensionPath = path.join(fixturesPath, 'ts-type-only-namespace');
+
+		const result = await checkTypes({
+			packageRoot: extensionPath,
+			files: [path.join(extensionPath, 'src/index.ts')],
+		});
+
+		assert.isEmpty(result.errors);
+	});
+
+	it('should report value use of other type-only namespaces', async () => {
+		const extensionPath = path.join(fixturesPath, 'ts-type-only-namespace');
+
+		const result = await checkTypes({
+			packageRoot: extensionPath,
+			files: [path.join(extensionPath, 'src/other.ts')],
+		});
+
+		assert.lengthOf(result.errors, 1);
+		assert.include(result.errors[0].message, 'TS2708');
+	});
+
 	it('should pass compilerOptions through', async () => {
 		const extensionPath = path.join(fixturesPath, 'ts-extension');
 

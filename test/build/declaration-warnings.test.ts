@@ -47,7 +47,7 @@ function createSiblingExtension(params: {
 async function emitConsumer(
 	consumer: { packageRoot: string; input: string },
 	namespace: string,
-	compilerOptions?: import('typescript').CompilerOptions,
+	compilerOptions?: import('typescript/unstable/sync').CompilerOptions,
 ): Promise<{ content: string; outputPath: string; diagnostics: Awaited<ReturnType<DeclarationEmitter['emit']>> }>
 {
 	const outputPath = path.join(consumer.packageRoot, 'dist', 'bundle.d.ts');
