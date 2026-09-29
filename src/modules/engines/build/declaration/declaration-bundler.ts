@@ -521,6 +521,10 @@ class SymbolCollector
 		{
 			if (!sourceFile) continue;
 
+			// An extension importing itself by name (`import { TextEditor } from 'ui.text-editor'`
+			// inside ui.text-editor) cannot inline its own types into itself.
+			if (name === this.#options.extensionName) continue;
+
 			const dtsPath = sourceToDts?.get(path.normalize(sourceFile.fileName));
 			if (!dtsPath) continue;
 
@@ -758,8 +762,10 @@ class SymbolCollector
 
 		// Direct symbol match: works when the literal is e.g. `IconClass` (named class
 		// declaration) — the symbol's declarations point at the sibling .d.ts file.
+		// Anonymous types (`{ ... }` literals, functions) have internal names like `__type`;
+		// there is no name to reference, so they are only matched structurally below.
 		const symbol = type.getAliasSymbol() ?? type.getSymbol();
-		if (symbol)
+		if (symbol && !isInternalSymbolName(this.#ts, symbol.name))
 		{
 			const decls = getDeclarations(symbol);
 			for (const decl of decls)
@@ -3379,6 +3385,11 @@ function getEntityNameLeft(tsModule: typeof ts, name: ts.EntityName): ts.Identif
 	}
 
 	return tsModule.isIdentifier(current) ? current : null;
+}
+
+function isInternalSymbolName(tsModule: typeof ts, name: string): boolean
+{
+	return name.startsWith('__') && Object.values(tsModule.InternalSymbolName).includes(name as ts.InternalSymbolName);
 }
 
 function getSymbolKey(symbol: TypeScriptSymbol): string

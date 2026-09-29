@@ -48,6 +48,7 @@ async function emitConsumer(
 	consumer: { packageRoot: string; input: string },
 	namespace: string,
 	compilerOptions?: import('typescript/unstable/sync').CompilerOptions,
+	extensionName?: string,
 ): Promise<{ content: string; outputPath: string; diagnostics: Awaited<ReturnType<DeclarationEmitter['emit']>> }>
 {
 	const outputPath = path.join(consumer.packageRoot, 'dist', 'bundle.d.ts');
@@ -60,6 +61,7 @@ async function emitConsumer(
 		namespace,
 		outputPath,
 		compilerOptions,
+		extensionName,
 	});
 
 	const content = fs.existsSync(outputPath) ? fs.readFileSync(outputPath, 'utf-8') : '';
@@ -196,6 +198,39 @@ describe('DeclarationEmitter — warnings & diagnostics', () => {
 				},
 			});
 		}
+
+		it('should not treat a self-import as an inlined sibling', async () => {
+			const extension = createSiblingExtension({
+				moduleName: 'ui',
+				extensionName: 'ui.editor',
+				namespace: 'BX.UI.Editor',
+				files: {
+					'src/index.ts': `
+						import { Editor } from './editor';
+						import * as AllCommands from './commands';
+
+						const Commands = { ...AllCommands };
+
+						export { Editor, Commands };
+					`,
+					'src/editor.ts': `
+						export class Editor {}
+					`,
+					'src/commands.ts': `
+						import { type Editor } from 'ui.editor';
+
+						export function bold(editor: Editor): void {}
+					`,
+				},
+			});
+
+			const { diagnostics } = await emitConsumer(extension, 'BX.UI.Editor', {
+				paths: buildSiblingPaths([{ extensionName: 'ui.editor', moduleName: 'ui' }]),
+			}, 'ui.editor');
+
+			const inlineWarnings = diagnostics.filter((d) => d.severity === 'warning' && d.code === 0);
+			assert.deepEqual(inlineWarnings.map((d) => d.message), []);
+		});
 
 		it('should warn on inlined anonymous sibling shape', async () => {
 			createSiblingWithIcons();
