@@ -94,10 +94,16 @@ const run = (cmd: string) => {
 // Rebase before bumping so the version commit lands on top of the latest main.
 run(`git pull --rebase`);
 
-pkg.version = newVersion;
-writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+// Browser data (caniuse-lite) ships with chef and drives targets and autoprefixing. Raising the
+// dependency to the latest data on every release makes updating chef refresh it for users.
+run(`npm install caniuse-lite@latest --save`);
 
-run(`git add package.json`);
+// npm has just rewritten package.json, so the version is bumped on a fresh read.
+const releasePkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+releasePkg.version = newVersion;
+writeFileSync(pkgPath, JSON.stringify(releasePkg, null, 2) + '\n');
+
+run(`git add package.json package-lock.json`);
 run(`git commit -m "release: ${tag}"`);
 run(`git tag ${tag}`);
 run(`git push`);

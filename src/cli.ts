@@ -92,6 +92,10 @@ for (const entry of commandRegistry)
 	program.addCommand(lazyCommand(entry));
 }
 
+// For outdated browser data browserslist suggests `npx update-browserslist-db`, which updates the
+// project, not the copy chef ships. Chef shows its own notice instead (see browser-data-age).
+process.env.BROWSERSLIST_IGNORE_OLD_DATA ??= '1';
+
 checkForUpdates();
 
 program.parseAsync(process.argv);

@@ -10,6 +10,16 @@ By default, Chef targets `baseline widely available` — browsers with [widely a
 2. Otherwise, Chef looks for a `.browserslistrc` file up the directory tree from the extension
 3. If no file is found, the default `baseline widely available` is used
 
+## Browser data
+
+Chef takes browser versions and their support from the [caniuse-lite](https://github.com/browserslist/caniuse-lite) database, which ships with Chef and is refreshed with every Chef release. To get fresh data, update Chef:
+
+```bash
+npm i -g @bitrix/chef
+```
+
+If the database is older than half a year, Chef reminds you after running a command. The browserslist advice `npx update-browserslist-db` does not help here: it updates the database in the current project, not the one shipped with Chef.
+
 ## Custom targets
 
 Specify targets directly in the config:

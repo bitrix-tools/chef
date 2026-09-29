@@ -11,6 +11,7 @@ import { flattenTree } from '../../utils/flatten-tree';
 import { buildDependenciesTree } from '../../utils/package/build-dependencies-tree';
 import { Environment } from '../../environment/environment';
 import { PackageSizeCalculator } from '../services/package-size-calculator';
+import { warnIfBrowserDataIsOutdated } from '../../utils/browser-data-age';
 
 import type { LintResult } from '../engines/lint/lint-types';
 import type { BuildOptions, BuildResult } from '../engines/build/build-types';
@@ -193,6 +194,8 @@ export abstract class BasePackage
 
 	getTargets(): Array<string>
 	{
+		warnIfBrowserDataIsOutdated();
+
 		const bundleConfig = this.getBundleConfig();
 		const value = bundleConfig.get('targets');
 

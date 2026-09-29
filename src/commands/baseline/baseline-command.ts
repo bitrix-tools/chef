@@ -7,6 +7,7 @@ import table from 'text-table';
 import { Command } from 'commander';
 
 import { createPathOption } from '../../shared/options/path-option';
+import { warnIfBrowserDataIsOutdated } from '../../utils/browser-data-age';
 
 const browserLabels: Record<string, string> = {
 	chrome: 'Chrome',
@@ -17,6 +18,8 @@ const browserLabels: Record<string, string> = {
 
 function resolveTargetMins(cwd: string): Record<string, number>
 {
+	warnIfBrowserDataIsOutdated();
+
 	const fileTargets = browserslist.loadConfig({ path: cwd });
 	const query = fileTargets && fileTargets.length > 0
 		? fileTargets
