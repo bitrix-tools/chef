@@ -239,6 +239,27 @@ describe('baseline / ast-walker', () => {
 		});
 	});
 
+	describe('optional chaining', () => {
+		it('reports API usages in arguments of an optional chain', () => {
+			const u = find('service?.run(structuredClone(data));');
+			assert.include(u.map((x) => x.label), 'structuredClone');
+		});
+
+		it('reports optional chaining once per chain', () => {
+			const u = find('const value = config?.options.theme.name;');
+			const chains = u.filter((x) => x.kind === 'syntax' && x.label === 'optional chaining (?.)');
+			assert.lengthOf(chains, 1);
+		});
+	});
+
+	describe('positions', () => {
+		it('reports correct line and column after non-ASCII text', () => {
+			const u = find('// Комментарий по-русски\nconst x = RegExp.escape("y");');
+			assert.equal(u[0].line, 2);
+			assert.equal(u[0].column, 10);
+		});
+	});
+
 	describe('class fields and private methods', () => {
 		it('parses class with private fields', () => {
 			const code = [
