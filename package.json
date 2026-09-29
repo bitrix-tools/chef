@@ -109,5 +109,8 @@
     "test-runner",
     "orchestrator",
     "chef"
-  ]
+  ],
+  "overrides": {
+    "typescript": "$typescript"
+  }
 }
