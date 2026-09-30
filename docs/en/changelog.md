@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.27.0 <Badge type="tip" text="9/30/2026" />
+
+Type checking, TypeScript transpilation and `.d.ts` bundling now run on TypeScript 7.1, the new compiler written in Go. `chef typecheck` is about 3 times faster, and building TypeScript extensions is 1.6–1.9 times faster. TypeScript 7 infers types from JS dependencies more strictly, so some extensions may get new errors: Flow function parameters with a type annotation are now required when called from TypeScript, the JSDoc type `Object` no longer means `any`, and some `@ts-expect-error` directives become unused. An IDE running TypeScript 5 or 6 may report different errors than chef. Uses of the global `BX` — `BX.ready()`, `window.BX`, `globalThis.BX` — are still not reported, even when nothing declares the `BX` value. `chef aliases` no longer writes `baseUrl` to `aliases.tsconfig.json`, since TypeScript 7 does not support it; older files with `baseUrl` are still read as before. False CHEF_DTS warnings about types being inlined into `.d.ts` are gone.
+
+Chef starts about 5 times faster: each command loads only its own dependencies. The Baseline check parses sources with the native Oxc parser and falls back to Babel only when Oxc cannot handle a file.
+
+Browser data (caniuse-lite) now updates with every chef release. Instead of the browserslist warning suggesting `update-browserslist-db`, chef shows its own notice that suggests updating chef itself.
+
+Dependencies are updated to their latest versions within the current major versions, including security fixes for rollup, postcss and svgo.
+
 ## v1.26.0 <Badge type="tip" text="9/28/2026" />
 
 Chef now explains to AI coding agents how to work with it. `chef help agent` prints a Markdown guide: what an extension is and how names work, what chef can do and which aspects of its behavior matter, plus every command with its options, the error codes and the documentation index. The guide imposes no working rules — those are up to the project, in its own instructions and in `chef.config`. Commands, options and error codes are generated from chef itself, so the guide always matches the installed version. The English documentation now ships inside the npm package, and the guide points to its files, so the agent needs no internet access. `chef init agents` adds a short block to the project's `AGENTS.md` (and to an existing `CLAUDE.md`) that sends agents to `chef help agent`; there is no need to rerun it after updating chef. `chef help <command>` now shows every option of a command and its subcommands — previously it printed only the description line.
