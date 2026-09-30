@@ -102,6 +102,28 @@ describe('checkTypes', () => {
 		assert.include(result.errors[0].message, 'TS2708');
 	});
 
+	it('should ignore BX read from window, self and globalThis when nothing declares its value', async () => {
+		const extensionPath = path.join(fixturesPath, 'ts-type-only-namespace');
+
+		const result = await checkTypes({
+			packageRoot: extensionPath,
+			files: [path.join(extensionPath, 'src/global-object.ts')],
+		});
+
+		assert.isEmpty(result.errors);
+	});
+
+	it('should report other names read from window and globalThis', async () => {
+		const extensionPath = path.join(fixturesPath, 'ts-type-only-namespace');
+
+		const result = await checkTypes({
+			packageRoot: extensionPath,
+			files: [path.join(extensionPath, 'src/other-global-object.ts')],
+		});
+
+		assert.sameMembers(result.errors.map((error) => error.message.slice(0, 7)), ['TS7017 ', 'TS2339 ']);
+	});
+
 	it('should pass compilerOptions through', async () => {
 		const extensionPath = path.join(fixturesPath, 'ts-extension');
 

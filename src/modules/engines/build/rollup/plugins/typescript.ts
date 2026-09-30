@@ -373,13 +373,54 @@ function collectDeclarationFiles(directory: string): string[]
 }
 
 /**
- * The TS2304 case for BX in another form: when some declaration adds types under
- * `declare global { namespace BX }`, BX becomes a type-only namespace, and using it as a value
- * reports TS2708 instead of TS2304.
+ * The TS2304 case for BX in other forms. TypeScript 5 took the BX value from JS sources, where
+ * an assignment like `BX.PullClient = PullClient` declared the global; TypeScript 7 no longer does.
+ * So when BX is a type-only namespace (some declaration adds types under
+ * `declare global { namespace BX }`) or is not declared at all, its value uses report:
+ * - TS2708 for `BX.ready()`: "Cannot use namespace 'BX' as a value";
+ * - TS2339 for `window.BX`: "Property 'BX' does not exist on type 'Window & typeof globalThis'";
+ * - TS7017 for `globalThis.BX`: "Element implicitly has an 'any' type because type
+ *   'typeof globalThis' has no index signature".
  */
 function isUntypedBitrixGlobal(diagnostic: Diagnostic): boolean
 {
-	return diagnostic.code === 2708 && diagnostic.text.includes('\'BX\'');
+	if (diagnostic.code === 2708)
+	{
+		return diagnostic.text.includes('\'BX\'');
+	}
+
+	if (diagnostic.code === 2339 || diagnostic.code === 7017)
+	{
+		return isGlobalObjectMember(diagnostic, 'BX');
+	}
+
+	return false;
+}
+
+/**
+ * Whether the diagnostic points at `window.<name>`, `self.<name>` or `globalThis.<name>`.
+ * The TS7017 message does not name the member, so the source under the diagnostic is checked.
+ * `pos` and `end` are UTF-8 byte offsets, while `startPosition` and `endPosition` are UTF-16
+ * columns of the source lines, so the latter are the ones to slice JS strings with.
+ */
+function isGlobalObjectMember(diagnostic: Diagnostic, name: string): boolean
+{
+	const { startPosition, endPosition } = diagnostic;
+	if (!startPosition || !endPosition || startPosition.line !== endPosition.line)
+	{
+		return false;
+	}
+
+	const sourceLine = diagnostic.sourceLines?.find((line) => line.line === startPosition.line);
+	if (!sourceLine)
+	{
+		return false;
+	}
+
+	const member = sourceLine.text.slice(startPosition.character, endPosition.character);
+	const object = sourceLine.text.slice(0, startPosition.character);
+
+	return member === name && /\b(?:window|self|globalThis)\??\.$/.test(object);
 }
 
 function diagnosticsToErrors(diagnostics: Diagnostic[]): BuildDiagnostic[]
