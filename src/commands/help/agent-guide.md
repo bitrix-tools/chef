@@ -26,6 +26,7 @@ chef (`@bitrix/chef`) builds, type-checks, lints and tests Bitrix JS extensions.
 
 - Without a target (`<name>` or `-p <path>`), `build`, `lint`, `typecheck` and `test` process every extension below the current directory.
 - Names accept glob patterns: `*` — one level, `**` — all levels (`'ui.bbcode.*'`). Unquoted patterns are expanded or rejected by the shell.
+- Types are checked by the TypeScript 7 bundled with chef, not by the project's `typescript` package: an editor or `npx tsc` running TypeScript 5 or 6 can report different errors, mostly for types taken from JS dependencies.
 - `--force` builds even when type or import checks fail.
 - `--watch` keeps running until interrupted.
 - `CF2001` — an option is not allowed: the project's `chef.config` denies it, or it conflicts with another option.
