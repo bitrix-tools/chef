@@ -33,6 +33,7 @@ export default {
 | `standalone` | `boolean \| object` | Standalone build with inlined dependencies |
 | `protected` | `boolean` | Protect from rebuilding |
 | `rebuild` | `string[]` | Rebuild dependent extensions |
+| `inline` | `string[]` | [Bundle the used code](#inlining-extensions) of other extensions in |
 | `transformClasses` | `boolean \| string[]` | Transpile classes — all (`true`) or by name |
 | `emitDeclaration` | `boolean` | Generate `.d.ts` with namespace declarations (default: `true`) |
 | `safeNamespaces` | `boolean` | Safe access to dependency namespaces via optional chaining |
@@ -221,6 +222,35 @@ When enabled:
 ::: tip
 If you need full independence from Bitrix dependencies as well, use [standalone](/en/guide/production#standalone-build) mode.
 :::
+
+## Inlining Extensions
+
+By default, an import of another Bitrix extension stays an external dependency: it is not included in the bundle, the extension is added to `rel` in `config.php` and is loaded on the page as a whole. The `inline` option lists extensions whose code is bundled in:
+
+```ts
+export default {
+  input: './src/index.ts',
+  output: './dist/my.bundle.js',
+  namespace: 'BX.My',
+  inline: ['ui.icon-set.api.core', 'ui.bbcode.*'],
+};
+```
+
+- Only the code that is actually imported and used ends up in the bundle — the rest is removed during the build.
+- Inlined extensions are left out of `rel`. Their own dependencies stay external and go to `rel` unless they are listed in `inline` too.
+- CSS imported by the sources of an inlined extension goes to the CSS bundle.
+- Names accept glob patterns: `*` — one segment of the name, `**` — any number of segments.
+- Sources of an inlined extension may be TypeScript, JavaScript or Flow, regardless of the current extension's language.
+- The `chef test` test bundle inlines the same extensions.
+
+Limitations:
+
+- Only an extension with `bundle.config` and sources can be inlined. Without sources, the build fails with [CF1016](/en/guide/errors#CF1016).
+- Inlined code is a separate copy. If the same extension is loaded on the page through `rel` of another dependency, its code runs twice: classes from different copies fail `instanceof` checks, and module-level state (registries, event subscriptions, caches) is not shared. Chef warns about it with [CF1017](/en/guide/errors#CF1017).
+- Inlined code is not registered in the namespace of the source extension: for example, inlining `ui.icon-set.api.core` does not fill `BX.UI.IconSet`.
+- Only code unreachable from the used functions is removed. If a used class refers to the whole module (for example, iterates over all data sets), the whole module ends up in the bundle.
+- Changes in an inlined extension reach the bundle only after the current extension is rebuilt. To rebuild it automatically, add the current extension to `rebuild` of the inlined one.
+- [Standalone mode](#standalone) inlines every dependency, `inline` is not needed there.
 
 ## Standalone
 

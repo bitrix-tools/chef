@@ -36,6 +36,7 @@ export interface PreparedBundleConfig {
 	safeNamespaces: boolean;
 	baseline: boolean;
 	alias: boolean;
+	inline: string[];
 	tests: {
 		localization: {
 			languageId: string;

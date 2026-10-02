@@ -81,6 +81,7 @@ export type UnitTestOptions = {
 	publicPath: string;
 	targets: string[];
 	typescript: boolean;
+	inline?: string[];
 	testFiles: string[];
 	browserType?: BrowserType;
 	headed?: boolean;

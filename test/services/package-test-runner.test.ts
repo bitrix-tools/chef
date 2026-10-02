@@ -26,6 +26,7 @@ function createMockPackage(options: {
 	publicPath?: string;
 	targets?: string[];
 	typescript?: boolean;
+	inline?: string[];
 	unitTests?: string[];
 	e2eTests?: string[];
 	e2eTestsDir?: string;
@@ -37,6 +38,7 @@ function createMockPackage(options: {
 		getPublicPath: () => options.publicPath ?? '/test/',
 		getTargets: () => options.targets ?? [],
 		isTypeScriptMode: () => options.typescript ?? false,
+		getBundleConfig: () => ({ get: (key: string) => (key === 'inline' ? options.inline ?? [] : undefined) }),
 		getUnitTests: async () => options.unitTests ?? [],
 		getEndToEndTests: async () => options.e2eTests ?? [],
 		getEndToEndTestsDirectoryPath: () => options.e2eTestsDir ?? '/test/package/test/e2e',
@@ -64,6 +66,7 @@ describe('PackageTestRunner', () => {
 				publicPath: '/bitrix/js/ui/buttons/',
 				targets: ['chrome 90'],
 				typescript: true,
+				inline: ['ui.icon-set.api.core'],
 				unitTests: testFiles,
 			});
 
@@ -87,6 +90,7 @@ describe('PackageTestRunner', () => {
 			assert.equal(options.publicPath, '/bitrix/js/ui/buttons/');
 			assert.deepEqual(options.targets, ['chrome 90']);
 			assert.isTrue(options.typescript);
+			assert.deepEqual(options.inline, ['ui.icon-set.api.core']);
 			assert.deepEqual(options.testFiles, testFiles);
 			assert.equal(options.browserType, 'chromium');
 			assert.isTrue(options.headed);

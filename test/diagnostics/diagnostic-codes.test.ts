@@ -19,6 +19,8 @@ describe('CF diagnostic codes', () => {
 		assert.match(CF.UNRESOLVED_IMPORT, /^CF1\d{3}$/);
 		assert.match(CF.MISSING_IIFE_NAME, /^CF1\d{3}$/);
 		assert.match(CF.PLUGIN_WARNING, /^CF1\d{3}$/);
+		assert.match(CF.INLINE_NOT_FOUND, /^CF1\d{3}$/);
+		assert.match(CF.INLINE_DUPLICATED, /^CF1\d{3}$/);
 		assert.match(CF.UNKNOWN_BUILD_WARNING, /^CF1\d{3}$/);
 	});
 

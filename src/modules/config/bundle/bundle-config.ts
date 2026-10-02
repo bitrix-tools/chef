@@ -53,6 +53,13 @@ export interface BundleConfig {
 		};
 	};
 	rebuild?: string[];
+	/**
+	 * Extensions (names or glob patterns) whose code is bundled into this
+	 * extension instead of being loaded as an external dependency. Only the
+	 * code that is actually imported and used ends up in the bundle; inlined
+	 * extensions are left out of `rel` in `config.php`.
+	 */
+	inline?: string[];
 	emitDeclaration?: boolean | 'ambient' | 'module' | 'both' | { enabled?: boolean; mode?: 'ambient' | 'module' | 'both' };
 	/**
 	 * Whether `chef aliases` should add this extension to `paths` in

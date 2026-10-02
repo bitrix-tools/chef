@@ -1,4 +1,5 @@
 import path from 'node:path';
+import fs from 'node:fs';
 
 import fg from 'fast-glob';
 
@@ -13,7 +14,8 @@ import { emitDeclarationStrategy } from '../config/bundle/strategies/emit-declar
 import { findReExports } from '../../utils/ast/find-re-exports';
 import { findImportLocation } from '../../utils/ast/find-import-location';
 import { findCircularDependencies } from '../../utils/package/find-circular-dependencies';
-import { PackageResolver } from '../packages/package-resolver';
+import { PackageResolver, findExtensionPath } from '../packages/package-resolver';
+import { PhpConfigManager } from '../config/php/php-config-manager';
 import { CF } from '../../diagnostics/diagnostic-codes';
 import type { BasePackage } from '../packages/base-package';
 import type { BuildEngine } from '../engines/build/build-engine';
@@ -86,6 +88,15 @@ export class PackageBuilder
 			catch
 			{
 				// Swallow: circular-deps diagnostics are best-effort.
+			}
+
+			try
+			{
+				buildResult.warnings.push(...PackageBuilder.#detectDuplicatedInlines(buildResult));
+			}
+			catch
+			{
+				// Swallow: inline diagnostics are best-effort.
 			}
 		}
 
@@ -167,6 +178,7 @@ export class PackageBuilder
 			standalone: bundleConfig.get('standalone').enabled,
 			standaloneRemap: bundleConfig.get('standalone').remap,
 			standaloneExposeNamespaces: bundleConfig.get('standalone').exposeNamespaces,
+			inline: bundleConfig.get('inline'),
 			resolve: bundleConfig.get('resolveNodeModules'),
 			babel: enforce?.babel ?? bundleConfig.get('babel'),
 			transformClasses: bundleConfig.get('transformClasses'),
@@ -314,6 +326,81 @@ export class PackageBuilder
 		}
 
 		return warnings;
+	}
+
+	/**
+	 * Surface inlined extensions that the page still loads through `rel` of an external
+	 * dependency: their code then runs twice — once from this bundle and once on its own.
+	 */
+	static #detectDuplicatedInlines(buildResult: BuildResult): BuildDiagnostic[]
+	{
+		const inlined = new Set(buildResult.inlined ?? []);
+		if (inlined.size === 0)
+		{
+			return [];
+		}
+
+		const details = [
+			'The inlined code and the extension loaded by the dependency are two separate copies:',
+			'classes from one copy fail `instanceof` checks against the other, and module-level',
+			'state (registries, event subscriptions, caches) is not shared. Either remove the',
+			'extension from `inline`, or make sure no external dependency loads it.',
+		].join('\n');
+
+		const warnings: BuildDiagnostic[] = [];
+		const visited = new Set<string>();
+		const queue: string[][] = buildResult.dependencies.map((name) => [name]);
+
+		// Breadth-first, so every inlined extension is reported with its shortest chain.
+		while (queue.length > 0)
+		{
+			const chain = queue.shift();
+			const name = chain.at(-1);
+			if (visited.has(name))
+			{
+				continue;
+			}
+
+			visited.add(name);
+
+			if (inlined.has(name))
+			{
+				warnings.push({
+					code: CF.INLINE_DUPLICATED,
+					message: `"${name}" is inlined, but is also loaded through ${chain.join(' → ')}`,
+					details,
+				});
+
+				continue;
+			}
+
+			for (const dependency of PackageBuilder.#readRel(name))
+			{
+				queue.push([...chain, dependency]);
+			}
+		}
+
+		return warnings;
+	}
+
+	static #readRel(extensionName: string): string[]
+	{
+		const extensionPath = findExtensionPath(extensionName);
+		if (!extensionPath)
+		{
+			return [];
+		}
+
+		const configPhpPath = path.join(extensionPath, 'config.php');
+		if (!fs.existsSync(configPhpPath))
+		{
+			return [];
+		}
+
+		const phpConfig = new PhpConfigManager();
+		phpConfig.loadFromFile(configPhpPath);
+
+		return phpConfig.get('rel') ?? [];
 	}
 
 	/**

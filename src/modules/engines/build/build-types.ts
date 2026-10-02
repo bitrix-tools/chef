@@ -27,6 +27,8 @@ export interface BuildResult {
 	errors: BuildDiagnostic[];
 	bundles: BundleFileInfo[];
 	dependencies: string[];
+	/** Extensions from the `inline` option whose code was bundled in. */
+	inlined?: string[];
 	standalone: boolean;
 }
 
@@ -42,6 +44,7 @@ export type BuildOptions = {
 	standalone?: boolean;
 	standaloneRemap?: Record<string, RemapTarget>;
 	standaloneExposeNamespaces?: boolean;
+	inline?: string[];
 	concat?: {
 		js?: Array<string>;
 		css?: Array<string>;
@@ -79,6 +82,7 @@ export type BuildCodeOptions = {
 	packageName?: string;
 	typescript?: boolean;
 	resolve?: boolean,
+	inline?: string[];
 	sourcemap?: boolean;
 };
 

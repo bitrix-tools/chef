@@ -24,6 +24,7 @@ export type BuildBundle = {
 export type BuildDetails = {
 	bundles: BuildBundle[],
 	dependencies: string[],
+	inlined: string[],
 	standalone: boolean,
 };
 
@@ -119,6 +120,7 @@ async function buildOne(extensionPackage: BasePackage, force?: boolean): Promise
 			details: {
 				bundles,
 				dependencies: buildResult.dependencies,
+				inlined: buildResult.inlined ?? [],
 				standalone: buildResult.standalone,
 			},
 			errors,
@@ -135,6 +137,7 @@ async function buildOne(extensionPackage: BasePackage, force?: boolean): Promise
 			details: {
 				bundles: [],
 				dependencies: [],
+				inlined: [],
 				standalone: false,
 			},
 			errors: [toErrorPayload(error, CF.UNEXPECTED_BUILD_ERROR)],

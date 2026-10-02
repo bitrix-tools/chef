@@ -220,6 +220,32 @@ A general warning from one of the build plugins.
 
 Read the warning text — it contains problem details. Usually a non-critical situation that doesn't require immediate action.
 
+### CF1016 — Extension Cannot Be Inlined {#CF1016}
+
+An extension from the [`inline`](/en/config/bundle-config#inlining-extensions) option is imported, but it has no sources to bundle: there is no `bundle.config` or entry point — only a `.d.ts` declaration file.
+
+```
+  [CF1016] Cannot inline "ui.legacy": the extension has no source to bundle (bundle.config with a JS, TS or CSS input)
+```
+
+**How to fix:**
+
+- Check the extension name in `inline`
+- If the extension has only a built bundle, remove it from `inline` — it will be loaded as an external dependency
+
+### CF1017 — Inlined Extension Is Loaded Again {#CF1017}
+
+An extension is bundled in through [`inline`](/en/config/bundle-config#inlining-extensions), but another dependency still loads it on the page through its `rel`. The code runs twice: classes from different copies fail `instanceof` checks, and registries, event subscriptions and caches are not shared.
+
+```
+  [CF1017] "ui.buttons" is inlined, but is also loaded through ui.forms → ui.buttons
+```
+
+**How to fix:**
+
+- Remove the extension from `inline` if the dependency in the chain is needed
+- Or inline the dependency that loads it as well
+
 ### CF1099 — Unknown Build Warning {#CF1099}
 
 A Rollup warning that doesn't fall into any of the categories above.

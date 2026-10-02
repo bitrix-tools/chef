@@ -202,9 +202,21 @@ export class RollupBuildStrategy extends BuildStrategy
 
 	protected static toDiagnostic(error: unknown, code: string = CF.SYNTAX_ERROR): BuildDiagnostic
 	{
-		const rollupCode = (error instanceof Error && 'code' in error && typeof error.code === 'string')
-			? error.code
-			: undefined;
+		// Rollup replaces the code of an error raised by a plugin with PLUGIN_ERROR
+		// and keeps the original one in `pluginCode`.
+		const rollupCode = (() => {
+			if (!(error instanceof Error))
+			{
+				return undefined;
+			}
+
+			if ('pluginCode' in error && typeof error.pluginCode === 'string' && error.pluginCode.startsWith('CF'))
+			{
+				return error.pluginCode;
+			}
+
+			return ('code' in error && typeof error.code === 'string') ? error.code : undefined;
+		})();
 
 		const errorCode = rollupCode?.startsWith('CF')
 			? rollupCode
@@ -547,6 +559,67 @@ export class RollupBuildStrategy extends BuildStrategy
 				return extension.getInputPath();
 			},
 		};
+	}
+
+	// Resolves imports of extensions listed in the `inline` option to their source input,
+	// so Rollup bundles them instead of leaving them external, and tree-shaking drops
+	// everything that is not used. Imports inside inlined sources go through the same
+	// chain: matching extensions are inlined too, the rest stay external and end up in `rel`.
+	protected static createInlinePlugin(options: {
+		patterns: string[];
+		currentPackageName?: string;
+		inlinedRef?: Set<string>;
+	}): Plugin
+	{
+		const isInlined = RollupBuildStrategy.#createExtensionNameMatcher(options.patterns);
+
+		return {
+			name: 'inline-extensions',
+			resolveId(id)
+			{
+				if (
+					id === options.currentPackageName
+					|| id.startsWith('.')
+					|| id.startsWith('\0')
+					|| path.isAbsolute(id)
+					|| !isInlined(id)
+				)
+				{
+					return null;
+				}
+
+				const inputPath = PackageResolver.resolve(id)?.getInputPath();
+				if (!inputPath || /\.d\.[cm]?ts$/.test(inputPath))
+				{
+					this.error({
+						code: CF.INLINE_NOT_FOUND,
+						message: `Cannot inline "${id}": the extension has no source to bundle (bundle.config with a JS, TS or CSS input)`,
+					});
+				}
+
+				options.inlinedRef?.add(id);
+
+				return inputPath;
+			},
+		};
+	}
+
+	// `*` matches one segment of an extension name, `**` matches any number of segments.
+	static #createExtensionNameMatcher(patterns: string[]): (name: string) => boolean
+	{
+		const expressions = patterns.map((pattern) => {
+			const source = pattern
+				.split('**')
+				.map((part) => part
+					.split('*')
+					.map((text) => text.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+					.join('[^.]*'))
+				.join('.*');
+
+			return new RegExp(`^${source}$`);
+		});
+
+		return (name) => expressions.some((expression) => expression.test(name));
 	}
 
 	protected static createStandalonePlugin(options: {
@@ -991,7 +1064,8 @@ export class RollupBuildStrategy extends BuildStrategy
 		}
 
 		const { onWarning, warningsRef, errorsRef, dependenciesRef, pendingCircularRef } = RollupBuildStrategy.createOnWarningHandler();
-		const inputOptions: InputOptions = await this.#buildRollupInputOptions(options, onWarning, dependenciesRef);
+		const inlinedRef = new Set<string>();
+		const inputOptions: InputOptions = await this.#buildRollupInputOptions(options, onWarning, dependenciesRef, inlinedRef);
 
 		let bundle: RollupBuild;
 		try
@@ -1042,6 +1116,7 @@ export class RollupBuildStrategy extends BuildStrategy
 
 		return {
 			dependencies: sortedDependencies,
+			inlined: [...inlinedRef].sort(),
 			bundles: bundlesSize,
 			warnings: [...warningsRef],
 			errors: [...errorsRef],
@@ -1116,7 +1191,8 @@ export class RollupBuildStrategy extends BuildStrategy
 		}
 
 		const { onWarning, warningsRef, errorsRef, dependenciesRef, pendingCircularRef } = RollupBuildStrategy.createOnWarningHandler();
-		const inputOptions: InputOptions = await this.#buildRollupInputOptions(options, onWarning, dependenciesRef);
+		const inlinedRef = new Set<string>();
+		const inputOptions: InputOptions = await this.#buildRollupInputOptions(options, onWarning, dependenciesRef, inlinedRef);
 
 		let bundle: RollupBuild;
 		try
@@ -1167,11 +1243,18 @@ export class RollupBuildStrategy extends BuildStrategy
 
 		return {
 			dependencies: sortedDependencies,
+			inlined: [...inlinedRef].sort(),
 			bundles: bundlesSize,
 			warnings: [...warningsRef],
 			errors: [...errorsRef],
 			standalone: options.standalone ?? false,
 		};
+	}
+
+	// Standalone builds inline every dependency on their own, `inline` adds nothing to them.
+	static #hasInline(options: BuildOptions): boolean
+	{
+		return !options.standalone && options.inline?.length > 0;
 	}
 
 	async #loadTsConfig(configPath: string, packageRoot: string): Promise<ParsedCommandLine>
@@ -1262,12 +1345,12 @@ export class RollupBuildStrategy extends BuildStrategy
 			import('./plugins/css'),
 		]);
 
+		// Inlined dependencies may be TS or Flow regardless of the entry package language.
+		const inlinesDependencies = (options.standalone ?? false) || RollupBuildStrategy.#hasInline(options);
 		const babelPlugins = await this.#loadBabelPlugins({
 			...options,
-			// Standalone builds inline dependencies, which may be TS or Flow
-			// regardless of the entry package language.
-			includeTypescriptSource: (options.typescript ?? false) || (options.standalone ?? false),
-			includeFlowSource: !options.typescript || (options.standalone ?? false),
+			includeTypescriptSource: (options.typescript ?? false) || inlinesDependencies,
+			includeFlowSource: !options.typescript || inlinesDependencies,
 		});
 
 		return {
@@ -1374,7 +1457,12 @@ export class RollupBuildStrategy extends BuildStrategy
 		];
 	}
 
-	async #buildRollupInputOptions(options: BuildOptions, onWarn: WarningHandlerWithDefault, dependenciesRef: string[]): Promise<InputOptions>
+	async #buildRollupInputOptions(
+		options: BuildOptions,
+		onWarn: WarningHandlerWithDefault,
+		dependenciesRef: string[],
+		inlinedRef: Set<string>,
+	): Promise<InputOptions>
 	{
 		const {
 			nodeResolve,
@@ -1386,6 +1474,7 @@ export class RollupBuildStrategy extends BuildStrategy
 		} = await this.#loadBuildPlugins(options);
 
 		const isCssOnly = options.input.endsWith('.css');
+		const hasInline = RollupBuildStrategy.#hasInline(options);
 
 		// Collect CSS-only dependencies for the entry package in standalone mode
 		const entryCssDeps = (() => {
@@ -1430,6 +1519,11 @@ export class RollupBuildStrategy extends BuildStrategy
 				})] : []),
 				RollupBuildStrategy.createEnvReplacePlugin(options.production ?? false),
 				RollupBuildStrategy.createNpmRemapPlugin(dependenciesRef),
+				...(hasInline ? [RollupBuildStrategy.createInlinePlugin({
+					patterns: options.inline,
+					currentPackageName: options.packageName,
+					inlinedRef,
+				})] : []),
 				...await (async () => {
 					if (options.baseline)
 					{
@@ -1460,7 +1554,7 @@ export class RollupBuildStrategy extends BuildStrategy
 					return [];
 				})(),
 				await (async () => {
-					if (options.vue || options.standalone)
+					if (options.vue || options.standalone || hasInline)
 					{
 						return this.#createVuePlugin(options);
 					}
@@ -1468,7 +1562,7 @@ export class RollupBuildStrategy extends BuildStrategy
 					return null;
 				})(),
 				await (async () => {
-					if (options.typescript || options.standalone)
+					if (options.typescript || options.standalone || hasInline)
 					{
 						const rootDir = Environment.getRoot() ?? undefined;
 						const tsConfigPath = FileFinder.findUpFile({
@@ -1601,6 +1695,10 @@ export class RollupBuildStrategy extends BuildStrategy
 				RollupBuildStrategy.createNpmRemapPlugin(dependenciesRef),
 				RollupBuildStrategy.createEnvReplacePlugin(false),
 				RollupBuildStrategy.createCurrentPackageResolver(options.packageName),
+				...(options.inline?.length > 0 ? [RollupBuildStrategy.createInlinePlugin({
+					patterns: options.inline,
+					currentPackageName: options.packageName,
+				})] : []),
 				await (async () => {
 					const rootDir = Environment.getRoot();
 					if (rootDir)

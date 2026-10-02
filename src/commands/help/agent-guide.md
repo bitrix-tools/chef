@@ -7,7 +7,7 @@ chef (`@bitrix/chef`) builds, type-checks, lints and tests Bitrix JS extensions.
 - **Extension** — a directory with `bundle.config.ts` (or `.js`) under a module's `install/js/` or under `local/js/`. Its name is the path after `js/` joined with dots: `ui/install/js/ui/buttons/` → `ui.buttons`.
 - **Other buildable directories** — component templates, activities, site templates: any directory with `bundle.config.*` or a legacy `script.es6.js`. They have no name and are addressed by path: `-p <path>`.
 - **Sources and output** — sources live in `src/` (or `script.es6.js`). `chef build` writes bundles (`dist/*.bundle.js`, `*.css`, `*.map`, `script.js`) and `config.php`, regenerating them on every build.
-- **Dependencies** — the `rel` list in `config.php` is derived from the imports in `src/`.
+- **Dependencies** — the `rel` list in `config.php` is derived from the imports in `src/`. Extensions listed in `inline` of `bundle.config` are left out of it: the code used from them is bundled in.
 - **Project root** — chef finds it by itself (a Bitrix source repository or a project with `local/`), so commands work from anywhere inside it.
 
 ## What chef can do

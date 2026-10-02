@@ -65,6 +65,7 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 			packageRoot: options.packageRoot,
 			publicPath: options.publicPath,
 			typescript: options.typescript,
+			inline: options.inline,
 			namespace: 'BX.TestsBundle',
 			sourcemap: true,
 		});

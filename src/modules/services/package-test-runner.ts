@@ -25,6 +25,7 @@ export class PackageTestRunner
 			publicPath: this.#package.getPublicPath(),
 			targets: this.#package.getTargets(),
 			typescript: this.#package.isTypeScriptMode(),
+			inline: this.#package.getBundleConfig().get('inline'),
 			testFiles: await this.#package.getUnitTests(),
 			browserType: args.browserType,
 			headed: args.headed,

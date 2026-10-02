@@ -106,6 +106,7 @@ type JsonErrorPayload = {
 type BuildDetails = {
   bundles: { file: string; size: number }[];  // file is relative to extensions[].path
   dependencies: string[];
+  inlined: string[];  // extensions from inline whose code is bundled in
   standalone: boolean;
 };
 ```
@@ -124,6 +125,7 @@ Example:
       { "file": "ui.buttons.bundle.css", "size": 91087 }
     ],
     "dependencies": ["main.core", "ui.cnt"],
+    "inlined": [],
     "standalone": false
   },
   "errors": [],

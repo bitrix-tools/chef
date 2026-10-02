@@ -16,6 +16,7 @@ export * from './concat-strategy';
 export * from './treeshake-strategy';
 export * from './resolve-files-import-strategy';
 export * from './rebuild-strategy';
+export * from './inline-strategy';
 export * from './standalone-strategy';
 export * from './resolve-node-modules-strategy';
 export * from './babel-strategy';
