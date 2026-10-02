@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.28.1 <Badge type="tip" text="10/2/2026" />
+
+Fixed the vulnerabilities `npm audit` reported in chef's development dependencies: mocha is updated to version 12 and esbuild to 0.28. Installing and running chef is not affected: the package dependencies are unchanged, and the built chef code is identical to the previous version.
+
 ## v1.28.0 <Badge type="tip" text="10/2/2026" />
 
 `bundle.config` has a new `inline` option — a list of extensions whose code is bundled in instead of being loaded as an external dependency. Only the code that is actually imported and used ends up in the bundle; the rest is removed during the build. Inlined extensions are left out of `rel` in `config.php`, and their own dependencies stay external unless they are listed in `inline` too. Names accept glob patterns (`'ui.bbcode.*'`), sources may be TypeScript, JavaScript or Flow regardless of the extension's language, CSS of the inlined code goes to the CSS bundle, and `chef test` inlines the same extensions into the test bundle. An extension without sources fails the build with CF1016. When an inlined extension is still loaded on the page through `rel` of another dependency and its code would run twice, chef warns with CF1017. The JSON build report has a new `inlined` field. Errors raised by build plugins now keep their CFxxxx code.
