@@ -98,10 +98,8 @@ run(`git pull --rebase`);
 // dependency to the latest data on every release makes updating chef refresh it for users.
 run(`npm install caniuse-lite@latest --save`);
 
-// npm has just rewritten package.json, so the version is bumped on a fresh read.
-const releasePkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-releasePkg.version = newVersion;
-writeFileSync(pkgPath, JSON.stringify(releasePkg, null, 2) + '\n');
+// Bumps the version in both package.json and package-lock.json; the commit and tag are made below.
+run(`npm version ${newVersion} --no-git-tag-version --allow-same-version`);
 
 run(`git add package.json package-lock.json`);
 run(`git commit -m "release: ${tag}"`);
