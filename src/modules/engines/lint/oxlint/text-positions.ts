@@ -47,6 +47,16 @@ export class TextPositions
 	}
 
 	/**
+	 * UTF-16 index of a 1-based line and column (in UTF-16 code units).
+	 */
+	indexOfLocation(line: number, column: number): number
+	{
+		const lineStart = this.#lineStarts[Math.min(Math.max(line - 1, 0), this.#lineStarts.length - 1)];
+
+		return Math.min(lineStart + column - 1, this.#text.length);
+	}
+
+	/**
 	 * 1-based line and column (in UTF-16 code units) of a UTF-16 index.
 	 */
 	locationOf(index: number): { line: number; column: number }

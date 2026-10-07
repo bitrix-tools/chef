@@ -108,7 +108,7 @@ Types are checked automatically during build (`chef build`). The `chef typecheck
 
 ## chef lint
 
-Lint extensions with ESLint.
+Lint extensions with ESLint or oxlint.
 
 ```bash
 chef lint [extensions...] [options]
@@ -122,6 +122,8 @@ chef lint [extensions...] [options]
 | `--file <patterns...>` | Lint specific files (glob patterns relative to `src/`) |
 | `--exclude <patterns...>` | Exclude files from linting (glob patterns relative to extension root) |
 | `--no-cache` | Disable caching (cache is enabled by default) |
+| `--linter <eslint\|oxlint>` | Linter to use; by default oxlint if the project has an oxlint config, ESLint otherwise |
+| `--lsp` | Run the oxlint language server for editors on stdin/stdout |
 
 ```bash
 chef lint main.core                        # Lint a specific extension
@@ -134,6 +136,35 @@ chef lint main.core --exclude 'src/old/**' # Exclude files from linting
 ::: tip
 `chef lint` requires an `eslint.config.{js,mjs,cjs,ts,mts,cts}` file in the project. If no config is found, linting is skipped.
 :::
+
+### oxlint
+
+oxlint is used when the project has an `oxlint.config.ts` or `.oxlintrc.json`, or when it is
+requested with `--linter oxlint` (or the `CHEF_LINTER=oxlint` environment variable). Without a
+project config chef uses the Bitrix24 presets, `@bitrix24/oxlint-config-bitrix24` and
+`@bitrix24/oxlint-config-bitrix24-mobile`.
+
+```bash
+chef lint main.core --linter oxlint        # Lint with oxlint
+chef lint -p ui --linter oxlint --fix      # Fix a whole module with oxlint
+```
+
+- **Flow files.** oxlint has no Flow parser. chef lints a Flow file through a copy that oxlint can
+  read and that keeps every position of the original: maybe types (`?string`) lose their `?` and
+  the file is linted as TypeScript; a file TypeScript cannot read has its types blanked out.
+  Diagnostics caused by the transformation itself are not reported, and neither is formatting
+  inside Flow type annotations. With `--fix`, fixes are carried back to the original; type-stripped
+  files are reported but not fixed.
+- **Unparsable files** are reported with a parsing error instead of being skipped silently.
+- **Speed.** All extensions of a run are linted by one batch of oxlint processes.
+- **Positions** are reported in UTF-16 columns, like ESLint.
+
+### Language server
+
+`chef lint --lsp` (or the `chef-oxlint --lsp` binary) runs the oxlint language server behind a
+proxy that understands Flow files the same way `chef lint` does. Editors that start an oxlint
+binary for the language server can be pointed at `chef-oxlint`: with `--lsp` it serves chef's
+language server, any other arguments go to oxlint unchanged. See [PhpStorm](./phpstorm-plugin.md#oxlint).
 
 ## chef diag
 

@@ -28,7 +28,8 @@
     "docs:preview": "vitepress preview docs"
   },
   "bin": {
-    "chef": "./bin/chef"
+    "chef": "./bin/chef",
+    "chef-oxlint": "./bin/chef-oxlint"
   },
   "repository": {
     "type": "git",

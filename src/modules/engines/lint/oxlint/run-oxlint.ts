@@ -28,7 +28,7 @@ type RawDiagnostic = {
 const FILES_PER_RUN = 300;
 const PARALLEL_RUNS = Math.max(1, Math.min(8, Math.floor(os.availableParallelism() / 2)));
 
-function oxlintBin(): string
+export function oxlintBin(): string
 {
 	const require = createRequire(import.meta.url);
 

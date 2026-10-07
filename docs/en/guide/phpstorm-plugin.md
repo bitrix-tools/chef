@@ -76,3 +76,18 @@ The `chef create` command will scaffold the extension structure with a build con
 ## bundle.config
 
 `bundle.config.js` and `bundle.config.ts` files are displayed with a Chef icon in the project tree.
+
+## oxlint
+
+PhpStorm shows oxlint diagnostics and quick fixes through the Oxc plugin (it uses the IDE's LSP
+API). chef provides a language server that also lints Flow files:
+
+1. Install the **Oxc** plugin from the JetBrains Marketplace.
+2. In **Settings | Languages & Frameworks | Oxc**, switch the plugin to the manual configuration
+   and set the oxlint binary to `chef-oxlint` from the global chef installation
+   (`npm root -g`/`@bitrix/chef/bin/chef-oxlint`).
+3. Turn ESLint off for the project (**Settings | Languages & Frameworks | JavaScript |
+   Code Quality Tools | ESLint**), otherwise the same problems are reported twice.
+
+Without an oxlint config in the project the language server uses the Bitrix24 presets, the same
+as `chef lint --linter oxlint`.
