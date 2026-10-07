@@ -11,8 +11,9 @@ import flowRemoveTypes from 'flow-remove-types';
 export type PreparedSource =
 	// lint the file in place
 	| { kind: 'native' }
-	// Flow file linted as TypeScript (`<name>.js.ts`): `?Type` loses its `?`
-	| { kind: 'flow-as-ts'; text: string; changed: number[] }
+	// Flow file linted as TypeScript (`<name>.js.ts`): `?Type` loses its `?`, `{[K]: V}`
+	// becomes `{ K : V}`; `typeRanges` are the type annotations, which ESLint did not format
+	| { kind: 'flow-as-ts'; text: string; changed: number[]; typeRanges: Array<[number, number]> }
 	// TypeScript file with Flow-style `?Type`: same fix, same name
 	| { kind: 'ts-fixed'; text: string; changed: number[] }
 	// Flow file oxlint cannot parse as TypeScript: types are blanked out
@@ -40,14 +41,11 @@ function parseErrors(fileName: string, text: string, lang: 'js' | 'ts'): ParseEr
 	return parse(fileName, text, lang).errors as ParseError[];
 }
 
-/**
- * Flow's unnamed indexer `{ [string]: T }` is valid TypeScript with another meaning: a
- * computed key that references a value named `string`. A Flow file with one cannot be
- * linted as TypeScript.
- */
-function hasComputedTypeKey(node: unknown): boolean
+type AstNode = { type: string; start: number; end: number; [key: string]: unknown };
+
+function walk(root: unknown, visit: (node: AstNode) => boolean | void): void
 {
-	const stack: unknown[] = [node];
+	const stack: unknown[] = [root];
 	while (stack.length > 0)
 	{
 		const current = stack.pop();
@@ -62,33 +60,87 @@ function hasComputedTypeKey(node: unknown): boolean
 			continue;
 		}
 
-		const record = current as Record<string, unknown>;
-		if (record.type === 'TSPropertySignature' && record.computed === true)
+		const node = current as AstNode;
+		if (typeof node.type === 'string' && visit(node) === false)
+		{
+			continue;
+		}
+
+		for (const key in node)
+		{
+			const value = node[key];
+			if (key !== 'parent' && value && typeof value === 'object')
+			{
+				stack.push(value);
+			}
+		}
+	}
+}
+
+// Type-only syntax: ESLint read Flow types through Babel and did not format them.
+const TYPE_NODES = new Set([
+	'TSTypeAnnotation',
+	'TSTypeAliasDeclaration',
+	'TSInterfaceDeclaration',
+	'TSTypeParameterDeclaration',
+	'TSTypeParameterInstantiation',
+]);
+
+function typeRanges(program: unknown): Array<[number, number]>
+{
+	const ranges: Array<[number, number]> = [];
+	walk(program, (node) => {
+		if (TYPE_NODES.has(node.type))
+		{
+			ranges.push([node.start, node.end]);
+
+			return false;
+		}
+
+		return true;
+	});
+
+	return ranges;
+}
+
+/**
+ * Flow's unnamed indexer `{[K]: V}` is valid TypeScript with another meaning: a computed
+ * key referencing a value `K`. Blanking the brackets (`{ K : V}`) turns it into a plain
+ * property, which keeps the length and references nothing. Returns the blanked positions.
+ */
+function unnamedIndexerBrackets(program: unknown, text: string): number[]
+{
+	const positions: number[] = [];
+	walk(program, (node) => {
+		if (node.type !== 'TSPropertySignature' || node.computed !== true)
 		{
 			return true;
 		}
 
-		for (const key in record)
+		const key = node.key as AstNode;
+		if (key.type !== 'Identifier')
 		{
-			if (key !== 'parent')
-			{
-				const value = record[key];
-				if (value && typeof value === 'object')
-				{
-					stack.push(value);
-				}
-			}
+			return true;
 		}
-	}
 
-	return false;
+		const open = text.lastIndexOf('[', key.start);
+		const close = text.indexOf(']', key.end);
+		if (open >= node.start && close !== -1 && close < node.end)
+		{
+			positions.push(open, close);
+		}
+
+		return true;
+	});
+
+	return positions;
 }
 
 /**
  * Blanks out the `?` of Flow maybe types (`?string` -> ` string`) until the text is valid
  * TypeScript. Returns null if anything else keeps it from parsing.
  */
-function fixMaybeTypes(fileName: string, source: string): { text: string; changed: number[] } | null
+function fixMaybeTypes(fileName: string, source: string): { text: string; changed: number[]; program: unknown } | null
 {
 	let text = source;
 	const changed: number[] = [];
@@ -99,7 +151,7 @@ function fixMaybeTypes(fileName: string, source: string): { text: string; change
 		const errors = result.errors as ParseError[];
 		if (errors.length === 0)
 		{
-			return hasComputedTypeKey(result.program) ? null : { text, changed };
+			return { text, changed, program: result.program };
 		}
 
 		for (const error of errors)
@@ -122,7 +174,7 @@ function fixMaybeTypes(fileName: string, source: string): { text: string; change
 	return null;
 }
 
-function stripFlowTypes(fileName: string, source: string): { text: string; changed: number[] } | null
+function stripFlowTypes(fileName: string, source: string): PreparedSource | null
 {
 	let text: string;
 	try
@@ -148,7 +200,7 @@ function stripFlowTypes(fileName: string, source: string): { text: string; chang
 		}
 	}
 
-	return { text, changed };
+	return { kind: 'stripped', text, changed };
 }
 
 export function prepareSource(filePath: string, text: string): PreparedSource
@@ -165,7 +217,7 @@ export function prepareSource(filePath: string, text: string): PreparedSource
 
 		const fixed = fixMaybeTypes(filePath, text);
 
-		return fixed ? { kind: 'ts-fixed', ...fixed } : { kind: 'native' };
+		return fixed ? { kind: 'ts-fixed', text: fixed.text, changed: fixed.changed } : { kind: 'native' };
 	}
 
 	if (!JS_EXTENSIONS.has(extension))
@@ -182,19 +234,37 @@ export function prepareSource(filePath: string, text: string): PreparedSource
 	const asTs = fixMaybeTypes(`${filePath}.ts`, text);
 	if (asTs)
 	{
-		return { kind: 'flow-as-ts', ...asTs };
+		let { text: tsText, program } = asTs;
+		const changed = [...asTs.changed];
+		const brackets = unnamedIndexerBrackets(program, tsText);
+		if (brackets.length > 0)
+		{
+			for (const position of brackets)
+			{
+				tsText = `${tsText.slice(0, position)} ${tsText.slice(position + 1)}`;
+			}
+			changed.push(...brackets);
+
+			const reparsed = parse(`${filePath}.ts`, tsText, 'ts');
+			if (reparsed.errors.length > 0)
+			{
+				return stripFlowTypes(filePath, text) ?? unparsable(jsErrors);
+			}
+			program = reparsed.program;
+		}
+
+		return { kind: 'flow-as-ts', text: tsText, changed: changed.sort((a, b) => a - b), typeRanges: typeRanges(program) };
 	}
 
-	const stripped = stripFlowTypes(filePath, text);
-	if (stripped)
-	{
-		return { kind: 'stripped', ...stripped };
-	}
+	return stripFlowTypes(filePath, text) ?? unparsable(jsErrors);
+}
 
+function unparsable(errors: ParseError[]): PreparedSource
+{
 	return {
 		kind: 'unparsable',
-		message: jsErrors[0].message,
-		offset: jsErrors[0].labels?.[0]?.start ?? 0,
+		message: errors[0].message,
+		offset: errors[0].labels?.[0]?.start ?? 0,
 	};
 }
 

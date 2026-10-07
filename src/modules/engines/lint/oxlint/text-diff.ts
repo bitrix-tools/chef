@@ -138,18 +138,30 @@ export function diffText(before: string, after: string): TextEdit[]
  * Applies the edits a fix made to a shadow copy to the original text. `changed` are the
  * positions where the copy differs from the original.
  *
- * An edit that only adds or removes whitespace at changed positions fixes the
+ * Edits inside `skipRanges` are left out. An edit that only adds or removes whitespace
+ * at changed positions fixes the
  * transformation itself (a blanked `?` reads as a double space) and is skipped. Any other
  * edit touching a changed position cannot be carried over: then null is returned and the
  * original is left as it was. Otherwise returns the new text and where the changed
  * positions moved to.
  */
-export function carryOverEdits(original: string, edits: TextEdit[], changed: number[]): { text: string; changed: number[] } | null
+export function carryOverEdits(
+	original: string,
+	edits: TextEdit[],
+	changed: number[],
+	// edits inside these ranges are not carried over
+	skipRanges: Array<[number, number]> = [],
+): { text: string; changed: number[] } | null
 {
 	const changedSet = new Set(changed);
 	const kept: TextEdit[] = [];
 	for (const edit of edits)
 	{
+		if (skipRanges.some(([start, end]) => edit.start >= start && edit.end <= end))
+		{
+			continue;
+		}
+
 		let touches = false;
 		let whitespaceOnly = /^\s*$/.test(edit.text);
 		for (let i = edit.start; i < edit.end; i++)

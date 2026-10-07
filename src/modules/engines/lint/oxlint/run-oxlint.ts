@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -22,8 +23,10 @@ type RawDiagnostic = {
 	labels?: Array<{ span: { offset: number; length: number } }>;
 };
 
-// A long file list is split: the oxlint launcher overflows its stack on ~10k arguments.
-const FILES_PER_RUN = 500;
+// A long file list is split, and the parts run in parallel: JS plugins run on one thread
+// per oxlint process (and the launcher overflows its stack on ~10k arguments).
+const FILES_PER_RUN = 300;
+const PARALLEL_RUNS = Math.max(1, Math.min(8, Math.floor(os.availableParallelism() / 2)));
 
 function oxlintBin(): string
 {
@@ -85,13 +88,24 @@ function runOnce(options: { cwd: string; configPath: string; files: string[]; fi
 
 export async function runOxlint(options: { cwd: string; configPath: string; files: string[]; fix: boolean }): Promise<OxlintDiagnostic[]>
 {
-	const diagnostics: OxlintDiagnostic[] = [];
+	const parts: string[][] = [];
 	for (let i = 0; i < options.files.length; i += FILES_PER_RUN)
 	{
-		diagnostics.push(...await runOnce({ ...options, files: options.files.slice(i, i + FILES_PER_RUN) }));
+		parts.push(options.files.slice(i, i + FILES_PER_RUN));
 	}
 
-	return diagnostics;
+	const results: OxlintDiagnostic[][] = [];
+	let next = 0;
+	const worker = async () => {
+		while (next < parts.length)
+		{
+			const index = next++;
+			results[index] = await runOnce({ ...options, files: parts[index] });
+		}
+	};
+	await Promise.all(Array.from({ length: Math.min(PARALLEL_RUNS, parts.length) }, worker));
+
+	return results.flat();
 }
 
 /**

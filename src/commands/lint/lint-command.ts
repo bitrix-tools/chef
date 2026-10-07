@@ -11,7 +11,7 @@ import { findPackages } from '../../utils/package/find-packages';
 import { formatInternalError } from '../../diagnostics/format-error';
 import { CF } from '../../diagnostics/diagnostic-codes';
 import { pluralize } from '../../utils/pluralize';
-import { lint } from './internal/lint';
+import { lint, prefetchLint } from './internal/lint';
 import { lint as lintJson } from '../../reporters/json/lint';
 import { emitJson } from '../../reporters/json/emit';
 import { createReporterOption } from '../../shared/options/reporter-option';
@@ -170,6 +170,7 @@ lintCommand
 		}
 
 		const queue = new SequentialQueue();
+		const found: BasePackage[] = [];
 		const lintResults: LintRunResult[] = [];
 		const startTime = Date.now();
 
@@ -201,12 +202,19 @@ lintCommand
 				console.log(message);
 			})
 			.on('data', ({ extension }: { extension: BasePackage }) => {
-				queue.add(async () => {
-					const result = await lint(extension, lintOptions)();
-					lintResults.push(result);
-				});
+				found.push(extension);
 			})
 			.on('done', async () => {
+				// oxlint lints all extensions in one batch; ESLint goes extension by extension
+				await prefetchLint(found, lintOptions);
+				for (const extension of found)
+				{
+					queue.add(async () => {
+						const result = await lint(extension, lintOptions)();
+						lintResults.push(result);
+					});
+				}
+
 				await queue.onIdle();
 
 				printSummary(lintResults, startTime);

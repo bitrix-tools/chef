@@ -30,6 +30,9 @@ const IGNORED = [
 	'**/*.cjs',
 ];
 
+// Fix passes over the same files: one oxlint run applies only non-overlapping fixes.
+const MAX_FIX_PASSES = 10;
+
 type SourceFile = {
 	path: string;
 	text: string;
@@ -40,8 +43,7 @@ type SourceFile = {
 
 type ShadowSource = SourceFile & { prepared: Exclude<PreparedSource, { kind: 'native' | 'unparsable' }> };
 
-// Fix passes over the same files: one oxlint run applies only non-overlapping fixes.
-const MAX_FIX_PASSES = 10;
+type LintedFile = LintFileResult & { fixed: boolean };
 
 function isShadow(source: SourceFile): source is ShadowSource
 {
@@ -61,9 +63,53 @@ function groupByFile(diagnostics: OxlintDiagnostic[]): Map<string, OxlintDiagnos
 	return byFile;
 }
 
-export function isOxlintRequested(options: LintOptions): boolean
+// Formatting rules that look at text, not at syntax: ESLint applied them to Flow types too.
+const TEXT_RULES = new Set([
+	'eol-last',
+	'linebreak-style',
+	'max-len',
+	'no-mixed-spaces-and-tabs',
+	'no-multiple-empty-lines',
+	'no-trailing-spaces',
+	'spaced-comment',
+]);
+
+/**
+ * A formatting diagnostic inside a Flow type annotation: ESLint did not format Flow
+ * types. A missing semicolon after `type A = {...}` is reported right at its end.
+ */
+function isTypeFormatting(code: string | undefined, start: number, typeRanges: Array<[number, number]>): boolean
 {
-	return (options.linter ?? process.env.CHEF_LINTER) === 'oxlint';
+	const match = /^@stylistic\((.+)\)$/.exec(code ?? '');
+	if (!match || TEXT_RULES.has(match[1]))
+	{
+		return false;
+	}
+
+	const inclusiveEnd = match[1] === 'semi';
+
+	return typeRanges.some(([from, to]) => start >= from && (start < to || (inclusiveEnd && start === to)));
+}
+
+function toLintResult(linted: LintedFile[]): LintResult
+{
+	const files: LintFileResult[] = linted.map(({ filePath, messages }) => ({ filePath, messages }));
+	const count = (severity: LintMessage['severity']) => files.reduce(
+		(sum, file) => sum + file.messages.filter((m) => m.severity === severity).length,
+		0,
+	);
+	const errorsCount = count('error');
+	const warningsCount = count('warning');
+	const fixedCount = linted.filter((file) => file.fixed).length;
+
+	return {
+		files,
+		hasErrors: () => errorsCount > 0,
+		getErrorsCount: () => errorsCount,
+		hasWarnings: () => warningsCount > 0,
+		getWarningsCount: () => warningsCount,
+		getFixedCount: () => fixedCount,
+	};
 }
 
 export class OxlintStrategy extends LintStrategy
@@ -81,19 +127,65 @@ export class OxlintStrategy extends LintStrategy
 
 	async lint(options: LintOptions): Promise<LintResult>
 	{
-		const files = await this.#collectFiles(options);
+		const [result] = await this.lintMany([options]);
+
+		return result;
+	}
+
+	/**
+	 * Lints several sources in one go: one oxlint run for all of their files instead of one
+	 * per source, which saves starting oxlint and loading its JS plugins every time.
+	 * All requests must share `rootPath` and `fix`.
+	 */
+	async lintMany(requests: LintOptions[]): Promise<LintResult[]>
+	{
+		if (requests.length === 0)
+		{
+			return [];
+		}
+
+		const rootPath = requests[0].rootPath;
+		const fix = requests[0].fix ?? false;
 		const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'chef-oxlint-'));
 
 		try
 		{
-			const configPath = findProjectConfig(options.sourcePath, options.rootPath)
-				?? await writePresetConfig({
-					rootPath: options.rootPath,
+			let presetConfig: Promise<string> | null = null;
+			const configOf = (request: LintOptions): Promise<string> => {
+				const projectConfig = findProjectConfig(request.sourcePath, request.rootPath);
+				if (projectConfig)
+				{
+					return Promise.resolve(projectConfig);
+				}
+
+				presetConfig ??= writePresetConfig({
+					rootPath,
 					outputDir: tempDir,
 					sourceRepository: Environment.getType() === 'source',
 				});
 
-			return await this.#lintFiles(files, options, configPath, path.join(tempDir, 'shadow'));
+				return presetConfig;
+			};
+
+			const requestFiles = await Promise.all(requests.map((request) => this.#collectFiles(request)));
+			const filesByConfig = new Map<string, Set<string>>();
+			for (const [i, request] of requests.entries())
+			{
+				const configPath = await configOf(request);
+				const files = filesByConfig.get(configPath) ?? new Set<string>();
+				requestFiles[i].forEach((file) => files.add(file));
+				filesByConfig.set(configPath, files);
+			}
+
+			const linted = new Map<string, LintedFile>();
+			for (const [index, [configPath, files]] of [...filesByConfig.entries()].entries())
+			{
+				const shadowRoot = path.join(tempDir, `shadow-${index}`);
+				const result = await this.#lintFiles([...files].sort(), { rootPath, fix }, configPath, shadowRoot);
+				result.forEach((file, filePath) => linted.set(filePath, file));
+			}
+
+			return requestFiles.map((files) => toLintResult(files.map((file) => linted.get(file)!)));
 		}
 		finally
 		{
@@ -113,12 +205,17 @@ export class OxlintStrategy extends LintStrategy
 		return files.filter((file) => !isExcluded(path.resolve(file))).sort();
 	}
 
-	async #lintFiles(paths: string[], options: LintOptions, configPath: string, shadowRoot: string): Promise<LintResult>
+	async #lintFiles(
+		paths: string[],
+		options: { rootPath: string; fix: boolean },
+		configPath: string,
+		shadowRoot: string,
+	): Promise<Map<string, LintedFile>>
 	{
-		const fix = options.fix ?? false;
+		const { rootPath, fix } = options;
 		const toSource = (filePath: string, text: string): SourceFile => {
 			const prepared = prepareSource(filePath, text);
-			const relative = path.relative(options.rootPath, filePath);
+			const relative = path.relative(rootPath, filePath);
 			const shadowRelative = relative.startsWith('..') ? path.basename(filePath) : relative;
 
 			return {
@@ -143,9 +240,9 @@ export class OxlintStrategy extends LintStrategy
 		}));
 		await Promise.all(sources.map(writeShadow));
 
-		const lintRun = (list: SourceFile[]) => this.#lint(list, options.rootPath, shadowRoot, configPath);
+		const lintRun = (list: SourceFile[]) => this.#lint(list, rootPath, shadowRoot, configPath);
+		const fixed = new Set<string>();
 		let diagnostics: Map<string, OxlintDiagnostic[]>;
-		let fixedCount = 0;
 
 		if (!fix)
 		{
@@ -153,23 +250,23 @@ export class OxlintStrategy extends LintStrategy
 		}
 		else
 		{
-			// native files are fixed in place; Flow files are fixed in their shadow copies and
+			// Native files are fixed in place; Flow files are fixed in their shadow copies and
 			// the result is carried over to the originals. Type-stripped copies are never fixed:
 			// blanked types make fixes unsafe.
 			const native = sources.filter((s) => s.prepared.kind === 'native');
 			const fixableShadow = sources.filter((s): s is ShadowSource => isShadow(s) && s.prepared.kind !== 'stripped');
 			const [nativeDiagnostics] = await Promise.all([
-				this.#fixUntilStable(native.map((s) => s.path), options.rootPath, configPath),
+				this.#fixUntilStable(native.map((s) => s.path), rootPath, configPath),
 				this.#fixUntilStable(fixableShadow.map((s) => s.lintPath), shadowRoot, configPath),
 			]);
 
-			const relint: SourceFile[] = sources.filter((s) => isShadow(s) && s.prepared.kind === 'stripped');
+			const relint: SourceFile[] = sources.filter((s) => s.prepared.kind === 'stripped');
 			sources = await Promise.all(sources.map(async (source) => {
 				if (source.prepared.kind === 'native')
 				{
 					if (await fs.promises.readFile(source.path, 'utf8') !== source.text)
 					{
-						fixedCount++;
+						fixed.add(source.path);
 					}
 
 					return source;
@@ -183,13 +280,18 @@ export class OxlintStrategy extends LintStrategy
 				const after = await fs.promises.readFile(source.lintPath, 'utf8');
 				const carried = after === source.prepared.text
 					? null
-					: carryOverEdits(source.text, diffText(source.prepared.text, after), source.prepared.changed);
+					: carryOverEdits(
+						source.text,
+						diffText(source.prepared.text, after),
+						source.prepared.changed,
+						source.prepared.kind === 'flow-as-ts' ? source.prepared.typeRanges : [],
+					);
 
 				let updated: SourceFile = source;
 				if (carried && carried.text !== source.text)
 				{
 					await fs.promises.writeFile(source.path, carried.text);
-					fixedCount++;
+					fixed.add(source.path);
 					updated = toSource(source.path, carried.text);
 				}
 
@@ -203,49 +305,38 @@ export class OxlintStrategy extends LintStrategy
 			diagnostics = new Map([...nativeDiagnostics, ...await lintRun(relint)]);
 		}
 
-		const files: LintFileResult[] = [];
+		const files = new Map<string, LintedFile>();
 		for (const source of sources)
 		{
 			if (source.prepared.kind === 'unparsable')
 			{
 				const { line, column } = new TextPositions(source.text).locationOf(source.prepared.offset);
-				files.push({
+				files.set(source.path, {
 					filePath: source.path,
 					messages: [{ line, column, severity: 'error', message: `Parsing error: ${source.prepared.message}`, ruleId: null }],
+					fixed: false,
 				});
 				continue;
 			}
 
 			// fixed native files are reported against their new text
-			const text = source.prepared.kind === 'native' && fix
+			const text = source.prepared.kind === 'native' && fixed.has(source.path)
 				? await fs.promises.readFile(source.path, 'utf8')
 				: source.text;
 
-			files.push({
+			files.set(source.path, {
 				filePath: source.path,
 				messages: this.#toMessages(
 					diagnostics.get(source.lintPath) ?? [],
 					text,
 					isShadow(source) ? source.prepared.changed : [],
+					source.prepared.kind === 'flow-as-ts' ? source.prepared.typeRanges : [],
 				),
+				fixed: fixed.has(source.path),
 			});
 		}
 
-		const count = (severity: LintMessage['severity']) => files.reduce(
-			(sum, file) => sum + file.messages.filter((m) => m.severity === severity).length,
-			0,
-		);
-		const errorsCount = count('error');
-		const warningsCount = count('warning');
-
-		return {
-			files,
-			hasErrors: () => errorsCount > 0,
-			getErrorsCount: () => errorsCount,
-			hasWarnings: () => warningsCount > 0,
-			getWarningsCount: () => warningsCount,
-			getFixedCount: () => fixedCount,
-		};
+		return files;
 	}
 
 	/**
@@ -305,12 +396,14 @@ export class OxlintStrategy extends LintStrategy
 	/**
 	 * Diagnostics at or right next to transformed positions describe the transformation (a
 	 * blanked `?` makes a double space, a blanked type leaves a space before a comma), not
-	 * the code, and are dropped.
+	 * the code, and are dropped. So are formatting diagnostics inside Flow type annotations
+	 * (`typeRanges`): ESLint did not format Flow types.
 	 */
-	#toMessages(diagnostics: OxlintDiagnostic[], text: string, changed: number[]): LintMessage[]
+	#toMessages(diagnostics: OxlintDiagnostic[], text: string, changed: number[], typeRanges: Array<[number, number]> = []): LintMessage[]
 	{
 		const positions = new TextPositions(text);
 		const changedSorted = [...changed].sort((a, b) => a - b);
+		// is there a changed position within [start, end]?
 		const touchesChange = (start: number, end: number) => {
 			let low = 0;
 			let high = changedSorted.length;
@@ -327,7 +420,7 @@ export class OxlintStrategy extends LintStrategy
 				}
 			}
 
-			return low < changedSorted.length && changedSorted[low] <= Math.max(start, end - 1);
+			return low < changedSorted.length && changedSorted[low] <= end;
 		};
 
 		const messages: LintMessage[] = [];
@@ -335,7 +428,12 @@ export class OxlintStrategy extends LintStrategy
 		{
 			const start = positions.indexOfByteOffset(diagnostic.offset);
 			const end = positions.indexOfByteOffset(diagnostic.offset + diagnostic.length);
-			if (diagnostic.code && touchesChange(start - 1, end + 1))
+			if (diagnostic.code && touchesChange(start - 1, end))
+			{
+				continue;
+			}
+
+			if (isTypeFormatting(diagnostic.code, start, typeRanges))
 			{
 				continue;
 			}

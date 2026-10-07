@@ -44,9 +44,29 @@ describe('prepareSource', () => {
 	});
 
 	it('does not read the Flow indexer as a TypeScript computed key', () => {
-		const prepared = prepareSource('/a/b.js', 'const map: {[string]: number} = {};\n');
+		const text = 'const map: {[string]: number} = {};\n';
+		const prepared = prepareSource('/a/b.js', text);
 
-		assert.equal(prepared.kind, 'stripped');
+		assert.equal(prepared.kind, 'flow-as-ts');
+		if (prepared.kind === 'flow-as-ts')
+		{
+			assert.equal(prepared.text, 'const map: { string : number} = {};\n');
+			assert.deepEqual(prepared.changed, [text.indexOf('['), text.indexOf(']')]);
+		}
+	});
+
+	it('knows where the type annotations are', () => {
+		const text = 'type A = {a: string};\nconst b: A = {a: \'1\'};\n';
+		const prepared = prepareSource('/a/b.js', text);
+
+		assert.equal(prepared.kind, 'flow-as-ts');
+		if (prepared.kind === 'flow-as-ts')
+		{
+			assert.deepEqual(
+				prepared.typeRanges.map(([start, end]) => text.slice(start, end)).sort(),
+				[': A', 'type A = {a: string};'],
+			);
+		}
 	});
 
 	it('reports what nothing parses', () => {
@@ -56,7 +76,7 @@ describe('prepareSource', () => {
 	});
 
 	it('names the TypeScript copy of a Flow file *.js.ts', () => {
-		assert.equal(shadowName('x/b.js', { kind: 'flow-as-ts', text: '', changed: [] }), 'x/b.js.ts');
+		assert.equal(shadowName('x/b.js', { kind: 'flow-as-ts', text: '', changed: [], typeRanges: [] }), 'x/b.js.ts');
 		assert.equal(shadowName('x/b.js', { kind: 'stripped', text: '', changed: [] }), 'x/b.js');
 	});
 });

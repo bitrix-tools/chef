@@ -34,30 +34,45 @@ const EMPTY_LINT_RESULT: LintResult = {
 	getFixedCount: () => 0,
 };
 
+function packageLintOptions(extension: BasePackage, options: LintCommandOptions)
+{
+	const root = extension.getPath();
+	const resolve = (pattern: string) => (path.isAbsolute(pattern) ? pattern : path.join(root, pattern));
+
+	return {
+		fix: options.fix,
+		files: options.files?.map(resolve),
+		cache: options.cache,
+		exclude: options.exclude?.map(resolve),
+		linter: options.linter,
+	};
+}
+
+/**
+ * Lints the extensions ahead in one batch when the linter supports it (oxlint); `lint()`
+ * then picks the prepared results up.
+ */
+export async function prefetchLint(extensions: BasePackage[], options: LintCommandOptions = {}): Promise<void>
+{
+	const { PackageLinter } = await import('../../../modules/services/package-linter');
+	await PackageLinter.prefetch(extensions.map((extension) => ({
+		extensionPackage: extension,
+		options: packageLintOptions(extension, options),
+	})));
+}
+
 export function lint(extension: BasePackage, options: LintCommandOptions = {}): () => Promise<LintRunResult>
 {
 	return async () => {
 		const name = extension.getName();
 		const root = extension.getPath();
-		const files = options.files?.map((pattern) => {
-			return path.isAbsolute(pattern) ? pattern : path.join(root, pattern);
-		});
-		const exclude = options.exclude?.map((pattern) => {
-			return path.isAbsolute(pattern) ? pattern : path.join(root, pattern);
-		});
 
 		let lintResult: LintResult = EMPTY_LINT_RESULT;
 
 		const lintTask: Task = {
 			title: `Linting ${name}...`,
 			run: async (): Promise<TaskResult> => {
-				const result = await extension.lint({
-					fix: options.fix,
-					files,
-					cache: options.cache,
-					exclude,
-					linter: options.linter,
-				});
+				const result = await extension.lint(packageLintOptions(extension, options));
 
 				lintResult = result;
 
