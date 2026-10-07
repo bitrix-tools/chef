@@ -44,6 +44,11 @@ export class ESLintStrategy extends LintStrategy
 {
 	match(options: LintOptions): boolean
 	{
+		if ((options.linter ?? process.env.CHEF_LINTER) === 'oxlint')
+		{
+			return false;
+		}
+
 		return findConfigFile(options.sourcePath, options.rootPath) !== null;
 	}
 

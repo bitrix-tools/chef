@@ -7,13 +7,14 @@ import { pluralize } from '../../../utils/pluralize';
 
 import type { BasePackage } from '../../../modules/packages/base-package';
 import type { Task, TaskResult, TaskDetail, TaskGroupResult } from '../../../modules/task/task-types';
-import type { LintResult } from '../../../modules/engines/lint/lint-types';
+import type { LintResult, LinterName } from '../../../modules/engines/lint/lint-types';
 
 type LintCommandOptions = {
 	fix?: boolean;
 	files?: string[];
 	cache?: boolean;
 	exclude?: string[];
+	linter?: LinterName;
 };
 
 export type LintRunResult = {
@@ -55,6 +56,7 @@ export function lint(extension: BasePackage, options: LintCommandOptions = {}): 
 					files,
 					cache: options.cache,
 					exclude,
+					linter: options.linter,
 				});
 
 				lintResult = result;

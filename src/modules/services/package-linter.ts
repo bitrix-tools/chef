@@ -2,16 +2,18 @@ import * as path from 'node:path';
 
 import { LintEngine } from '../engines/lint/lint-engine';
 import { ESLintStrategy } from '../engines/lint/eslint/eslint-strategy';
+import { OxlintStrategy } from '../engines/lint/oxlint/oxlint-strategy';
 import { Environment } from '../../environment/environment';
 
 import type { BasePackage } from '../packages/base-package';
-import type { LintResult } from '../engines/lint/lint-types';
+import type { LintResult, LinterName } from '../engines/lint/lint-types';
 
 type PackageLinterOptions = {
 	fix?: boolean;
 	files?: string[];
 	cache?: boolean;
 	exclude?: string[];
+	linter?: LinterName;
 };
 
 export class PackageLinter
@@ -26,6 +28,7 @@ export class PackageLinter
 	async lint(options: PackageLinterOptions = {}): Promise<LintResult>
 	{
 		const engine = new LintEngine([
+			new OxlintStrategy(),
 			new ESLintStrategy(),
 		]);
 
@@ -40,6 +43,7 @@ export class PackageLinter
 				this.#package.getOutputCssPath(),
 				...(options.exclude ?? []),
 			],
+			linter: options.linter,
 		});
 	}
 }
