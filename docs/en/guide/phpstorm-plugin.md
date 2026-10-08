@@ -91,8 +91,12 @@ API). chef provides a language server that also lints Flow files:
 
 The language server lints each extension (the directory of its `bundle.config.*`) as a workspace
 of its own, opened with its first document, so it starts in seconds in a repository of any size.
-The config is the one set in the editor, else the nearest `oxlint.config.ts` or `.oxlintrc.json`
-from the extension up to the project root.
+A file outside extensions gets the nearest directory with a `package.json` below the project root
+as its workspace, else its own directory. Files directly in the project root, such as
+`webpack.config.js`, get no diagnostics: their workspace would be the whole repository.
+The config is the one set in the editor, else the one `chef lint` takes for the extension: the
+nearest `oxlint.config.ts` from its `src` up to the project root, else the nearest
+`.oxlintrc.json`. Configs deeper in the extension are not applied, as in `chef lint`.
 
 The Oxc plugin sends the server only the files under the directory of the `oxlint` package it
 finds in the project. Keep `oxlint` in the `node_modules` of the project root, or nowhere: with

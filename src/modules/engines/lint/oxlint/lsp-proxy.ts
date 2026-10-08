@@ -84,6 +84,9 @@ const SCOPE_TIMEOUT = 60_000;
 
 const EXTENSION_FILES = ['bundle.config.js', 'bundle.config.ts', 'script.es6.js'];
 
+// options with a path the server resolves against its workspace folder
+const WORKSPACE_PATH_OPTIONS = ['configPath', 'tsConfigPath'];
+
 type OpenDocument = {
 	// what the server sees
 	uri: string;
@@ -106,9 +109,10 @@ type OpenDocument = {
  * looking for .gitignore files, which takes minutes on a repository of modules and times
  * out the editor. Each extension with an open document becomes a workspace instead, and
  * messages about its documents wait until the server confirms it (it registers file
- * watchers for a new workspace). The config path is passed explicitly, since the server
- * looks for a config in the workspace only: the one set in the editor, else the nearest
- * project config, else the presets.
+ * watchers for a new workspace). A document directly in an editor folder gets none: its
+ * workspace would be the whole folder again. The config path is passed explicitly, as
+ * `chef lint` passes it: the one set in the editor, else the project config found from the
+ * sources of the extension up to the editor folder, else the presets.
  */
 export class OxlintLspProxy
 {
@@ -127,8 +131,8 @@ export class OxlintLspProxy
 	#clientConfiguration = false;
 	#clientWatchers = false;
 	readonly #scopes = new Map<string, Scope>();
-	// directory of a document -> directory of its scope
-	readonly #scopeDirs = new Map<string, string>();
+	// directory of a document -> directory of its scope, null for none
+	readonly #scopeDirs = new Map<string, string | null>();
 	readonly #isIgnored = createPathFilter(IGNORED_FILES);
 	#client!: MessageStream;
 	#server!: MessageStream;
@@ -224,14 +228,15 @@ export class OxlintLspProxy
 		if (scopes)
 		{
 			this.#configurationRequests.delete(message.id!);
-			if (Array.isArray(message.result))
-			{
-				message.result = message.result.map((item: unknown, index: number) => {
-					const scope = scopes[index] ?? null;
+			// an editor that fails to answer still gets the options it gave for the folder
+			const answers: unknown[] = Array.isArray(message.result) ? message.result : [];
+			this.#server.send({
+				jsonrpc: '2.0',
+				id: message.id,
+				result: scopes.map((scope, index) => this.#scopeOptions(scope, answers[index] ?? null)),
+			});
 
-					return this.#withOptions(scope ? this.#merge(this.#rootOptions.get(scope.rootDir), item) : item, scope);
-				});
-			}
+			return;
 		}
 
 		this.#server.send(this.#toServerUris(message));
@@ -314,7 +319,7 @@ export class OxlintLspProxy
 		const rootUris = folders.length > 0
 			? folders.map((folder) => folder.uri)
 			: [params.rootUri ?? (params.rootPath ? pathToFileURL(params.rootPath).href : pathToFileURL(this.#rootPath).href)];
-		this.#rootDirs = rootUris.filter((uri) => uri.startsWith('file:')).map((uri) => fileURLToPath(uri));
+		this.#rootDirs = this.#pathsOfUris(rootUris);
 
 		const options = params.initializationOptions;
 		for (const rootDir of this.#rootDirs)
@@ -349,22 +354,24 @@ export class OxlintLspProxy
 
 	#changeRoots(event: { added?: Array<{ uri: string }>; removed?: Array<{ uri: string }> }): void
 	{
-		const removed = (event.removed ?? []).map((folder) => fileURLToPath(folder.uri));
-		const added = (event.added ?? []).map((folder) => fileURLToPath(folder.uri));
+		const removed = this.#pathsOfUris((event.removed ?? []).map((folder) => folder?.uri));
+		const added = this.#pathsOfUris((event.added ?? []).map((folder) => folder?.uri));
 		this.#rootDirs = [...this.#rootDirs.filter((dir) => !removed.includes(dir)), ...added];
 		removed.forEach((dir) => this.#rootOptions.delete(dir));
 		added.forEach((dir) => this.#rootOptions.set(dir, null));
+		// the scope of a directory depends on the folder it lies in
+		this.#scopeDirs.clear();
 
 		const gone = [...this.#scopes.values()].filter((scope) => this.#rootOf(scope.dir) !== scope.rootDir);
-		gone.forEach((scope) => this.#dropScope(scope));
-		if (gone.length > 0)
+		if (gone.length === 0)
 		{
-			this.#server.send({
-				jsonrpc: '2.0',
-				method: 'workspace/didChangeWorkspaceFolders',
-				params: { event: { added: [], removed: gone.map((scope) => ({ uri: scope.uri, name: scope.dir })) } },
-			});
+			return;
 		}
+
+		gone.forEach((scope) => this.#dropScope(scope));
+		this.#sendFolders([], gone);
+		// messages held for a dropped scope go to the scope their documents have now
+		gone.flatMap((scope) => scope.queue).forEach((message) => this.#fromClient(message));
 	}
 
 	/**
@@ -397,10 +404,7 @@ export class OxlintLspProxy
 			this.#rootDirs.forEach((dir) => this.#rootOptions.set(dir, settings));
 		}
 
-		params.settings = [...this.#scopes.values()].map((scope) => ({
-			workspaceUri: scope.uri,
-			options: this.#withOptions(this.#rootOptions.get(scope.rootDir) ?? null, scope),
-		}));
+		params.settings = [...this.#scopes.values()].map((scope) => ({ workspaceUri: scope.uri, options: this.#scopeOptions(scope) }));
 	}
 
 	/**
@@ -410,12 +414,11 @@ export class OxlintLspProxy
 	#requestConfiguration(message: Message): void
 	{
 		const items: Array<{ scopeUri?: string; section?: string }> = message.params?.items ?? [];
-		const scopes = items.map((item) => (item.scopeUri ? this.#scopes.get(this.#dirOfUri(item.scopeUri)) ?? null : null));
+		const scopes = items.map((item) => (item.scopeUri ? this.#scopes.get(this.#pathOfUri(item.scopeUri)) ?? null : null));
 
 		if (!this.#clientConfiguration)
 		{
-			const result = scopes.map((scope) => this.#withOptions(scope ? this.#rootOptions.get(scope.rootDir) ?? null : null, scope));
-			this.#server.send({ jsonrpc: '2.0', id: message.id, result });
+			this.#server.send({ jsonrpc: '2.0', id: message.id, result: scopes.map((scope) => this.#scopeOptions(scope)) });
 
 			return;
 		}
@@ -435,12 +438,13 @@ export class OxlintLspProxy
 	#scopeOfMessage(message: Message): Scope | null
 	{
 		const uri = message.method?.startsWith('textDocument/') ? message.params?.textDocument?.uri : undefined;
-		if (typeof uri !== 'string' || !uri.startsWith('file:'))
+		// what the server says about files chef lint never lints is dropped anyway
+		if (typeof uri !== 'string' || !uri.startsWith('file:') || this.#isIgnoredUri(uri))
 		{
 			return null;
 		}
 
-		const filePath = fileURLToPath(uri);
+		const filePath = this.#pathOfUri(uri);
 		const rootDir = this.#rootOf(filePath);
 		if (!rootDir)
 		{
@@ -448,34 +452,31 @@ export class OxlintLspProxy
 		}
 
 		const dir = this.#scopeDirOf(path.dirname(filePath), rootDir);
-		const existing = this.#scopes.get(dir);
-		if (existing)
+		const existing = dir ? this.#scopes.get(dir) : undefined;
+		// the server needs no workspace to close a document
+		if (!dir || existing || message.method === 'textDocument/didClose')
 		{
-			return existing;
+			return existing ?? null;
 		}
 
 		const scope: Scope = { dir, uri: pathToFileURL(dir).href, rootDir, ready: false, queue: [], timer: null };
 		scope.timer = setTimeout(() => this.#release(scope), SCOPE_TIMEOUT);
 		scope.timer.unref();
 		this.#scopes.set(dir, scope);
-		this.#server.send({
-			jsonrpc: '2.0',
-			method: 'workspace/didChangeWorkspaceFolders',
-			params: { event: { added: [{ uri: scope.uri, name: path.basename(dir) }], removed: [] } },
-		});
+		this.#sendFolders([scope], []);
 
 		return scope;
 	}
 
 	/**
-	 * The extension directory of a document, else its package, else its own directory.
+	 * The extension directory of a document, else its package, else its own directory, but
+	 * not the editor folder itself unless it is an extension: the server would walk all of it.
 	 */
-	#scopeDirOf(fileDir: string, rootDir: string): string
+	#scopeDirOf(fileDir: string, rootDir: string): string | null
 	{
-		const known = this.#scopeDirs.get(fileDir);
-		if (known)
+		if (this.#scopeDirs.has(fileDir))
 		{
-			return known;
+			return this.#scopeDirs.get(fileDir)!;
 		}
 
 		const ancestors: string[] = [];
@@ -490,10 +491,20 @@ export class OxlintLspProxy
 
 		const scopeDir = ancestors.find((dir) => EXTENSION_FILES.some((name) => fs.existsSync(path.join(dir, name))))
 			?? ancestors.find((dir) => dir !== rootDir && fs.existsSync(path.join(dir, 'package.json')))
-			?? fileDir;
+			?? (fileDir === rootDir ? null : fileDir);
 		this.#scopeDirs.set(fileDir, scopeDir);
 
 		return scopeDir;
+	}
+
+	#sendFolders(added: Scope[], removed: Scope[]): void
+	{
+		const folder = (scope: Scope) => ({ uri: scope.uri, name: path.basename(scope.dir) });
+		this.#server.send({
+			jsonrpc: '2.0',
+			method: 'workspace/didChangeWorkspaceFolders',
+			params: { event: { added: added.map(folder), removed: removed.map(folder) } },
+		});
 	}
 
 	#confirmScopes(registrations: Array<{ id?: string }>): void
@@ -506,7 +517,7 @@ export class OxlintLspProxy
 				continue;
 			}
 
-			const scope = this.#scopes.get(this.#dirOfUri(id.slice('watcher-'.length)));
+			const scope = this.#scopes.get(this.#pathOfUri(id.slice('watcher-'.length)));
 			if (scope)
 			{
 				this.#release(scope);
@@ -533,16 +544,10 @@ export class OxlintLspProxy
 		if (scope.timer)
 		{
 			clearTimeout(scope.timer);
+			scope.timer = null;
 		}
 
 		this.#scopes.delete(scope.dir);
-		for (const [fileDir, scopeDir] of this.#scopeDirs)
-		{
-			if (scopeDir === scope.dir)
-			{
-				this.#scopeDirs.delete(fileDir);
-			}
-		}
 	}
 
 	#rootOf(filePath: string): string | null
@@ -552,19 +557,40 @@ export class OxlintLspProxy
 			.sort((a, b) => b.length - a.length)[0] ?? null;
 	}
 
-	#dirOfUri(uri: string): string
+	/**
+	 * The path of a `file:` URI, normalized: no trailing separator, no empty segments.
+	 */
+	#pathOfUri(uri: string): string
 	{
 		return path.resolve(fileURLToPath(uri));
 	}
 
+	/**
+	 * Paths of the `file:` URIs among the given ones.
+	 */
+	#pathsOfUris(uris: unknown[]): string[]
+	{
+		return uris
+			.filter((uri): uri is string => typeof uri === 'string' && uri.startsWith('file:'))
+			.map((uri) => this.#pathOfUri(uri));
+	}
+
 	#isSamePath(uri: string, dir: string): boolean
 	{
-		return uri.startsWith('file:') && this.#dirOfUri(uri) === path.resolve(dir);
+		return uri.startsWith('file:') && this.#pathOfUri(uri) === dir;
 	}
 
 	/**
-	 * Options the editor gave on start, updated by the ones it answers with now.
+	 * Options for a scope: the ones the editor gave for its folder, updated by the ones it
+	 * answers with now, if asked.
 	 */
+	#scopeOptions(scope: Scope | null, answered?: unknown): unknown
+	{
+		const given = scope ? this.#rootOptions.get(scope.rootDir) ?? null : null;
+
+		return this.#withOptions(answered === undefined ? given : this.#merge(given, answered), scope);
+	}
+
 	#merge(initial: unknown, current: unknown): unknown
 	{
 		const isObject = (value: unknown) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -577,26 +603,39 @@ export class OxlintLspProxy
 	}
 
 	/**
-	 * The options of a scope: the config path set in the editor wins, relative to the editor
-	 * folder; else the nearest project config up to that folder; else the presets.
+	 * The options of a scope. The server resolves paths against its workspace, the scope, so
+	 * the ones relative to the editor folder are made absolute. The config path set in the
+	 * editor wins; else the project config `chef lint` takes, found from the sources of the
+	 * extension up to that folder; else the presets.
 	 */
 	#withOptions(options: unknown, scope: Scope | null): unknown
 	{
-		const given = options && typeof options === 'object' ? options as Record<string, unknown> : {};
-		if (typeof given.configPath === 'string' && given.configPath !== '')
+		const isObject = Boolean(options) && typeof options === 'object';
+		const given: Record<string, unknown> = isObject ? { ...options as Record<string, unknown> } : {};
+		if (scope)
 		{
-			return scope && !path.isAbsolute(given.configPath)
-				? { ...given, configPath: path.resolve(scope.rootDir, given.configPath) }
-				: options;
+			for (const key of WORKSPACE_PATH_OPTIONS)
+			{
+				const value = given[key];
+				if (typeof value === 'string' && value !== '' && !path.isAbsolute(value))
+				{
+					given[key] = path.resolve(scope.rootDir, value);
+				}
+			}
 		}
 
-		const configPath = (scope && findProjectConfig(scope.dir, scope.rootDir)) ?? this.#configPath;
-		if (!configPath)
+		if (typeof given.configPath !== 'string' || given.configPath === '')
 		{
-			return options;
+			const configPath = (scope && findProjectConfig(path.join(scope.dir, 'src'), scope.rootDir)) ?? this.#configPath;
+			if (!configPath)
+			{
+				return isObject ? given : options;
+			}
+
+			given.configPath = configPath;
 		}
 
-		return { ...given, configPath };
+		return given;
 	}
 
 	#isTransformed(uri: string): boolean

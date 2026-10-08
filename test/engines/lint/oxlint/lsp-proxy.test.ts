@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { describe, it, before, after } from 'mocha';
 import { assert } from 'chai';
 
-type Message = { id?: number; method?: string; params?: any; result?: any };
+type Message = { id?: number; method?: string; params?: any; result?: any; error?: any };
 
 /**
  * Talks LSP to `chef-oxlint --lsp` over stdio.
@@ -20,6 +20,8 @@ class Client
 	readonly #waiting = new Map<number, (message: Message) => void>();
 	readonly diagnostics = new Map<string, Array<{ code: string; range: any; message: string }>>();
 	readonly registrations: Array<{ id: string }> = [];
+	// answer workspace/configuration with an error, like an editor that cannot
+	configurationFails = false;
 
 	constructor(cwd: string)
 	{
@@ -59,7 +61,14 @@ class Client
 					this.registrations.push(...message.params.registrations);
 				}
 
-				this.send({ id: message.id, result: message.method === 'workspace/configuration' ? message.params.items.map(() => ({})) : null });
+				if (message.method === 'workspace/configuration' && this.configurationFails)
+				{
+					this.send({ id: message.id, error: { code: -32601, message: 'Unhandled method workspace/configuration' } });
+				}
+				else
+				{
+					this.send({ id: message.id, result: message.method === 'workspace/configuration' ? message.params.items.map(() => ({})) : null });
+				}
 			}
 			else if (message.id !== undefined)
 			{
@@ -282,20 +291,32 @@ describe('oxlint language server in a repository of extensions', function ()
 
 	const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chef-oxlint-lsp-test-')));
 	const extensionDir = path.join(root, 'ui', 'install', 'js', 'ui', 'wrap');
-	const filePath = path.join(extensionDir, 'src', 'wrap.js');
+	const filePath = path.join(extensionDir, 'src', 'lib', 'wrap.js');
 	const uri = pathToFileURL(filePath).href;
 	const text = 'export function wrap(value) { debugger; return value ? value : "" }\n';
+	const watcherOf = (dir: string) => `watcher-${pathToFileURL(dir).href}`;
 	let client: Client;
+
+	const open = (filePathToOpen: string, textToOpen: string) => {
+		const documentUri = pathToFileURL(filePathToOpen).href;
+		client.send({ method: 'textDocument/didOpen', params: { textDocument: { uri: documentUri, languageId: 'javascript', version: 1, text: textToOpen } } });
+
+		return client.request('textDocument/diagnostic', { textDocument: { uri: documentUri } });
+	};
 
 	before(async () => {
 		fs.mkdirSync(path.dirname(filePath), { recursive: true });
 		fs.writeFileSync(path.join(extensionDir, 'bundle.config.js'), 'module.exports = {};\n');
 		fs.writeFileSync(filePath, text);
 		fs.writeFileSync(path.join(root, '.oxlintrc.json'), JSON.stringify({ categories: { correctness: 'off' }, rules: { 'no-debugger': 'error' } }));
+		// chef lint does not apply it: it takes the config found from src up
+		fs.writeFileSync(path.join(path.dirname(filePath), '.oxlintrc.json'), JSON.stringify({ rules: { 'no-debugger': 'off' } }));
+		fs.writeFileSync(path.join(root, 'package.json'), '{}\n');
 		client = new Client(root);
 		await client.request('initialize', {
 			processId: process.pid,
-			workspaceFolders: [{ uri: pathToFileURL(root).href, name: 'root' }],
+			// some editors end a folder URI with a slash
+			workspaceFolders: [{ uri: `${pathToFileURL(root).href}/`, name: 'root' }],
 			capabilities: {
 				workspace: { configuration: true, didChangeWatchedFiles: { dynamicRegistration: true }, diagnostics: { refreshSupport: true } },
 				textDocument: { diagnostic: { dynamicRegistration: true } },
@@ -313,14 +334,100 @@ describe('oxlint language server in a repository of extensions', function ()
 		client.send({ method: 'textDocument/didOpen', params: { textDocument: { uri, languageId: 'javascript', version: 1, text } } });
 		await client.request('textDocument/diagnostic', { textDocument: { uri } });
 
-		assert.deepEqual(client.registrations.map((registration) => registration.id), [`watcher-${pathToFileURL(extensionDir).href}`]);
+		assert.deepEqual(client.registrations.map((registration) => registration.id), [watcherOf(extensionDir)]);
 	});
 
-	it('lints with the project config found above the extension', async () => {
+	it('lints with the project config chef lint takes for the extension', async () => {
+		const response = await client.request('textDocument/diagnostic', { textDocument: { uri } });
+		const items = response.result.items as Array<{ code: string; severity: number }>;
+
+		// an error, as the config says, not a warning of oxlint's defaults
+		assert.deepEqual(items.map((d) => [d.code, d.severity]), [['eslint(no-debugger)', 1]]);
+	});
+
+	it('serves a file outside any extension in its own directory', async () => {
+		const toolPath = path.join(root, 'tools', 'build', 'make.js');
+		fs.mkdirSync(path.dirname(toolPath), { recursive: true });
+		await open(toolPath, 'debugger;\n');
+
+		assert.include(client.registrations.map((registration) => registration.id), watcherOf(path.dirname(toolPath)));
+		assert.notInclude(client.registrations.map((registration) => registration.id), watcherOf(root));
+	});
+
+	it('does not serve files chef lint never lints', async () => {
+		const libraryDir = path.join(root, 'node_modules', 'library');
+		fs.mkdirSync(libraryDir, { recursive: true });
+		fs.writeFileSync(path.join(libraryDir, 'package.json'), '{}\n');
+		const response = await open(path.join(libraryDir, 'index.js'), 'debugger;\n');
+
+		assert.deepEqual(response.result.items, []);
+		assert.notInclude(client.registrations.map((registration) => registration.id), watcherOf(libraryDir));
+	});
+
+	it('does not serve the whole repository for a file in its root', async () => {
+		const response = await open(path.join(root, 'webpack.config.js'), 'debugger;\n');
+
+		assert.deepEqual(response.result.items, []);
+		assert.notInclude(client.registrations.map((registration) => registration.id), watcherOf(root));
+	});
+
+	it('keeps the messages held for an extension when the editor folders change', async () => {
+		const otherDir = path.join(root, 'ui', 'install', 'js', 'ui', 'other');
+		const otherPath = path.join(otherDir, 'src', 'other.js');
+		fs.mkdirSync(path.dirname(otherPath), { recursive: true });
+		fs.writeFileSync(path.join(otherDir, 'bundle.config.js'), 'module.exports = {};\n');
+		fs.writeFileSync(otherPath, 'export const other = 1;\n');
+
+		// the extension is not served yet when the folders change
+		const diagnostics = open(otherPath, 'export const other = 1;\ndebugger;\n');
+		client.send({
+			method: 'workspace/didChangeWorkspaceFolders',
+			params: { event: { added: [{ uri: pathToFileURL(path.join(root, 'ui')).href, name: 'ui' }], removed: [] } },
+		});
+		const codes = ((await diagnostics).result.items as Array<{ code: string }>).map((d) => d.code);
+
+		assert.include(codes, 'eslint(no-debugger)');
+	});
+});
+
+describe('oxlint language server for an editor that fails to give its configuration', function ()
+{
+	this.timeout(60000);
+
+	const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chef-oxlint-lsp-test-')));
+	const filePath = path.join(root, 'ext', 'src', 'wrap.js');
+	const uri = pathToFileURL(filePath).href;
+	const text = 'export const wrap = "x"\n';
+	let client: Client;
+
+	before(async () => {
+		fs.mkdirSync(path.dirname(filePath), { recursive: true });
+		fs.writeFileSync(filePath, text);
+		client = new Client(root);
+		client.configurationFails = true;
+		await client.request('initialize', {
+			processId: process.pid,
+			rootUri: pathToFileURL(root).href,
+			capabilities: {
+				workspace: { configuration: true, diagnostics: { refreshSupport: true } },
+				textDocument: { diagnostic: { dynamicRegistration: true } },
+			},
+		});
+		client.send({ method: 'initialized', params: {} });
+	});
+
+	after(() => {
+		client.stop();
+		fs.rmSync(root, { recursive: true, force: true });
+	});
+
+	it('lints with the presets', async () => {
+		client.send({ method: 'textDocument/didOpen', params: { textDocument: { uri, languageId: 'javascript', version: 1, text } } });
 		const response = await client.request('textDocument/diagnostic', { textDocument: { uri } });
 		const codes = (response.result.items as Array<{ code: string }>).map((d) => d.code);
 
-		assert.deepEqual(codes, ['eslint(no-debugger)']);
+		assert.include(codes, '@stylistic(semi)');
+		assert.include(codes, '@stylistic(quotes)');
 	});
 });
 
