@@ -8,6 +8,7 @@ import { LintStrategy } from '../lint-strategy';
 import { createPathFilter } from '../../../../utils/create-path-filter';
 import { normalizePath } from '../../../../utils/path/normalize';
 import { Environment } from '../../../../environment/environment';
+import { TransformationArtifacts } from './artifacts';
 import { IGNORED_FILES, findProjectConfig, writePresetConfig } from './oxlint-config';
 import { prepareSource, shadowName } from './prepare-source';
 import { runOxlint, toRuleId } from './run-oxlint';
@@ -49,34 +50,6 @@ function groupByFile(diagnostics: OxlintDiagnostic[]): Map<string, OxlintDiagnos
 	}
 
 	return byFile;
-}
-
-// Formatting rules that look at text, not at syntax: ESLint applied them to Flow types too.
-const TEXT_RULES = new Set([
-	'eol-last',
-	'linebreak-style',
-	'max-len',
-	'no-mixed-spaces-and-tabs',
-	'no-multiple-empty-lines',
-	'no-trailing-spaces',
-	'spaced-comment',
-]);
-
-/**
- * A formatting diagnostic inside a Flow type annotation: ESLint did not format Flow
- * types. A missing semicolon after `type A = {...}` is reported right at its end.
- */
-function isTypeFormatting(code: string | undefined, start: number, typeRanges: Array<[number, number]>): boolean
-{
-	const match = /^@stylistic\((.+)\)$/.exec(code ?? '');
-	if (!match || TEXT_RULES.has(match[1]))
-	{
-		return false;
-	}
-
-	const inclusiveEnd = match[1] === 'semi';
-
-	return typeRanges.some(([from, to]) => start >= from && (start < to || (inclusiveEnd && start === to)));
 }
 
 function toLintResult(linted: LintedFile[]): LintResult
@@ -324,8 +297,7 @@ export class OxlintStrategy extends LintStrategy
 				messages: this.#toMessages(
 					diagnostics.get(source.lintPath) ?? [],
 					text,
-					isShadow(source) ? source.prepared.changed : [],
-					source.prepared.kind === 'flow-as-ts' ? source.prepared.typeRanges : [],
+					isShadow(source) ? new TransformationArtifacts(source.text, source.prepared) : null,
 				),
 				fixed: fixed.has(source.path),
 			});
@@ -389,52 +361,18 @@ export class OxlintStrategy extends LintStrategy
 	}
 
 	/**
-	 * Diagnostics at or right next to transformed positions describe the transformation (a
-	 * blanked `?` makes a double space, a blanked type leaves a space before a comma), not
-	 * the code, and are dropped. So are formatting diagnostics inside Flow type annotations
-	 * (`typeRanges`): ESLint did not format Flow types.
+	 * Diagnostics of a shadow copy that describe the transformation are dropped (see
+	 * TransformationArtifacts).
 	 */
-	#toMessages(diagnostics: OxlintDiagnostic[], text: string, changed: number[], typeRanges: Array<[number, number]> = []): LintMessage[]
+	#toMessages(diagnostics: OxlintDiagnostic[], text: string, artifacts: TransformationArtifacts | null): LintMessage[]
 	{
 		const positions = new TextPositions(text);
-		const changedSorted = [...changed].sort((a, b) => a - b);
-		// is there a changed position within [start, end]?
-		const touchesChange = (start: number, end: number) => {
-			let low = 0;
-			let high = changedSorted.length;
-			while (low < high)
-			{
-				const middle = (low + high) >> 1;
-				if (changedSorted[middle] < start)
-				{
-					low = middle + 1;
-				}
-				else
-				{
-					high = middle;
-				}
-			}
-
-			return low < changedSorted.length && changedSorted[low] <= end;
-		};
-
 		const messages: LintMessage[] = [];
 		for (const diagnostic of diagnostics)
 		{
 			const start = positions.indexOfByteOffset(diagnostic.offset);
 			const end = positions.indexOfByteOffset(diagnostic.offset + diagnostic.length);
-			// a transformation artifact is a short span at the change (a double space, a space
-			// before a comma) or blank lines left by blanked types; any other span over lines
-			// (a class member, a function) only contains changes and still describes the code,
-			// unless it starts at one
-			const multiline = text.lastIndexOf('\n', end - 1) >= start;
-			const blank = multiline && text.slice(start, end).trim() === '';
-			if (diagnostic.code && touchesChange(start - 1, multiline && !blank ? start : end))
-			{
-				continue;
-			}
-
-			if (isTypeFormatting(diagnostic.code, start, typeRanges))
+			if (artifacts?.has(diagnostic.code, start, end))
 			{
 				continue;
 			}

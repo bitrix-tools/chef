@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { createPathFilter } from '../../../../utils/create-path-filter';
+import { TransformationArtifacts } from './artifacts';
 import { IGNORED_FILES, findProjectConfig, writePresetConfig } from './oxlint-config';
 import { prepareSource } from './prepare-source';
 import { oxlintBin } from './run-oxlint';
@@ -69,6 +70,8 @@ type OpenDocument = {
 	uri: string;
 	prepared: PreparedSource;
 	text: string;
+	// null for documents the server sees as they are
+	artifacts: TransformationArtifacts | null;
 };
 
 /**
@@ -258,19 +261,20 @@ export class OxlintLspProxy
 	{
 		if (!uri.startsWith('file:'))
 		{
-			return { uri, prepared: { kind: 'native' }, text };
+			return { uri, prepared: { kind: 'native' }, text, artifacts: null };
 		}
 
 		const prepared = prepareSource(fileURLToPath(uri), text);
 		if (prepared.kind === 'native' || prepared.kind === 'unparsable')
 		{
-			return { uri, prepared, text };
+			return { uri, prepared, text, artifacts: null };
 		}
 
 		return {
 			uri: prepared.kind === 'flow-as-ts' ? `${uri}.ts` : uri,
 			prepared,
 			text: prepared.text,
+			artifacts: new TransformationArtifacts(text, prepared),
 		};
 	}
 
@@ -342,8 +346,7 @@ export class OxlintLspProxy
 	 */
 	#isArtifact(document: OpenDocument, range: Range, code: string | undefined): boolean
 	{
-		const prepared = document.prepared;
-		if (prepared.kind === 'native' || prepared.kind === 'unparsable' || !code)
+		if (!document.artifacts)
 		{
 			return false;
 		}
@@ -351,21 +354,8 @@ export class OxlintLspProxy
 		const positions = new TextPositions(document.text);
 		const start = positions.indexOfLocation(range.start.line + 1, range.start.character + 1);
 		const end = positions.indexOfLocation(range.end.line + 1, range.end.character + 1);
-		// a span over lines only contains changes, unless it starts at one or is blank (see
-		// #toMessages of OxlintStrategy)
-		const blank = document.text.slice(start, end).trim() === '';
-		const last = range.start.line === range.end.line || blank ? end : start;
-		if (prepared.changed.some((index) => index >= start - 1 && index <= last))
-		{
-			return true;
-		}
 
-		if (prepared.kind === 'flow-as-ts' && /^@stylistic\(/.test(code))
-		{
-			return prepared.typeRanges.some(([from, to]) => start >= from && start < to);
-		}
-
-		return false;
+		return document.artifacts.has(code, start, end);
 	}
 
 	#isUnsafeEdit(document: OpenDocument, edit: TextEdit): boolean
