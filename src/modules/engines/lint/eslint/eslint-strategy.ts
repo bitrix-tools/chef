@@ -44,7 +44,7 @@ export class ESLintStrategy extends LintStrategy
 {
 	match(options: LintOptions): boolean
 	{
-		if ((options.linter ?? process.env.CHEF_LINTER) === 'oxlint')
+		if ((options.linter ?? process.env.CHEF_LINTER) !== 'eslint')
 		{
 			return false;
 		}

@@ -156,9 +156,9 @@ describe('chef (project environment)', () => {
 	});
 
 	describe('lint', () => {
-		it('should skip lint when no eslint config in project', async () => {
+		it('should skip lint with ESLint when no eslint config in project', async () => {
 			const { exitCode, output } = await runChef(
-				['lint', 'local.buttons'],
+				['lint', 'local.buttons', '--linter', 'eslint'],
 				{ cwd: tmpProject },
 			);
 

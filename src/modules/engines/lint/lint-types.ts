@@ -7,8 +7,7 @@ export type LintOptions = {
 	files?: string[];
 	cache?: boolean;
 	exclude?: string[];
-	// forces a linter; by default oxlint is used when the project has an oxlint config,
-	// ESLint otherwise. The CHEF_LINTER environment variable does the same.
+	// the linter, oxlint by default; the CHEF_LINTER environment variable does the same
 	linter?: LinterName;
 };
 

@@ -108,7 +108,7 @@ Types are checked automatically during build (`chef build`). The `chef typecheck
 
 ## chef lint
 
-Lint extensions with ESLint or oxlint.
+Lint extensions with oxlint (ESLint is kept for the transition: `--linter eslint`).
 
 ```bash
 chef lint [extensions...] [options]
@@ -122,7 +122,7 @@ chef lint [extensions...] [options]
 | `--file <patterns...>` | Lint specific files (glob patterns relative to `src/`) |
 | `--exclude <patterns...>` | Exclude files from linting (glob patterns relative to extension root) |
 | `--no-cache` | Disable caching (cache is enabled by default) |
-| `--linter <eslint\|oxlint>` | Linter to use; by default oxlint if the project has an oxlint config, ESLint otherwise |
+| `--linter <eslint\|oxlint>` | Linter to use, `oxlint` by default; also `CHEF_LINTER` |
 | `--lsp` | Run the oxlint language server for editors on stdin/stdout |
 
 ```bash
@@ -134,19 +134,19 @@ chef lint main.core --exclude 'src/old/**' # Exclude files from linting
 ```
 
 ::: tip
-`chef lint` requires an `eslint.config.{js,mjs,cjs,ts,mts,cts}` file in the project. If no config is found, linting is skipped.
+With `--linter eslint` (or `CHEF_LINTER=eslint`), `chef lint` requires an `eslint.config.{js,mjs,cjs,ts,mts,cts}` file in the project. If no config is found, linting is skipped.
 :::
 
 ### oxlint
 
-oxlint is used when the project has an `oxlint.config.ts` or `.oxlintrc.json`, or when it is
-requested with `--linter oxlint` (or the `CHEF_LINTER=oxlint` environment variable). Without a
-project config chef uses the Bitrix24 presets, `@bitrix24/oxlint-config-bitrix24` and
+oxlint is the default linter. chef uses the project's `oxlint.config.ts` or `.oxlintrc.json`
+when there is one, and the Bitrix24 presets otherwise: `@bitrix24/oxlint-config-bitrix24` and
 `@bitrix24/oxlint-config-bitrix24-mobile`.
 
 ```bash
-chef lint main.core --linter oxlint        # Lint with oxlint
-chef lint -p ui --linter oxlint --fix      # Fix a whole module with oxlint
+chef lint main.core                        # Lint with oxlint
+chef lint -p ui --fix                      # Fix a whole module
+chef lint main.core --linter eslint        # Lint with ESLint, as before
 ```
 
 - **Flow files.** oxlint has no Flow parser. chef lints a Flow file through a copy that oxlint can

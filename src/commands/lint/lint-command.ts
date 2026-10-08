@@ -152,7 +152,7 @@ lintCommand
 	.addOption(new Option('--exclude <patterns...>', 'Exclude files from linting (glob patterns relative to extension root)'))
 	.addOption(new Option('--no-cache', 'Disable caching (cache is enabled by default)'))
 	.addOption(new Option('--lsp', 'Run the oxlint language server for editors (stdio); Flow files are supported'))
-	.addOption(new Option('--linter <name>', 'Linter to use; by default oxlint if the project has an oxlint config, ESLint otherwise').choices(['eslint', 'oxlint']))
+	.addOption(new Option('--linter <name>', 'Linter to use (default: oxlint); ESLint is kept for the transition').choices(['eslint', 'oxlint']))
 	.addOption(createReporterOption())
 	.action(async (extensions: string[], args) => {
 		if (args.lsp)

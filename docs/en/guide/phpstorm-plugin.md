@@ -90,7 +90,7 @@ API). chef provides a language server that also lints Flow files:
    Code Quality Tools | ESLint**), otherwise the same problems are reported twice.
 
 Without an oxlint config in the project the language server uses the Bitrix24 presets, the same
-as `chef lint --linter oxlint`, and reports nothing for the files `chef lint` skips (`*.cjs`,
+as `chef lint`, and reports nothing for the files `chef lint` skips (`*.cjs`,
 `vendor`, `dist`, minified and bundled files), although the plugin sends them to the server.
 Quick fixes and **Run 'Fix All' on Save** keep Flow types intact. One 'Fix All' applies the fixes
 that do not overlap, so a line with several problems may need a second save; `chef lint --fix`
