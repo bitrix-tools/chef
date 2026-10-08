@@ -68,6 +68,34 @@ describe('OxlintStrategy', function ()
 		assert.isFalse(result.hasErrors());
 	});
 
+	it('keeps diagnostics over a whole member of a type-stripped Flow file', async () => {
+		// `any => void` is Flow only: the file is linted with its types blanked out
+		fs.writeFileSync(filePath, [
+			'export class Process',
+			'{',
+			'\thandlers: { stop?: any => void } = {};',
+			'',
+			'\tsetId(id: string): Process',
+			'\t{',
+			'\t\treturn this;',
+			'\t}',
+			'\tgetId(): string',
+			'\t{',
+			"\t\treturn '';",
+			'\t}',
+			'}',
+			'',
+		].join('\n'));
+		const result = await new OxlintStrategy().lint({ sourcePath, rootPath: root, linter: 'oxlint' });
+		const messages = result.files.find((file) => file.filePath === filePath)?.messages ?? [];
+
+		assert.deepEqual(
+			messages.filter((m) => m.ruleId === '@stylistic/lines-between-class-members').map((m) => m.line),
+			[9],
+		);
+		assert.deepEqual(messages.filter((m) => m.ruleId?.startsWith('@stylistic/') && m.line === 3), []);
+	});
+
 	it('reports a file nothing parses', async () => {
 		fs.writeFileSync(filePath, 'const = ;\n');
 		const result = await new OxlintStrategy().lint({ sourcePath, rootPath: root, linter: 'oxlint' });

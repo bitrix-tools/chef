@@ -307,10 +307,17 @@ export class OxlintStrategy extends LintStrategy
 				continue;
 			}
 
-			// fixed native files are reported against their new text
-			const text = source.prepared.kind === 'native' && fixed.has(source.path)
-				? await fs.promises.readFile(source.path, 'utf8')
-				: source.text;
+			// fixed native files are reported against their new text, shadow copies against
+			// the text oxlint saw (same length and lines as the original)
+			let text = source.text;
+			if (isShadow(source))
+			{
+				text = source.prepared.text;
+			}
+			else if (fixed.has(source.path))
+			{
+				text = await fs.promises.readFile(source.path, 'utf8');
+			}
 
 			files.set(source.path, {
 				filePath: source.path,
@@ -416,7 +423,13 @@ export class OxlintStrategy extends LintStrategy
 		{
 			const start = positions.indexOfByteOffset(diagnostic.offset);
 			const end = positions.indexOfByteOffset(diagnostic.offset + diagnostic.length);
-			if (diagnostic.code && touchesChange(start - 1, end))
+			// a transformation artifact is a short span at the change (a double space, a space
+			// before a comma) or blank lines left by blanked types; any other span over lines
+			// (a class member, a function) only contains changes and still describes the code,
+			// unless it starts at one
+			const multiline = text.lastIndexOf('\n', end - 1) >= start;
+			const blank = multiline && text.slice(start, end).trim() === '';
+			if (diagnostic.code && touchesChange(start - 1, multiline && !blank ? start : end))
 			{
 				continue;
 			}

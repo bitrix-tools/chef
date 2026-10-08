@@ -351,7 +351,11 @@ export class OxlintLspProxy
 		const positions = new TextPositions(document.text);
 		const start = positions.indexOfLocation(range.start.line + 1, range.start.character + 1);
 		const end = positions.indexOfLocation(range.end.line + 1, range.end.character + 1);
-		if (prepared.changed.some((index) => index >= start - 1 && index <= end))
+		// a span over lines only contains changes, unless it starts at one or is blank (see
+		// #toMessages of OxlintStrategy)
+		const blank = document.text.slice(start, end).trim() === '';
+		const last = range.start.line === range.end.line || blank ? end : start;
+		if (prepared.changed.some((index) => index >= start - 1 && index <= last))
 		{
 			return true;
 		}
