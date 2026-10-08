@@ -146,7 +146,7 @@ typecheckCommand
 				files: args.file,
 				exclude: args.exclude,
 			});
-			emitJson(result);
+			await emitJson(result);
 			process.exit(result.success ? 0 : 1);
 		}
 

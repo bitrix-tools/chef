@@ -163,7 +163,7 @@ lintCommand
 				cache: args.cache,
 				exclude: args.exclude,
 			});
-			emitJson(result);
+			await emitJson(result);
 			process.exit(result.success ? 0 : 1);
 		}
 

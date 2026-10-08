@@ -232,7 +232,7 @@ async function runTestsJson({ extensions, args, type }: RunTestsOptions): Promis
 {
 	if (args.watch)
 	{
-		emitJson({
+		await emitJson({
 			success: false,
 			command: 'test',
 			error: { code: CF.OPTION_DENIED, message: '--watch is not supported with --reporter json' },
@@ -257,7 +257,7 @@ async function runTestsJson({ extensions, args, type }: RunTestsOptions): Promis
 		project: args.project,
 		listOnly: args.list,
 	});
-	emitJson(result);
+	await emitJson(result);
 	process.exit(result.success ? 0 : 1);
 }
 
@@ -522,7 +522,7 @@ async function runModuleTests(rawModules: string[], args: Record<string, any>): 
 	{
 		if (args.watch)
 		{
-			emitJson({
+			await emitJson({
 				success: false,
 				command: 'test',
 				error: { code: CF.OPTION_DENIED, message: '--watch is not supported with --reporter json' },
@@ -551,7 +551,7 @@ async function runModuleTests(rawModules: string[], args: Record<string, any>): 
 			project: args.project,
 			listOnly: args.list,
 		});
-		emitJson(result);
+		await emitJson(result);
 		process.exit(result.success ? 0 : 1);
 	}
 

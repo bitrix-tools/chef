@@ -115,7 +115,7 @@ const topUsedCommand = new Command('top-used')
 		if (args.reporter === 'json')
 		{
 			const result = await diagJson.topUsed({ path: args.path, limit: args.limit });
-			emitJson(result);
+			await emitJson(result);
 			process.exit(result.success ? 0 : 1);
 		}
 
@@ -162,7 +162,7 @@ const topDepsCommand = new Command('top-deps')
 		if (args.reporter === 'json')
 		{
 			const result = await diagJson.topDeps({ path: args.path, limit: args.limit });
-			emitJson(result);
+			await emitJson(result);
 			process.exit(result.success ? 0 : 1);
 		}
 
@@ -210,7 +210,7 @@ const topDepsTreeCommand = new Command('top-deps-tree')
 		if (args.reporter === 'json')
 		{
 			const result = await diagJson.topDepsTree({ path: args.path, limit: args.limit });
-			emitJson(result);
+			await emitJson(result);
 			process.exit(result.success ? 0 : 1);
 		}
 
@@ -262,7 +262,7 @@ const topBundleSizeCommand = new Command('top-bundle-size')
 		if (args.reporter === 'json')
 		{
 			const result = await diagJson.topBundleSize({ path: args.path, limit: args.limit, sortBy });
-			emitJson(result);
+			await emitJson(result);
 			process.exit(result.success ? 0 : 1);
 		}
 
@@ -318,7 +318,7 @@ const topTotalSizeCommand = new Command('top-total-size')
 		if (args.reporter === 'json')
 		{
 			const result = await diagJson.topTotalSize({ path: args.path, limit: args.limit, sortBy });
-			emitJson(result);
+			await emitJson(result);
 			process.exit(result.success ? 0 : 1);
 		}
 
@@ -382,7 +382,7 @@ const configCommand = new Command('config')
 				except: args.except,
 				missing: args.missing,
 			});
-			emitJson(result);
+			await emitJson(result);
 			process.exit(result.success ? 0 : 1);
 		}
 
@@ -546,7 +546,7 @@ const unusedDepsCommand = new Command('unused-deps')
 		if (args.reporter === 'json')
 		{
 			const result = await diagJson.unusedDeps({ path: args.path, limit: args.limit });
-			emitJson(result);
+			await emitJson(result);
 			process.exit(result.success ? 0 : 1);
 		}
 
@@ -605,7 +605,7 @@ const circularDepsCommand = new Command('circular-deps')
 				extension: extensions.length > 0 ? extensions : undefined,
 				path: extensions.length > 0 ? undefined : args.path,
 			});
-			emitJson(result);
+			await emitJson(result);
 			process.exit(result.success ? 0 : 1);
 		}
 
@@ -785,7 +785,7 @@ const circularImportsCommand = new Command('circular-imports')
 				extension: extensions.length > 0 ? extensions : undefined,
 				path: extensions.length > 0 ? undefined : args.path,
 			});
-			emitJson(result);
+			await emitJson(result);
 			process.exit(result.success ? 0 : 1);
 		}
 
@@ -1006,7 +1006,7 @@ const findUsagesCommand = new Command('find-usages')
 				kinds: filter.kinds,
 				list: Boolean(args.list),
 			});
-			emitJson(result);
+			await emitJson(result);
 			process.exit(result.success ? 0 : 1);
 		}
 
@@ -1272,7 +1272,7 @@ const findLoadersCommand = new Command('find-loaders')
 		if (args.reporter === 'json')
 		{
 			const result = await diagJson.findLoaders({ extension: extensionName, path: args.path });
-			emitJson(result);
+			await emitJson(result);
 			process.exit(result.success ? 0 : 1);
 		}
 
@@ -1389,7 +1389,7 @@ const unusedCommand = new Command('unused')
 		if (args.reporter === 'json')
 		{
 			const result = await diagJson.unused({ path: args.path });
-			emitJson(result);
+			await emitJson(result);
 			process.exit(result.success ? 0 : 1);
 		}
 
@@ -1455,7 +1455,7 @@ const depsTreeCommand = new Command('deps-tree')
 				depth: args.depth,
 				why: args.why,
 			});
-			emitJson(result);
+			await emitJson(result);
 			process.exit(result.success ? 0 : 1);
 		}
 
@@ -1545,7 +1545,7 @@ const bundleSizeCommand = new Command('bundle-size')
 				extension: extensionName,
 				withDeps: args.withDeps,
 			});
-			emitJson(result);
+			await emitJson(result);
 			process.exit(result.success ? 0 : 1);
 		}
 

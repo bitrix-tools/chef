@@ -51,7 +51,7 @@ buildCommand
 		{
 			if (args.watch)
 			{
-				emitJson({
+				await emitJson({
 					success: false,
 					command: 'build',
 					error: { code: CF.OPTION_DENIED, message: '--watch is not supported with --reporter json' },
@@ -66,7 +66,7 @@ buildCommand
 				path: extensions.length > 0 ? undefined : args.path,
 				force: args.force,
 			});
-			emitJson(result);
+			await emitJson(result);
 			process.exit(result.success ? 0 : 1);
 		}
 
