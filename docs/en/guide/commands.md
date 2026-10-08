@@ -141,7 +141,8 @@ With `--linter eslint` (or `CHEF_LINTER=eslint`), `chef lint` requires an `eslin
 
 oxlint is the default linter. chef uses the project's `oxlint.config.ts` or `.oxlintrc.json`
 when there is one, and the Bitrix24 presets otherwise: `@bitrix24/oxlint-config-bitrix24` and
-`@bitrix24/oxlint-config-bitrix24-mobile`.
+`@bitrix24/oxlint-config-bitrix24-mobile`. Files matching the `ignorePatterns` of the project config are not
+linted, Flow files included.
 
 ```bash
 chef lint main.core                        # Lint with oxlint

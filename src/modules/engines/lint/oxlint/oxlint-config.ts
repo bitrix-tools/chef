@@ -1,5 +1,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+import picomatch from 'picomatch';
 
 import { FileFinder } from '../../../../utils/file-finder';
 
@@ -32,6 +35,48 @@ export function findProjectConfig(fromDir: string, rootDir: string): string | nu
 	}
 
 	return null;
+}
+
+/**
+ * The `ignorePatterns` of a project config as a filter of absolute paths. oxlint applies
+ * them itself, but only to files inside the project: chef lints Flow files through copies
+ * elsewhere, so it drops ignored files before that. Patterns follow .gitignore: relative to
+ * the config's directory, a pattern without a slash matches at any depth.
+ */
+export async function createProjectIgnoreFilter(configPath: string): Promise<(filePath: string) => boolean>
+{
+	let patterns: unknown;
+	if (configPath.endsWith('.json'))
+	{
+		patterns = JSON.parse(await fs.promises.readFile(configPath, 'utf8')).ignorePatterns;
+	}
+	else
+	{
+		patterns = (await import(pathToFileURL(configPath).href)).default?.ignorePatterns;
+	}
+
+	if (!Array.isArray(patterns) || patterns.length === 0)
+	{
+		return () => false;
+	}
+
+	const globs = (patterns as string[]).map((pattern) => {
+		let glob = pattern.startsWith('/') ? pattern.slice(1) : pattern;
+		if (glob.endsWith('/'))
+		{
+			glob = `${glob}**`;
+		}
+
+		return pattern.slice(0, -1).includes('/') ? glob : `**/${glob}`;
+	});
+	const isMatch = picomatch(globs, { dot: true });
+	const configDir = path.dirname(configPath);
+
+	return (filePath: string) => {
+		const relative = path.relative(configDir, filePath);
+
+		return !relative.startsWith('..') && isMatch(relative.split(path.sep).join('/'));
+	};
 }
 
 type RuleValue = string | [string, ...unknown[]];

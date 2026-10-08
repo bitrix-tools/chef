@@ -9,7 +9,7 @@ import { createPathFilter } from '../../../../utils/create-path-filter';
 import { normalizePath } from '../../../../utils/path/normalize';
 import { Environment } from '../../../../environment/environment';
 import { TransformationArtifacts } from './artifacts';
-import { IGNORED_FILES, findProjectConfig, writePresetConfig } from './oxlint-config';
+import { IGNORED_FILES, createProjectIgnoreFilter, findProjectConfig, writePresetConfig } from './oxlint-config';
 import { prepareSource, shadowName } from './prepare-source';
 import { runOxlint, toRuleId } from './run-oxlint';
 import { TextPositions } from './text-positions';
@@ -106,11 +106,19 @@ export class OxlintStrategy extends LintStrategy
 
 		try
 		{
+			// project config -> its ignorePatterns as a filter
+			const ignoreFilters = new Map<string, Promise<(filePath: string) => boolean>>();
+			const isIgnored = (configPath: string) => ignoreFilters.get(configPath) ?? Promise.resolve(() => false);
 			let presetConfig: Promise<string> | null = null;
 			const configOf = (request: LintOptions): Promise<string> => {
 				const projectConfig = findProjectConfig(request.sourcePath, request.rootPath);
 				if (projectConfig)
 				{
+					if (!ignoreFilters.has(projectConfig))
+					{
+						ignoreFilters.set(projectConfig, createProjectIgnoreFilter(projectConfig));
+					}
+
 					return Promise.resolve(projectConfig);
 				}
 
@@ -127,6 +135,8 @@ export class OxlintStrategy extends LintStrategy
 			for (const [i, request] of requests.entries())
 			{
 				const configPath = await configOf(request);
+				const ignored = await isIgnored(configPath);
+				requestFiles[i] = requestFiles[i].filter((file) => !ignored(file));
 				const files = filesByConfig.get(configPath) ?? new Set<string>();
 				requestFiles[i].forEach((file) => files.add(file));
 				filesByConfig.set(configPath, files);

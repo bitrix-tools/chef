@@ -96,6 +96,26 @@ describe('OxlintStrategy', function ()
 		assert.deepEqual(messages.filter((m) => m.ruleId?.startsWith('@stylistic/') && m.line === 3), []);
 	});
 
+	it('skips the files the project config ignores, Flow ones included', async () => {
+		fs.writeFileSync(path.join(root, '.oxlintrc.json'), JSON.stringify({
+			rules: { 'no-debugger': 'error' },
+			ignorePatterns: ['ext/src/lib/**', 'legacy.js'],
+		}));
+		fs.mkdirSync(path.join(sourcePath, 'lib'));
+		const ignored = [path.join(sourcePath, 'lib', 'vendor.js'), path.join(sourcePath, 'legacy.js')];
+		for (const file of ignored)
+		{
+			fs.writeFileSync(file, 'export function f(a: ?string) { debugger; }\n');
+		}
+
+		const result = await new OxlintStrategy().lint({ sourcePath, rootPath: root, linter: 'oxlint' });
+		const linted = result.files.map((file) => file.filePath);
+
+		assert.include(linted, filePath);
+		assert.notInclude(linted, ignored[0]);
+		assert.notInclude(linted, ignored[1]);
+	});
+
 	it('reports a file nothing parses', async () => {
 		fs.writeFileSync(filePath, 'const = ;\n');
 		const result = await new OxlintStrategy().lint({ sourcePath, rootPath: root, linter: 'oxlint' });
