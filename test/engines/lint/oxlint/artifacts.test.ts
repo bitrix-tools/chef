@@ -51,6 +51,13 @@ describe('TransformationArtifacts', () => {
 		assert.isFalse(artifacts.has('eslint(no-unused-vars)', ...artifacts.span('Type')));
 	});
 
+	it('drops an unused import a blanked for...of annotation uses', () => {
+		const text = "import type { Item } from 'x';\nexport function f(items: Array<string>): ?string { for (const item: Item of items) {} return null; }\n";
+		const artifacts = prepare(text, 'flow-as-ts');
+
+		assert.isTrue(artifacts.has('eslint(no-unused-vars)', ...artifacts.span('Item')));
+	});
+
 	it('keeps a diagnostic over a whole member that contains types', () => {
 		const text = 'export class A\n{\n\thandlers: { stop?: any => void } = {};\n\tgetId(): string\n\t{\n\t\treturn \'\';\n\t}\n}\n';
 		const artifacts = prepare(text, 'stripped');

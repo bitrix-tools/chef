@@ -136,13 +136,120 @@ function unnamedIndexerBrackets(program: unknown, text: string): number[]
 	return positions;
 }
 
-type FixedMaybeTypes = { text: string; changed: number[]; program: unknown };
+type FixedTypeScript = { text: string; changed: number[]; program: unknown };
+
+// TypeScript rejects these in Flow code whose syntax it reads well: the parts they name
+// are blanked out. oxlint lints no file with such an error.
+const FLOW_SEMANTIC_ERRORS = [
+	'Type annotation cannot appear on a constructor declaration',
+	"A 'set' accessor cannot have a return type annotation",
+	"The left-hand side of a 'for...of' statement cannot use a type annotation",
+	"The left-hand side of a 'for...in' statement cannot use a type annotation",
+	'A required parameter cannot follow an optional parameter',
+];
+
+const FUNCTION_NODES = new Set(['FunctionDeclaration', 'FunctionExpression', 'ArrowFunctionExpression']);
 
 /**
- * Blanks out the `?` of Flow maybe types (`?string` -> ` string`) until the text is valid
- * TypeScript. Otherwise returns the error that keeps it from parsing.
+ * Ranges to blank for FLOW_SEMANTIC_ERRORS: the return type of a constructor or a setter,
+ * the type of a `for...of`/`for...in` variable, the `?` of an optional parameter followed
+ * by a required one.
  */
-function fixMaybeTypes(fileName: string, source: string): FixedMaybeTypes | { error: ParseError }
+function flowSemanticFixes(program: unknown, text: string): Array<[number, number]>
+{
+	const ranges: Array<[number, number]> = [];
+	walk(program, (node) => {
+		if (node.type === 'MethodDefinition' && (node.kind === 'constructor' || node.kind === 'set'))
+		{
+			const returnType = (node.value as AstNode | null)?.returnType as AstNode | null;
+			if (returnType)
+			{
+				ranges.push([returnType.start, returnType.end]);
+			}
+		}
+
+		if ((node.type === 'ForOfStatement' || node.type === 'ForInStatement') && (node.left as AstNode).type === 'VariableDeclaration')
+		{
+			for (const declarator of (node.left as AstNode).declarations as AstNode[])
+			{
+				const annotation = (declarator.id as AstNode).typeAnnotation as AstNode | null;
+				if (annotation)
+				{
+					ranges.push([annotation.start, annotation.end]);
+				}
+			}
+		}
+
+		if (FUNCTION_NODES.has(node.type))
+		{
+			const params = node.params as AstNode[];
+			let lastRequired = params.length - 1;
+			while (lastRequired >= 0 && (params[lastRequired].type === 'RestElement' || params[lastRequired].type === 'AssignmentPattern' || params[lastRequired].optional === true))
+			{
+				lastRequired--;
+			}
+
+			for (const param of params.slice(0, Math.max(lastRequired, 0)))
+			{
+				const annotation = param.typeAnnotation as AstNode | null;
+				const question = param.optional === true ? text.indexOf('?', param.start) : -1;
+				if (question !== -1 && question < (annotation?.start ?? param.end))
+				{
+					ranges.push([question, question + 1]);
+				}
+			}
+		}
+
+		return true;
+	});
+
+	return ranges;
+}
+
+const IMPORT_DECLARATION = /^[ \t]*import\b[^;]*?\bfrom\s*['"][^'"\n]*['"]/gm;
+const TYPEOF_IMPORT = /\btypeof(?=\s+[\p{ID_Start}$_])/gu;
+
+/**
+ * Flow's `import typeof X` and `import { typeof X }` become `import type   X`, which
+ * TypeScript reads.
+ */
+function blankTypeofImports(source: string): { text: string; changed: number[] }
+{
+	const changed: number[] = [];
+	const text = source.replace(IMPORT_DECLARATION, (declaration, offset: number) => declaration.replace(TYPEOF_IMPORT, (keyword, at: number) => {
+		changed.push(offset + at + 4, offset + at + 5);
+
+		return 'type  ';
+	}));
+
+	return { text, changed };
+}
+
+function blankRanges(text: string, ranges: Array<[number, number]>, changed: number[]): string
+{
+	// UTF-16 code units, like the positions
+	const chars = text.split('');
+	for (const [from, to] of ranges)
+	{
+		for (let i = from; i < to; i++)
+		{
+			if (chars[i] !== ' ' && chars[i] !== '\t' && chars[i] !== '\n' && chars[i] !== '\r')
+			{
+				chars[i] = ' ';
+				changed.push(i);
+			}
+		}
+	}
+
+	return chars.join('');
+}
+
+/**
+ * Blanks out what keeps Flow code from being valid TypeScript: the `?` of maybe types
+ * (`?string` -> ` string`) and, for Flow files, FLOW_SEMANTIC_ERRORS. Otherwise returns
+ * the error that keeps the text from parsing.
+ */
+function fixForTypeScript(fileName: string, source: string, flow: boolean): FixedTypeScript | { error: ParseError }
 {
 	let text = source;
 	const changed: number[] = [];
@@ -157,20 +264,35 @@ function fixMaybeTypes(fileName: string, source: string): FixedMaybeTypes | { er
 			return { text, changed, program: result.program };
 		}
 
+		const ranges: Array<[number, number]> = [];
+		let semantic = false;
 		for (const error of errors)
 		{
 			const start = error.labels?.[0]?.start;
-			if (pass === 3 || !error.message.startsWith(FLOW_MAYBE_TYPE) || start === undefined || text[start] !== '?')
+			if (pass < 4 && error.message.startsWith(FLOW_MAYBE_TYPE) && start !== undefined && text[start] === '?')
+			{
+				ranges.push([start, start + 1]);
+			}
+			else if (pass < 4 && flow && FLOW_SEMANTIC_ERRORS.some((message) => error.message.startsWith(message)))
+			{
+				semantic = true;
+			}
+			else
 			{
 				return { error };
 			}
 		}
 
-		for (const error of errors)
+		if (semantic)
 		{
-			const start = error.labels![0].start;
-			text = `${text.slice(0, start)} ${text.slice(start + 1)}`;
-			changed.push(start);
+			ranges.push(...flowSemanticFixes(result.program, text));
+		}
+
+		const before = changed.length;
+		text = blankRanges(text, ranges, changed);
+		if (changed.length === before)
+		{
+			return { error: errors[0] };
 		}
 	}
 }
@@ -216,7 +338,7 @@ export function prepareSource(filePath: string, text: string): PreparedSource
 			return { kind: 'native' };
 		}
 
-		const fixed = fixMaybeTypes(filePath, text);
+		const fixed = fixForTypeScript(filePath, text, false);
 
 		return 'error' in fixed ? { kind: 'native' } : { kind: 'ts-fixed', text: fixed.text, changed: fixed.changed };
 	}
@@ -232,11 +354,12 @@ export function prepareSource(filePath: string, text: string): PreparedSource
 		return { kind: 'native' };
 	}
 
-	const asTs = fixMaybeTypes(`${filePath}.ts`, text);
+	const typeofImports = blankTypeofImports(text);
+	const asTs = fixForTypeScript(`${filePath}.ts`, typeofImports.text, true);
 	if (!('error' in asTs))
 	{
 		let { text: tsText, program } = asTs;
-		const changed = [...asTs.changed];
+		const changed = [...typeofImports.changed, ...asTs.changed];
 		const brackets = unnamedIndexerBrackets(program, tsText);
 		if (brackets.length > 0)
 		{

@@ -20,7 +20,7 @@ const IDENTIFIER = /^[\p{ID_Start}$_][\p{ID_Continue}$‌‍]*$/u;
  * - a short span at a change, or separated from it by spaces only (a blanked `?` makes a
  *   double space, a blanked `type X` leaves a trailing comma in an import);
  * - blank lines left by blanked types;
- * - an unused import of a type-stripped file that the original uses in its types;
+ * - an unused import that the original uses in blanked types only;
  * - formatting inside Flow type annotations: ESLint did not format Flow types.
  *
  * A span over lines (a class member, a function) only contains changes and still
@@ -72,7 +72,7 @@ export class TransformationArtifacts
 			return true;
 		}
 
-		return this.#isUsedInStrippedTypes(code, start, end) || this.#isTypeFormatting(code, start);
+		return this.#isUsedInBlankedTypes(code, start, end) || this.#isTypeFormatting(code, start);
 	}
 
 	// is there a changed position within [start, end]?
@@ -96,9 +96,9 @@ export class TransformationArtifacts
 		return low < this.#changed.length && this.#changed[low] <= end;
 	}
 
-	#isUsedInStrippedTypes(code: string, start: number, end: number): boolean
+	#isUsedInBlankedTypes(code: string, start: number, end: number): boolean
 	{
-		if (this.#prepared.kind !== 'stripped' || code !== 'eslint(no-unused-vars)')
+		if (code !== 'eslint(no-unused-vars)')
 		{
 			return false;
 		}

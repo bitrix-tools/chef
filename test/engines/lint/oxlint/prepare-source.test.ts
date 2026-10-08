@@ -83,6 +83,43 @@ describe('prepareSource', () => {
 		assert.equal(prepared.kind === 'unparsable' && text.slice(0, prepared.offset).split('\n').length, 6);
 	});
 
+	it('reads Flow typeof imports as type imports', () => {
+		const text = "import { typeof A, B } from 'x';\nimport typeof C from 'y';\nexport function f(a: A, c: C): ?B { return null; }\n";
+		const prepared = prepareSource('/a/b.js', text);
+
+		assert.equal(prepared.kind, 'flow-as-ts');
+		assert.equal(
+			prepared.kind === 'flow-as-ts' && prepared.text,
+			"import { type   A, B } from 'x';\nimport type   C from 'y';\nexport function f(a: A, c: C):  B { return null; }\n",
+		);
+	});
+
+	it('blanks the Flow annotations TypeScript rejects in valid syntax', () => {
+		const text = [
+			'export class A',
+			'{',
+			'\tconstructor(): void {}',
+			'\tset value(v: string): void {}',
+			'\tf(items: Array<string>) { for (const item: string of items) {} }',
+			'}',
+			'export function g(a?: string, b: number) { return [a, b]; }',
+			'',
+		].join('\n');
+		const prepared = prepareSource('/a/b.js', text);
+
+		assert.equal(prepared.kind, 'flow-as-ts');
+		assert.equal(prepared.kind === 'flow-as-ts' && prepared.text, [
+			'export class A',
+			'{',
+			'\tconstructor()       {}',
+			'\tset value(v: string)       {}',
+			'\tf(items: Array<string>) { for (const item         of items) {} }',
+			'}',
+			'export function g(a : string, b: number) { return [a, b]; }',
+			'',
+		].join('\n'));
+	});
+
 	it('names the TypeScript copy of a Flow file *.js.ts', () => {
 		assert.equal(shadowName('x/b.js', { kind: 'flow-as-ts', text: '', changed: [], typeRanges: [] }), 'x/b.js.ts');
 		assert.equal(shadowName('x/b.js', { kind: 'stripped', text: '', changed: [] }), 'x/b.js');
