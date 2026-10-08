@@ -323,3 +323,58 @@ describe('oxlint language server in a repository of extensions', function ()
 		assert.deepEqual(codes, ['eslint(no-debugger)']);
 	});
 });
+
+describe('oxlint language server with several extensions open', function ()
+{
+	this.timeout(60000);
+
+	const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chef-oxlint-lsp-test-')));
+	const documents = [
+		{ filePath: path.join(root, 'first', 'src', 'first.js'), text: 'export const first = value ? value : "x"\n' },
+		{ filePath: path.join(root, 'second', 'src', 'second.js'), text: 'export const second = 1;\nexport function more()\n{\n\treturn [second,second];\n}\n' },
+	];
+	let client: Client;
+
+	const lint = async (filePath: string) => {
+		const response = await client.request('textDocument/diagnostic', { textDocument: { uri: pathToFileURL(filePath).href } });
+
+		return response.result.items as Array<{ code: string; message: string }>;
+	};
+
+	before(async () => {
+		for (const { filePath, text } of documents)
+		{
+			fs.mkdirSync(path.dirname(filePath), { recursive: true });
+			fs.writeFileSync(path.join(path.dirname(filePath), '..', 'bundle.config.js'), 'module.exports = {};\n');
+			fs.writeFileSync(filePath, text);
+		}
+		client = new Client(root);
+		await client.request('initialize', {
+			processId: process.pid,
+			rootUri: pathToFileURL(root).href,
+			capabilities: {
+				workspace: { configuration: true, diagnostics: { refreshSupport: true } },
+				textDocument: { diagnostic: { dynamicRegistration: true } },
+			},
+		});
+		client.send({ method: 'initialized', params: {} });
+	});
+
+	after(() => {
+		client.stop();
+		fs.rmSync(root, { recursive: true, force: true });
+	});
+
+	it('runs JS plugin rules for an extension linted before another one', async () => {
+		for (const { filePath, text } of documents)
+		{
+			client.send({ method: 'textDocument/didOpen', params: { textDocument: { uri: pathToFileURL(filePath).href, languageId: 'javascript', version: 1, text } } });
+			await lint(filePath);
+		}
+
+		const items = await lint(documents[0].filePath);
+
+		assert.include(items.map((d) => d.code), '@stylistic(quotes)');
+		assert.isFalse(items.some((d) => d.message.includes('Error running JS plugin')));
+	});
+});

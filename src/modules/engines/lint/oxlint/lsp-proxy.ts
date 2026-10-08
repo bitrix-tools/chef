@@ -6,9 +6,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { createPathFilter } from '../../../../utils/create-path-filter';
 import { TransformationArtifacts } from './artifacts';
+import { oxlintServerArgs } from './lsp-server';
 import { IGNORED_FILES, findProjectConfig, writePresetConfig } from './oxlint-config';
 import { prepareSource } from './prepare-source';
-import { oxlintBin } from './run-oxlint';
 import { TextPositions } from './text-positions';
 
 import type { PreparedSource } from './prepare-source';
@@ -147,7 +147,7 @@ export class OxlintLspProxy
 			process.on('exit', () => fs.rmSync(tempDir, { recursive: true, force: true }));
 		}
 
-		const server = spawn(process.execPath, [oxlintBin(), '--lsp'], { cwd: this.#rootPath, stdio: ['pipe', 'pipe', 'inherit'] });
+		const server = spawn(process.execPath, oxlintServerArgs(), { cwd: this.#rootPath, stdio: ['pipe', 'pipe', 'inherit'] });
 		server.on('exit', (code) => process.exit(code ?? 0));
 		process.stdin.on('end', () => server.kill());
 
