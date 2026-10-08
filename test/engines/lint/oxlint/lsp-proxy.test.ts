@@ -94,6 +94,18 @@ class Client
 	}
 }
 
+function applyEdits(text: string, edits: Array<{ range: any; newText: string }>): string
+{
+	const lines = text.split('\n');
+	const offset = (position: { line: number; character: number }) => {
+		return lines.slice(0, position.line).reduce((sum, line) => sum + line.length + 1, 0) + position.character;
+	};
+
+	return [...edits]
+		.sort((a, b) => offset(b.range.start) - offset(a.range.start))
+		.reduce((result, edit) => result.slice(0, offset(edit.range.start)) + edit.newText + result.slice(offset(edit.range.end)), text);
+}
+
 describe('oxlint language server', function ()
 {
 	this.timeout(60000);
@@ -144,5 +156,73 @@ describe('oxlint language server', function ()
 		const fix = (response.result as any[]).find((action) => action.edit?.changes);
 
 		assert.deepEqual(Object.keys(fix.edit.changes), [uri]);
+	});
+});
+
+describe('oxlint language server with pull diagnostics', function ()
+{
+	this.timeout(60000);
+
+	const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chef-oxlint-lsp-test-')));
+	const filePath = path.join(root, 'ext', 'src', 'wrap.js');
+	const uri = pathToFileURL(filePath).href;
+	const text = "export function wrap(value: ?string): ?string\n{\n\treturn value ? value : \"\"\n}\n";
+	let client: Client;
+
+	before(async () => {
+		fs.mkdirSync(path.dirname(filePath), { recursive: true });
+		fs.writeFileSync(filePath, text);
+		client = new Client(root);
+		// what the JetBrains Oxc plugin declares: the server then serves textDocument/diagnostic
+		await client.request('initialize', {
+			processId: process.pid,
+			rootUri: pathToFileURL(root).href,
+			capabilities: {
+				workspace: { configuration: true, diagnostics: { refreshSupport: true } },
+				textDocument: { diagnostic: { dynamicRegistration: true } },
+			},
+		});
+		client.send({ method: 'initialized', params: {} });
+	});
+
+	after(() => {
+		client.stop();
+		fs.rmSync(root, { recursive: true, force: true });
+	});
+
+	it('answers a diagnostic request for a Flow document without transformation artifacts', async () => {
+		client.send({ method: 'textDocument/didOpen', params: { textDocument: { uri, languageId: 'javascript', version: 1, text } } });
+		const response = await client.request('textDocument/diagnostic', { textDocument: { uri } });
+		const codes = (response.result.items as Array<{ code: string }>).map((d) => d.code);
+
+		assert.include(codes, '@stylistic(semi)');
+		assert.include(codes, '@stylistic(quotes)');
+		assert.notInclude(codes, '@stylistic(no-multi-spaces)');
+	});
+
+	it('fixes all problems of a Flow document and keeps its types', async () => {
+		// one request applies non-overlapping fixes only: the quotes, then the semicolon
+		let fixed = text;
+		for (let version = 2; version <= 3; version++)
+		{
+			await client.request('textDocument/diagnostic', { textDocument: { uri } });
+			const response = await client.request('textDocument/codeAction', {
+				textDocument: { uri },
+				range: { start: { line: 0, character: 0 }, end: { line: 4, character: 0 } },
+				context: { diagnostics: [], only: ['source.fixAll.oxc'] },
+			});
+			fixed = applyEdits(fixed, (response.result as any[]).flatMap((action) => action.edit?.changes?.[uri] ?? []));
+			client.send({ method: 'textDocument/didChange', params: { textDocument: { uri, version }, contentChanges: [{ text: fixed }] } });
+		}
+
+		assert.equal(fixed, "export function wrap(value: ?string): ?string\n{\n\treturn value ? value : '';\n}\n");
+	});
+
+	it('reports nothing for files chef lint never lints', async () => {
+		const cjsUri = pathToFileURL(path.join(root, 'ext', 'build.cjs')).href;
+		client.send({ method: 'textDocument/didOpen', params: { textDocument: { uri: cjsUri, languageId: 'javascript', version: 1, text: 'module.exports = "x"\n' } } });
+		const response = await client.request('textDocument/diagnostic', { textDocument: { uri: cjsUri } });
+
+		assert.deepEqual(response.result.items, []);
 	});
 });

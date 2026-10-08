@@ -8,7 +8,7 @@ import { LintStrategy } from '../lint-strategy';
 import { createPathFilter } from '../../../../utils/create-path-filter';
 import { normalizePath } from '../../../../utils/path/normalize';
 import { Environment } from '../../../../environment/environment';
-import { findProjectConfig, writePresetConfig } from './oxlint-config';
+import { IGNORED_FILES, findProjectConfig, writePresetConfig } from './oxlint-config';
 import { prepareSource, shadowName } from './prepare-source';
 import { runOxlint, toRuleId } from './run-oxlint';
 import { TextPositions } from './text-positions';
@@ -17,18 +17,6 @@ import { carryOverEdits, diffText } from './text-diff';
 import type { PreparedSource } from './prepare-source';
 import type { OxlintDiagnostic } from './run-oxlint';
 import type { LintOptions, LintResult, LintFileResult, LintMessage } from '../lint-types';
-
-// Never linted: generated code, third-party code, CommonJS modules.
-const IGNORED = [
-	'**/node_modules/**',
-	'**/dist/**',
-	'**/vendor/**',
-	'**/*.min.js',
-	'**/*.bundle.js',
-	'**/*.bundle.map.js',
-	'**/*.d.ts',
-	'**/*.cjs',
-];
 
 // Fix passes over the same files: one oxlint run applies only non-overlapping fixes.
 const MAX_FIX_PASSES = 10;
@@ -199,7 +187,7 @@ export class OxlintStrategy extends LintStrategy
 			? options.files.map((pattern) => normalizePath(pattern))
 			: [`${normalizePath(options.sourcePath)}/**/*.{js,ts}`];
 
-		const files = await fg(patterns, { absolute: true, onlyFiles: true, ignore: IGNORED, dot: false });
+		const files = await fg(patterns, { absolute: true, onlyFiles: true, ignore: IGNORED_FILES, dot: false });
 		const isExcluded = createPathFilter(options.exclude?.map((p) => path.resolve(p)) ?? []);
 
 		return files.filter((file) => !isExcluded(path.resolve(file))).sort();

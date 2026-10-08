@@ -3,6 +3,18 @@ import * as path from 'node:path';
 
 import { FileFinder } from '../../../../utils/file-finder';
 
+// Never linted: generated code, third-party code, CommonJS modules.
+export const IGNORED_FILES = [
+	'**/node_modules/**',
+	'**/dist/**',
+	'**/vendor/**',
+	'**/*.min.js',
+	'**/*.bundle.js',
+	'**/*.bundle.map.js',
+	'**/*.d.ts',
+	'**/*.cjs',
+];
+
 const PROJECT_CONFIG_FILES = [
 	'oxlint.config.ts',
 	'.oxlintrc.json',

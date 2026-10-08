@@ -83,11 +83,15 @@ PhpStorm shows oxlint diagnostics and quick fixes through the Oxc plugin (it use
 API). chef provides a language server that also lints Flow files:
 
 1. Install the **Oxc** plugin from the JetBrains Marketplace.
-2. In **Settings | Languages & Frameworks | Oxc**, switch the plugin to the manual configuration
-   and set the oxlint binary to `chef-oxlint` from the global chef installation
-   (`npm root -g`/`@bitrix/chef/bin/chef-oxlint`).
+2. In **Settings | Tools | Oxlint**, select **Manual Oxlint configuration** and set
+   **Path to Oxlint Language Server** to `chef-oxlint` from the global chef installation
+   (`$(npm root -g)/@bitrix/chef/bin/chef-oxlint`). Leave **Path to Oxlint Config** empty.
 3. Turn ESLint off for the project (**Settings | Languages & Frameworks | JavaScript |
    Code Quality Tools | ESLint**), otherwise the same problems are reported twice.
 
 Without an oxlint config in the project the language server uses the Bitrix24 presets, the same
-as `chef lint --linter oxlint`.
+as `chef lint --linter oxlint`, and reports nothing for the files `chef lint` skips (`*.cjs`,
+`vendor`, `dist`, minified and bundled files), although the plugin sends them to the server.
+Quick fixes and **Run 'Fix All' on Save** keep Flow types intact. One 'Fix All' applies the fixes
+that do not overlap, so a line with several problems may need a second save; `chef lint --fix`
+repeats the passes itself.

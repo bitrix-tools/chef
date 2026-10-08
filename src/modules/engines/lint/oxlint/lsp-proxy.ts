@@ -4,7 +4,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { findProjectConfig, writePresetConfig } from './oxlint-config';
+import { createPathFilter } from '../../../../utils/create-path-filter';
+import { IGNORED_FILES, findProjectConfig, writePresetConfig } from './oxlint-config';
 import { prepareSource } from './prepare-source';
 import { oxlintBin } from './run-oxlint';
 import { TextPositions } from './text-positions';
@@ -87,7 +88,10 @@ export class OxlintLspProxy
 	readonly #realUris = new Map<string, string>();
 	// ids of workspace/configuration requests the server sent to the client
 	readonly #configurationRequests = new Set<number | string>();
+	// ids of textDocument/diagnostic requests the client sent (pull diagnostics) -> real URI
+	readonly #diagnosticRequests = new Map<number | string, string>();
 	#configPath: string | null = null;
+	readonly #isIgnored = createPathFilter(IGNORED_FILES);
 	#client!: MessageStream;
 	#server!: MessageStream;
 
@@ -132,6 +136,12 @@ export class OxlintLspProxy
 				this.#close(message.params.textDocument.uri);
 
 				return;
+			case 'textDocument/diagnostic':
+				if (message.id !== undefined && message.id !== null)
+				{
+					this.#diagnosticRequests.set(message.id, message.params.textDocument.uri);
+				}
+				break;
 			case 'textDocument/didSave':
 				// the server may read a saved file from disk, but a virtual document has no file
 				if (this.#isTransformed(message.params.textDocument.uri))
@@ -165,17 +175,47 @@ export class OxlintLspProxy
 		if (message.method === 'textDocument/publishDiagnostics')
 		{
 			const realUri = this.#realUris.get(message.params.uri) ?? message.params.uri;
-			const document = this.#documents.get(realUri);
 			message.params.uri = realUri;
-			if (document)
+			message.params.diagnostics = this.#withoutArtifacts(realUri, message.params.diagnostics);
+		}
+
+		// a response to the client's textDocument/diagnostic request: clients that pull
+		// diagnostics (the JetBrains plugin does) get them here instead of publishDiagnostics
+		if (message.method === undefined && message.id !== undefined && message.id !== null && this.#diagnosticRequests.has(message.id))
+		{
+			const realUri = this.#diagnosticRequests.get(message.id)!;
+			this.#diagnosticRequests.delete(message.id);
+			if (Array.isArray(message.result?.items))
 			{
-				message.params.diagnostics = message.params.diagnostics.filter((d: { range: Range; code?: string }) => {
-					return !this.#isArtifact(document, d.range, d.code);
-				});
+				message.result.items = this.#withoutArtifacts(realUri, message.result.items);
 			}
 		}
 
 		this.#client.send(this.#toClientUris(message));
+	}
+
+	#withoutArtifacts<T extends { range: Range; code?: string }>(realUri: string, diagnostics: T[]): T[]
+	{
+		if (this.#isIgnoredUri(realUri))
+		{
+			return [];
+		}
+
+		const document = this.#documents.get(realUri);
+		if (!document)
+		{
+			return diagnostics;
+		}
+
+		return diagnostics.filter((d) => !this.#isArtifact(document, d.range, d.code));
+	}
+
+	/**
+	 * Files `chef lint` never lints, though editors send them (the JetBrains plugin sends .cjs).
+	 */
+	#isIgnoredUri(uri: string): boolean
+	{
+		return uri.startsWith('file:') && this.#isIgnored(path.relative(this.#rootPath, fileURLToPath(uri)));
 	}
 
 	#withConfigPath(params: any): void
@@ -421,7 +461,11 @@ export class OxlintLspProxy
 			for (const [uri, edits] of Object.entries(value.changes as Record<string, TextEdit[]>))
 			{
 				const document = this.#documents.get(uri);
-				if (document)
+				if (this.#isIgnoredUri(uri))
+				{
+					value.changes[uri] = [];
+				}
+				else if (document)
 				{
 					value.changes[uri] = edits.filter((edit) => !this.#isUnsafeEdit(document, edit));
 				}
@@ -432,8 +476,13 @@ export class OxlintLspProxy
 		{
 			for (const change of value.documentChanges)
 			{
-				const document = change?.textDocument && this.#documents.get(change.textDocument.uri);
-				if (document && Array.isArray(change.edits))
+				const uri = change?.textDocument?.uri;
+				const document = uri && this.#documents.get(uri);
+				if (uri && this.#isIgnoredUri(uri) && Array.isArray(change.edits))
+				{
+					change.edits = [];
+				}
+				else if (document && Array.isArray(change.edits))
 				{
 					change.edits = change.edits.filter((edit: TextEdit) => !this.#isUnsafeEdit(document, edit));
 				}
