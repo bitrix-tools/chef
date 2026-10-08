@@ -136,16 +136,19 @@ function unnamedIndexerBrackets(program: unknown, text: string): number[]
 	return positions;
 }
 
+type FixedMaybeTypes = { text: string; changed: number[]; program: unknown };
+
 /**
  * Blanks out the `?` of Flow maybe types (`?string` -> ` string`) until the text is valid
- * TypeScript. Returns null if anything else keeps it from parsing.
+ * TypeScript. Otherwise returns the error that keeps it from parsing.
  */
-function fixMaybeTypes(fileName: string, source: string): { text: string; changed: number[]; program: unknown } | null
+function fixMaybeTypes(fileName: string, source: string): FixedMaybeTypes | { error: ParseError }
 {
 	let text = source;
 	const changed: number[] = [];
 
-	for (let pass = 0; pass < 3; pass++)
+	// a maybe type nested in another one (`?Array<?string>`) is reported on the next pass
+	for (let pass = 0; ; pass++)
 	{
 		const result = parse(fileName, text, 'ts');
 		const errors = result.errors as ParseError[];
@@ -157,9 +160,9 @@ function fixMaybeTypes(fileName: string, source: string): { text: string; change
 		for (const error of errors)
 		{
 			const start = error.labels?.[0]?.start;
-			if (!error.message.startsWith(FLOW_MAYBE_TYPE) || start === undefined || text[start] !== '?')
+			if (pass === 3 || !error.message.startsWith(FLOW_MAYBE_TYPE) || start === undefined || text[start] !== '?')
 			{
-				return null;
+				return { error };
 			}
 		}
 
@@ -170,8 +173,6 @@ function fixMaybeTypes(fileName: string, source: string): { text: string; change
 			changed.push(start);
 		}
 	}
-
-	return null;
 }
 
 function stripFlowTypes(fileName: string, source: string): PreparedSource | null
@@ -217,7 +218,7 @@ export function prepareSource(filePath: string, text: string): PreparedSource
 
 		const fixed = fixMaybeTypes(filePath, text);
 
-		return fixed ? { kind: 'ts-fixed', text: fixed.text, changed: fixed.changed } : { kind: 'native' };
+		return 'error' in fixed ? { kind: 'native' } : { kind: 'ts-fixed', text: fixed.text, changed: fixed.changed };
 	}
 
 	if (!JS_EXTENSIONS.has(extension))
@@ -232,7 +233,7 @@ export function prepareSource(filePath: string, text: string): PreparedSource
 	}
 
 	const asTs = fixMaybeTypes(`${filePath}.ts`, text);
-	if (asTs)
+	if (!('error' in asTs))
 	{
 		let { text: tsText, program } = asTs;
 		const changed = [...asTs.changed];
@@ -256,7 +257,9 @@ export function prepareSource(filePath: string, text: string): PreparedSource
 		return { kind: 'flow-as-ts', text: tsText, changed: changed.sort((a, b) => a - b), typeRanges: typeRanges(program) };
 	}
 
-	return stripFlowTypes(filePath, text) ?? unparsable(jsErrors);
+	// a Flow file stops the JavaScript parser at its first type annotation, which tells
+	// nothing; the TypeScript parser gets past the types to the real error
+	return stripFlowTypes(filePath, text) ?? unparsable([asTs.error]);
 }
 
 function unparsable(errors: ParseError[]): PreparedSource

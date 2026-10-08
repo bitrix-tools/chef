@@ -75,6 +75,14 @@ describe('prepareSource', () => {
 		assert.equal(prepared.kind, 'unparsable');
 	});
 
+	it('reports the error that keeps a Flow file from parsing, not its first type', () => {
+		const text = "export class A\n{\n\tid: ?string = null;\n\tparse(s: string)\n\t{\n\t\treturn s.replace(/x/, '\\001');\n\t}\n}\n";
+		const prepared = prepareSource('/a/b.js', text);
+
+		assert.equal(prepared.kind, 'unparsable');
+		assert.equal(prepared.kind === 'unparsable' && text.slice(0, prepared.offset).split('\n').length, 6);
+	});
+
 	it('names the TypeScript copy of a Flow file *.js.ts', () => {
 		assert.equal(shadowName('x/b.js', { kind: 'flow-as-ts', text: '', changed: [], typeRanges: [] }), 'x/b.js.ts');
 		assert.equal(shadowName('x/b.js', { kind: 'stripped', text: '', changed: [] }), 'x/b.js');
