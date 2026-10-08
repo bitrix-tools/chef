@@ -89,6 +89,16 @@ API). chef provides a language server that also lints Flow files:
 3. Turn ESLint off for the project (**Settings | Languages & Frameworks | JavaScript |
    Code Quality Tools | ESLint**), otherwise the same problems are reported twice.
 
+The language server lints each extension (the directory of its `bundle.config.*`) as a workspace
+of its own, opened with its first document, so it starts in seconds in a repository of any size.
+The config is the one set in the editor, else the nearest `oxlint.config.ts` or `.oxlintrc.json`
+from the extension up to the project root.
+
+The Oxc plugin sends the server only the files under the directory of the `oxlint` package it
+finds in the project. Keep `oxlint` in the `node_modules` of the project root, or nowhere: with
+`oxlint` installed only in another directory of the project (an attached repository, say), files
+outside that directory get no diagnostics.
+
 Without an oxlint config in the project the language server uses the Bitrix24 presets, the same
 as `chef lint`, and reports nothing for the files `chef lint` skips (`*.cjs`,
 `vendor`, `dist`, minified and bundled files), although the plugin sends them to the server.

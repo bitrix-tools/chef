@@ -65,6 +65,25 @@ class MessageStream
 	}
 }
 
+/**
+ * A directory the server lints as a workspace of its own: the extension of the open file.
+ */
+type Scope = {
+	dir: string;
+	uri: string;
+	// the editor workspace folder it lies in
+	rootDir: string;
+	ready: boolean;
+	// client messages about its documents, held until the server has a worker for it
+	queue: Message[];
+	timer: NodeJS.Timeout | null;
+};
+
+// how long messages wait for a scope when the server never confirms it
+const SCOPE_TIMEOUT = 60_000;
+
+const EXTENSION_FILES = ['bundle.config.js', 'bundle.config.ts', 'script.es6.js'];
+
 type OpenDocument = {
 	// what the server sees
 	uri: string;
@@ -82,6 +101,14 @@ type OpenDocument = {
  * coming back are moved to the real URI; transformations keep every position, so ranges
  * need no mapping, only the ones that describe the transformation itself are dropped.
  * Without a project oxlint config the server gets the Bitrix24 presets.
+ *
+ * The server does not get the editor's workspace folders: on start it walks a workspace
+ * looking for .gitignore files, which takes minutes on a repository of modules and times
+ * out the editor. Each extension with an open document becomes a workspace instead, and
+ * messages about its documents wait until the server confirms it (it registers file
+ * watchers for a new workspace). The config path is passed explicitly, since the server
+ * looks for a config in the workspace only: the one set in the editor, else the nearest
+ * project config, else the presets.
  */
 export class OxlintLspProxy
 {
@@ -89,11 +116,19 @@ export class OxlintLspProxy
 	readonly #documents = new Map<string, OpenDocument>();
 	// virtual URI -> real URI
 	readonly #realUris = new Map<string, string>();
-	// ids of workspace/configuration requests the server sent to the client
-	readonly #configurationRequests = new Set<number | string>();
+	// ids of workspace/configuration requests the server sent to the client -> scopes asked for
+	readonly #configurationRequests = new Map<number | string, Array<Scope | null>>();
 	// ids of textDocument/diagnostic requests the client sent (pull diagnostics) -> real URI
 	readonly #diagnosticRequests = new Map<number | string, string>();
 	#configPath: string | null = null;
+	// editor workspace folders and the options the editor gave for them, by folder path
+	#rootDirs: string[] = [];
+	readonly #rootOptions = new Map<string, unknown>();
+	#clientConfiguration = false;
+	#clientWatchers = false;
+	readonly #scopes = new Map<string, Scope>();
+	// directory of a document -> directory of its scope
+	readonly #scopeDirs = new Map<string, string>();
 	readonly #isIgnored = createPathFilter(IGNORED_FILES);
 	#client!: MessageStream;
 	#server!: MessageStream;
@@ -125,8 +160,34 @@ export class OxlintLspProxy
 		switch (message.method)
 		{
 			case 'initialize':
-				this.#withConfigPath(message.params);
+				this.#initialize(message.params);
 				break;
+			case 'workspace/didChangeWorkspaceFolders':
+				this.#changeRoots(message.params.event);
+
+				return;
+			case 'workspace/didChangeConfiguration':
+				this.#changeConfiguration(message.params);
+				break;
+			default:
+				break;
+		}
+
+		const scope = this.#scopeOfMessage(message);
+		if (scope && !scope.ready)
+		{
+			scope.queue.push(message);
+
+			return;
+		}
+
+		this.#handleClient(message);
+	}
+
+	#handleClient(message: Message): void
+	{
+		switch (message.method)
+		{
 			case 'textDocument/didOpen':
 				this.#open(message.params.textDocument.uri, message.params.textDocument.text, message.params.textDocument.version);
 
@@ -157,11 +218,19 @@ export class OxlintLspProxy
 		}
 
 		// a response to the server's workspace/configuration request
-		if (message.method === undefined && message.id !== undefined && this.#configurationRequests.delete(message.id!))
+		const scopes = message.method === undefined && message.id !== undefined && message.id !== null
+			? this.#configurationRequests.get(message.id)
+			: undefined;
+		if (scopes)
 		{
+			this.#configurationRequests.delete(message.id!);
 			if (Array.isArray(message.result))
 			{
-				message.result = message.result.map((item: unknown) => this.#withOptions(item));
+				message.result = message.result.map((item: unknown, index: number) => {
+					const scope = scopes[index] ?? null;
+
+					return this.#withOptions(scope ? this.#merge(this.#rootOptions.get(scope.rootDir), item) : item, scope);
+				});
 			}
 		}
 
@@ -170,9 +239,27 @@ export class OxlintLspProxy
 
 	#fromServer(message: Message): void
 	{
-		if (message.method === 'workspace/configuration' && message.id !== undefined)
+		if (message.method === 'workspace/configuration' && message.id !== undefined && message.id !== null)
 		{
-			this.#configurationRequests.add(message.id!);
+			this.#requestConfiguration(message);
+
+			return;
+		}
+
+		if (message.method === 'client/registerCapability' || message.method === 'client/unregisterCapability')
+		{
+			if (message.method === 'client/registerCapability')
+			{
+				this.#confirmScopes(message.params?.registrations ?? []);
+			}
+
+			// the server is told the editor watches files, to learn when a scope is ready
+			if (!this.#clientWatchers)
+			{
+				this.#server.send({ jsonrpc: '2.0', id: message.id, result: null });
+
+				return;
+			}
 		}
 
 		if (message.method === 'textDocument/publishDiagnostics')
@@ -221,35 +308,295 @@ export class OxlintLspProxy
 		return uri.startsWith('file:') && this.#isIgnored(path.relative(this.#rootPath, fileURLToPath(uri)));
 	}
 
-	#withConfigPath(params: any): void
+	#initialize(params: any): void
 	{
-		if (!this.#configPath)
-		{
-			return;
-		}
+		const folders: Array<{ uri: string }> = Array.isArray(params.workspaceFolders) ? params.workspaceFolders : [];
+		const rootUris = folders.length > 0
+			? folders.map((folder) => folder.uri)
+			: [params.rootUri ?? (params.rootPath ? pathToFileURL(params.rootPath).href : pathToFileURL(this.#rootPath).href)];
+		this.#rootDirs = rootUris.filter((uri) => uri.startsWith('file:')).map((uri) => fileURLToPath(uri));
 
 		const options = params.initializationOptions;
-		if (Array.isArray(options))
+		for (const rootDir of this.#rootDirs)
 		{
-			params.initializationOptions = options.map((entry) => ({ ...entry, options: this.#withOptions(entry?.options) }));
+			const entry = Array.isArray(options)
+				? options.find((item) => typeof item?.workspaceUri === 'string' && this.#isSamePath(item.workspaceUri, rootDir))
+				: undefined;
+			// the old form: settings for the only folder
+			const given = Array.isArray(options) ? entry?.options : options?.settings;
+			this.#rootOptions.set(rootDir, given ?? null);
 		}
-		else
+
+		const capabilities = params.capabilities ?? {};
+		const workspace = capabilities.workspace ?? {};
+		this.#clientConfiguration = workspace.configuration === true;
+		this.#clientWatchers = workspace.didChangeWatchedFiles?.dynamicRegistration === true;
+
+		params.capabilities = {
+			...capabilities,
+			workspace: {
+				...workspace,
+				configuration: true,
+				didChangeWatchedFiles: { ...workspace.didChangeWatchedFiles, dynamicRegistration: true },
+			},
+		};
+		// no workers on start: scopes are added as documents open
+		params.workspaceFolders = [];
+		params.rootUri = null;
+		params.rootPath = null;
+		params.initializationOptions = [];
+	}
+
+	#changeRoots(event: { added?: Array<{ uri: string }>; removed?: Array<{ uri: string }> }): void
+	{
+		const removed = (event.removed ?? []).map((folder) => fileURLToPath(folder.uri));
+		const added = (event.added ?? []).map((folder) => fileURLToPath(folder.uri));
+		this.#rootDirs = [...this.#rootDirs.filter((dir) => !removed.includes(dir)), ...added];
+		removed.forEach((dir) => this.#rootOptions.delete(dir));
+		added.forEach((dir) => this.#rootOptions.set(dir, null));
+
+		const gone = [...this.#scopes.values()].filter((scope) => this.#rootOf(scope.dir) !== scope.rootDir);
+		gone.forEach((scope) => this.#dropScope(scope));
+		if (gone.length > 0)
 		{
-			const workspaceUri = params.rootUri ?? pathToFileURL(this.#rootPath).href;
-			params.initializationOptions = [{ workspaceUri, options: this.#withOptions(options) }];
+			this.#server.send({
+				jsonrpc: '2.0',
+				method: 'workspace/didChangeWorkspaceFolders',
+				params: { event: { added: [], removed: gone.map((scope) => ({ uri: scope.uri, name: scope.dir })) } },
+			});
 		}
 	}
 
-	#withOptions(options: unknown): unknown
+	/**
+	 * Options the editor sends per workspace folder go to every scope in that folder.
+	 */
+	#changeConfiguration(params: any): void
+	{
+		const settings = params?.settings;
+		if (settings === null || settings === undefined)
+		{
+			// the server asks for the configuration of its scopes
+			return;
+		}
+
+		if (Array.isArray(settings))
+		{
+			for (const entry of settings)
+			{
+				const rootDir = typeof entry?.workspaceUri === 'string'
+					? this.#rootDirs.find((dir) => this.#isSamePath(entry.workspaceUri, dir))
+					: undefined;
+				if (rootDir)
+				{
+					this.#rootOptions.set(rootDir, entry.options ?? null);
+				}
+			}
+		}
+		else
+		{
+			this.#rootDirs.forEach((dir) => this.#rootOptions.set(dir, settings));
+		}
+
+		params.settings = [...this.#scopes.values()].map((scope) => ({
+			workspaceUri: scope.uri,
+			options: this.#withOptions(this.#rootOptions.get(scope.rootDir) ?? null, scope),
+		}));
+	}
+
+	/**
+	 * The server asks for the options of its workspaces, the scopes: the editor knows only
+	 * its own folders, so it is asked for those, or answered here when it cannot be asked.
+	 */
+	#requestConfiguration(message: Message): void
+	{
+		const items: Array<{ scopeUri?: string; section?: string }> = message.params?.items ?? [];
+		const scopes = items.map((item) => (item.scopeUri ? this.#scopes.get(this.#dirOfUri(item.scopeUri)) ?? null : null));
+
+		if (!this.#clientConfiguration)
+		{
+			const result = scopes.map((scope) => this.#withOptions(scope ? this.#rootOptions.get(scope.rootDir) ?? null : null, scope));
+			this.#server.send({ jsonrpc: '2.0', id: message.id, result });
+
+			return;
+		}
+
+		this.#configurationRequests.set(message.id!, scopes);
+		message.params.items = items.map((item, index) => {
+			const scope = scopes[index];
+
+			return scope ? { ...item, scopeUri: pathToFileURL(scope.rootDir).href } : item;
+		});
+		this.#client.send(message);
+	}
+
+	/**
+	 * The scope of a document message, opened on the server when it is the first one.
+	 */
+	#scopeOfMessage(message: Message): Scope | null
+	{
+		const uri = message.method?.startsWith('textDocument/') ? message.params?.textDocument?.uri : undefined;
+		if (typeof uri !== 'string' || !uri.startsWith('file:'))
+		{
+			return null;
+		}
+
+		const filePath = fileURLToPath(uri);
+		const rootDir = this.#rootOf(filePath);
+		if (!rootDir)
+		{
+			return null;
+		}
+
+		const dir = this.#scopeDirOf(path.dirname(filePath), rootDir);
+		const existing = this.#scopes.get(dir);
+		if (existing)
+		{
+			return existing;
+		}
+
+		const scope: Scope = { dir, uri: pathToFileURL(dir).href, rootDir, ready: false, queue: [], timer: null };
+		scope.timer = setTimeout(() => this.#release(scope), SCOPE_TIMEOUT);
+		scope.timer.unref();
+		this.#scopes.set(dir, scope);
+		this.#server.send({
+			jsonrpc: '2.0',
+			method: 'workspace/didChangeWorkspaceFolders',
+			params: { event: { added: [{ uri: scope.uri, name: path.basename(dir) }], removed: [] } },
+		});
+
+		return scope;
+	}
+
+	/**
+	 * The extension directory of a document, else its package, else its own directory.
+	 */
+	#scopeDirOf(fileDir: string, rootDir: string): string
+	{
+		const known = this.#scopeDirs.get(fileDir);
+		if (known)
+		{
+			return known;
+		}
+
+		const ancestors: string[] = [];
+		for (let dir = fileDir; ; dir = path.dirname(dir))
+		{
+			ancestors.push(dir);
+			if (dir === rootDir || path.dirname(dir) === dir)
+			{
+				break;
+			}
+		}
+
+		const scopeDir = ancestors.find((dir) => EXTENSION_FILES.some((name) => fs.existsSync(path.join(dir, name))))
+			?? ancestors.find((dir) => dir !== rootDir && fs.existsSync(path.join(dir, 'package.json')))
+			?? fileDir;
+		this.#scopeDirs.set(fileDir, scopeDir);
+
+		return scopeDir;
+	}
+
+	#confirmScopes(registrations: Array<{ id?: string }>): void
+	{
+		for (const registration of registrations)
+		{
+			const id = registration?.id ?? '';
+			if (!id.startsWith('watcher-file:'))
+			{
+				continue;
+			}
+
+			const scope = this.#scopes.get(this.#dirOfUri(id.slice('watcher-'.length)));
+			if (scope)
+			{
+				this.#release(scope);
+			}
+		}
+	}
+
+	#release(scope: Scope): void
+	{
+		if (scope.timer)
+		{
+			clearTimeout(scope.timer);
+			scope.timer = null;
+		}
+
+		scope.ready = true;
+		const queue = scope.queue;
+		scope.queue = [];
+		queue.forEach((message) => this.#handleClient(message));
+	}
+
+	#dropScope(scope: Scope): void
+	{
+		if (scope.timer)
+		{
+			clearTimeout(scope.timer);
+		}
+
+		this.#scopes.delete(scope.dir);
+		for (const [fileDir, scopeDir] of this.#scopeDirs)
+		{
+			if (scopeDir === scope.dir)
+			{
+				this.#scopeDirs.delete(fileDir);
+			}
+		}
+	}
+
+	#rootOf(filePath: string): string | null
+	{
+		return this.#rootDirs
+			.filter((dir) => filePath === dir || filePath.startsWith(dir.endsWith(path.sep) ? dir : dir + path.sep))
+			.sort((a, b) => b.length - a.length)[0] ?? null;
+	}
+
+	#dirOfUri(uri: string): string
+	{
+		return path.resolve(fileURLToPath(uri));
+	}
+
+	#isSamePath(uri: string, dir: string): boolean
+	{
+		return uri.startsWith('file:') && this.#dirOfUri(uri) === path.resolve(dir);
+	}
+
+	/**
+	 * Options the editor gave on start, updated by the ones it answers with now.
+	 */
+	#merge(initial: unknown, current: unknown): unknown
+	{
+		const isObject = (value: unknown) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+		if (!isObject(initial))
+		{
+			return current;
+		}
+
+		return isObject(current) ? { ...initial as object, ...current as object } : initial;
+	}
+
+	/**
+	 * The options of a scope: the config path set in the editor wins, relative to the editor
+	 * folder; else the nearest project config up to that folder; else the presets.
+	 */
+	#withOptions(options: unknown, scope: Scope | null): unknown
 	{
 		const given = options && typeof options === 'object' ? options as Record<string, unknown> : {};
-		// a config path set in the editor wins over the presets
-		if (!this.#configPath || (typeof given.configPath === 'string' && given.configPath !== ''))
+		if (typeof given.configPath === 'string' && given.configPath !== '')
+		{
+			return scope && !path.isAbsolute(given.configPath)
+				? { ...given, configPath: path.resolve(scope.rootDir, given.configPath) }
+				: options;
+		}
+
+		const configPath = (scope && findProjectConfig(scope.dir, scope.rootDir)) ?? this.#configPath;
+		if (!configPath)
 		{
 			return options;
 		}
 
-		return { ...given, configPath: this.#configPath };
+		return { ...given, configPath };
 	}
 
 	#isTransformed(uri: string): boolean

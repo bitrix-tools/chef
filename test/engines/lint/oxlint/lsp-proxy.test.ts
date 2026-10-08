@@ -19,6 +19,7 @@ class Client
 	#nextId = 1;
 	readonly #waiting = new Map<number, (message: Message) => void>();
 	readonly diagnostics = new Map<string, Array<{ code: string; range: any; message: string }>>();
+	readonly registrations: Array<{ id: string }> = [];
 
 	constructor(cwd: string)
 	{
@@ -53,6 +54,11 @@ class Client
 			}
 			else if (message.method && message.id !== undefined)
 			{
+				if (message.method === 'client/registerCapability')
+				{
+					this.registrations.push(...message.params.registrations);
+				}
+
 				this.send({ id: message.id, result: message.method === 'workspace/configuration' ? message.params.items.map(() => ({})) : null });
 			}
 			else if (message.id !== undefined)
@@ -263,6 +269,54 @@ describe('oxlint language server with a config path set in the editor', function
 
 	it('lints with that config instead of the presets', async () => {
 		client.send({ method: 'textDocument/didOpen', params: { textDocument: { uri, languageId: 'javascript', version: 1, text } } });
+		const response = await client.request('textDocument/diagnostic', { textDocument: { uri } });
+		const codes = (response.result.items as Array<{ code: string }>).map((d) => d.code);
+
+		assert.deepEqual(codes, ['eslint(no-debugger)']);
+	});
+});
+
+describe('oxlint language server in a repository of extensions', function ()
+{
+	this.timeout(60000);
+
+	const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chef-oxlint-lsp-test-')));
+	const extensionDir = path.join(root, 'ui', 'install', 'js', 'ui', 'wrap');
+	const filePath = path.join(extensionDir, 'src', 'wrap.js');
+	const uri = pathToFileURL(filePath).href;
+	const text = 'export function wrap(value) { debugger; return value ? value : "" }\n';
+	let client: Client;
+
+	before(async () => {
+		fs.mkdirSync(path.dirname(filePath), { recursive: true });
+		fs.writeFileSync(path.join(extensionDir, 'bundle.config.js'), 'module.exports = {};\n');
+		fs.writeFileSync(filePath, text);
+		fs.writeFileSync(path.join(root, '.oxlintrc.json'), JSON.stringify({ categories: { correctness: 'off' }, rules: { 'no-debugger': 'error' } }));
+		client = new Client(root);
+		await client.request('initialize', {
+			processId: process.pid,
+			workspaceFolders: [{ uri: pathToFileURL(root).href, name: 'root' }],
+			capabilities: {
+				workspace: { configuration: true, didChangeWatchedFiles: { dynamicRegistration: true }, diagnostics: { refreshSupport: true } },
+				textDocument: { diagnostic: { dynamicRegistration: true } },
+			},
+		});
+		client.send({ method: 'initialized', params: {} });
+	});
+
+	after(() => {
+		client.stop();
+		fs.rmSync(root, { recursive: true, force: true });
+	});
+
+	it('serves the extension of a document as a workspace, not the whole repository', async () => {
+		client.send({ method: 'textDocument/didOpen', params: { textDocument: { uri, languageId: 'javascript', version: 1, text } } });
+		await client.request('textDocument/diagnostic', { textDocument: { uri } });
+
+		assert.deepEqual(client.registrations.map((registration) => registration.id), [`watcher-${pathToFileURL(extensionDir).href}`]);
+	});
+
+	it('lints with the project config found above the extension', async () => {
 		const response = await client.request('textDocument/diagnostic', { textDocument: { uri } });
 		const codes = (response.result.items as Array<{ code: string }>).map((d) => d.code);
 
