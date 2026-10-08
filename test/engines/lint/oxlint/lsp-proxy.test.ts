@@ -485,3 +485,45 @@ describe('oxlint language server with several extensions open', function ()
 		assert.isFalse(items.some((d) => d.message.includes('Error running JS plugin')));
 	});
 });
+
+describe('oxlint language server with many extensions opened at once', function ()
+{
+	this.timeout(60000);
+
+	const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chef-oxlint-lsp-test-')));
+	const text = 'debugger;\n';
+	const uris = Array.from({ length: 100 }, (_, index) => pathToFileURL(path.join(root, `ext${index}`, 'src', 'index.js')).href);
+	let client: Client;
+
+	before(async () => {
+		fs.writeFileSync(path.join(root, '.oxlintrc.json'), JSON.stringify({ categories: { correctness: 'off' }, rules: { 'no-debugger': 'error' } }));
+		for (let index = 0; index < uris.length; index++)
+		{
+			fs.mkdirSync(path.join(root, `ext${index}`, 'src'), { recursive: true });
+			fs.writeFileSync(path.join(root, `ext${index}`, 'bundle.config.js'), 'module.exports = {};\n');
+		}
+		client = new Client(root);
+		// what the JetBrains Oxc plugin declares
+		await client.request('initialize', {
+			processId: process.pid,
+			workspaceFolders: [{ uri: pathToFileURL(root).href, name: 'root' }],
+			capabilities: {
+				workspace: { configuration: true, didChangeWatchedFiles: { dynamicRegistration: true }, diagnostics: { refreshSupport: true } },
+				textDocument: { diagnostic: { dynamicRegistration: true } },
+			},
+		});
+		client.send({ method: 'initialized', params: {} });
+	});
+
+	after(() => {
+		client.stop();
+		fs.rmSync(root, { recursive: true, force: true });
+	});
+
+	it('answers for every document, as an editor restoring its tabs needs', async () => {
+		uris.forEach((uri) => client.send({ method: 'textDocument/didOpen', params: { textDocument: { uri, languageId: 'javascript', version: 1, text } } }));
+		const responses = await Promise.all(uris.map((uri) => client.request('textDocument/diagnostic', { textDocument: { uri } })));
+
+		assert.isTrue(responses.every((response) => response.result.items.some((d: { code: string }) => d.code === 'eslint(no-debugger)')));
+	});
+});

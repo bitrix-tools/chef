@@ -124,6 +124,9 @@ export class OxlintLspProxy
 	readonly #configurationRequests = new Map<number | string, Array<Scope | null>>();
 	// ids of textDocument/diagnostic requests the client sent (pull diagnostics) -> real URI
 	readonly #diagnosticRequests = new Map<number | string, string>();
+	// ids of the requests the proxy itself sent to the client
+	readonly #ownRequests = new Set<string>();
+	#nextOwnRequest = 1;
 	#configPath: string | null = null;
 	// editor workspace folders and the options the editor gave for them, by folder path
 	#rootDirs: string[] = [];
@@ -131,6 +134,9 @@ export class OxlintLspProxy
 	#clientConfiguration = false;
 	#clientWatchers = false;
 	readonly #scopes = new Map<string, Scope>();
+	// scopes waiting for the server to open them, one at a time: see #openNextScope
+	readonly #scopesToOpen: Scope[] = [];
+	#openingScope: Scope | null = null;
 	// directory of a document -> directory of its scope, null for none
 	readonly #scopeDirs = new Map<string, string | null>();
 	readonly #isIgnored = createPathFilter(IGNORED_FILES);
@@ -161,6 +167,12 @@ export class OxlintLspProxy
 
 	#fromClient(message: Message): void
 	{
+		// a response to a request of the proxy
+		if (message.method === undefined && typeof message.id === 'string' && this.#ownRequests.delete(message.id))
+		{
+			return;
+		}
+
 		switch (message.method)
 		{
 			case 'initialize':
@@ -253,18 +265,24 @@ export class OxlintLspProxy
 
 		if (message.method === 'client/registerCapability' || message.method === 'client/unregisterCapability')
 		{
+			// answered at once, before the messages a registration releases: the server holds one
+			// of its few handlers until the answer, and with many new scopes the answer behind
+			// their messages would never be read
+			this.#server.send({ jsonrpc: '2.0', id: message.id, result: null });
+			// the server is told the editor always watches files, to learn when a scope is ready
+			if (this.#clientWatchers)
+			{
+				const id = `chef-${this.#nextOwnRequest++}`;
+				this.#ownRequests.add(id);
+				this.#client.send({ ...message, id });
+			}
+
 			if (message.method === 'client/registerCapability')
 			{
 				this.#confirmScopes(message.params?.registrations ?? []);
 			}
 
-			// the server is told the editor watches files, to learn when a scope is ready
-			if (!this.#clientWatchers)
-			{
-				this.#server.send({ jsonrpc: '2.0', id: message.id, result: null });
-
-				return;
-			}
+			return;
 		}
 
 		if (message.method === 'textDocument/publishDiagnostics')
@@ -368,10 +386,17 @@ export class OxlintLspProxy
 			return;
 		}
 
+		// the scopes still waiting for their turn are not on the server
+		const opened = gone.filter((scope) => scope.ready || scope === this.#openingScope);
 		gone.forEach((scope) => this.#dropScope(scope));
-		this.#sendFolders([], gone);
+		if (opened.length > 0)
+		{
+			this.#sendFolders([], opened);
+		}
+
 		// messages held for a dropped scope go to the scope their documents have now
 		gone.flatMap((scope) => scope.queue).forEach((message) => this.#fromClient(message));
+		this.#openNextScope();
 	}
 
 	/**
@@ -460,12 +485,31 @@ export class OxlintLspProxy
 		}
 
 		const scope: Scope = { dir, uri: pathToFileURL(dir).href, rootDir, ready: false, queue: [], timer: null };
-		scope.timer = setTimeout(() => this.#release(scope), SCOPE_TIMEOUT);
-		scope.timer.unref();
 		this.#scopes.set(dir, scope);
-		this.#sendFolders([scope], []);
+		this.#scopesToOpen.push(scope);
+		this.#openNextScope();
 
 		return scope;
+	}
+
+	/**
+	 * Opens the next scope on the server, once the previous one is ready. For a new workspace
+	 * the server holds one of its few handlers until the editor answers for its options and
+	 * watchers, and it stops reading its input while too many messages wait: with many scopes
+	 * opened at once, and their messages released, those answers were never read.
+	 */
+	#openNextScope(): void
+	{
+		const scope = this.#openingScope ? undefined : this.#scopesToOpen.shift();
+		if (!scope)
+		{
+			return;
+		}
+
+		this.#openingScope = scope;
+		scope.timer = setTimeout(() => this.#release(scope), SCOPE_TIMEOUT);
+		scope.timer.unref();
+		this.#sendFolders([scope], []);
 	}
 
 	/**
@@ -537,6 +581,8 @@ export class OxlintLspProxy
 		const queue = scope.queue;
 		scope.queue = [];
 		queue.forEach((message) => this.#handleClient(message));
+		this.#unqueueScope(scope);
+		this.#openNextScope();
 	}
 
 	#dropScope(scope: Scope): void
@@ -548,6 +594,21 @@ export class OxlintLspProxy
 		}
 
 		this.#scopes.delete(scope.dir);
+		this.#unqueueScope(scope);
+	}
+
+	#unqueueScope(scope: Scope): void
+	{
+		if (this.#openingScope === scope)
+		{
+			this.#openingScope = null;
+		}
+
+		const index = this.#scopesToOpen.indexOf(scope);
+		if (index !== -1)
+		{
+			this.#scopesToOpen.splice(index, 1);
+		}
 	}
 
 	#rootOf(filePath: string): string | null
