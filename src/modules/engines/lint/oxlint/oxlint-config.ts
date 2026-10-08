@@ -188,7 +188,6 @@ function translateOverrides(overrides: Override[], presetIds: Set<string>): Over
  * written JSON config.
  */
 export async function writePresetConfig(options: {
-	rootPath: string;
 	outputDir: string;
 	sourceRepository: boolean;
 }): Promise<string>
@@ -207,12 +206,6 @@ export async function writePresetConfig(options: {
 	if (options.sourceRepository)
 	{
 		config.overrides!.push(...translateOverrides(SOURCE_REPOSITORY_OVERRIDES, presetRuleIds(config)));
-	}
-
-	const aliasesFile = path.join(options.rootPath, 'webpack.aliases.js');
-	if (fs.existsSync(aliasesFile))
-	{
-		config.settings = { bitrix24: { aliasesFile } };
 	}
 
 	const configPath = path.join(options.outputDir, 'oxlintrc.json');

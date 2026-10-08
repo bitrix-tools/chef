@@ -108,7 +108,7 @@ export class OxlintLspProxy
 		if (!findProjectConfig(this.#rootPath, this.#rootPath))
 		{
 			const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'chef-oxlint-lsp-'));
-			this.#configPath = await writePresetConfig({ rootPath: this.#rootPath, outputDir: tempDir, sourceRepository: true });
+			this.#configPath = await writePresetConfig({ outputDir: tempDir, sourceRepository: true });
 			process.on('exit', () => fs.rmSync(tempDir, { recursive: true, force: true }));
 		}
 

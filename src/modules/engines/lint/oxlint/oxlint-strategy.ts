@@ -115,7 +115,6 @@ export class OxlintStrategy extends LintStrategy
 				}
 
 				presetConfig ??= writePresetConfig({
-					rootPath,
 					outputDir: tempDir,
 					sourceRepository: Environment.getType() === 'source',
 				});
