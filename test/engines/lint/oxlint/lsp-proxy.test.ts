@@ -226,3 +226,46 @@ describe('oxlint language server with pull diagnostics', function ()
 		assert.deepEqual(response.result.items, []);
 	});
 });
+
+describe('oxlint language server with a config path set in the editor', function ()
+{
+	this.timeout(60000);
+
+	const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chef-oxlint-lsp-test-')));
+	const configPath = path.join(root, 'custom', 'oxlintrc.json');
+	const filePath = path.join(root, 'ext', 'src', 'wrap.js');
+	const uri = pathToFileURL(filePath).href;
+	const text = 'export function wrap(value) { debugger; return value ? value : "" }\n';
+	let client: Client;
+
+	before(async () => {
+		fs.mkdirSync(path.dirname(filePath), { recursive: true });
+		fs.mkdirSync(path.dirname(configPath), { recursive: true });
+		fs.writeFileSync(filePath, text);
+		fs.writeFileSync(configPath, JSON.stringify({ categories: { correctness: 'off' }, rules: { 'no-debugger': 'error' } }));
+		client = new Client(root);
+		await client.request('initialize', {
+			processId: process.pid,
+			rootUri: pathToFileURL(root).href,
+			capabilities: {
+				workspace: { configuration: true, diagnostics: { refreshSupport: true } },
+				textDocument: { diagnostic: { dynamicRegistration: true } },
+			},
+			initializationOptions: [{ workspaceUri: pathToFileURL(root).href, options: { configPath } }],
+		});
+		client.send({ method: 'initialized', params: {} });
+	});
+
+	after(() => {
+		client.stop();
+		fs.rmSync(root, { recursive: true, force: true });
+	});
+
+	it('lints with that config instead of the presets', async () => {
+		client.send({ method: 'textDocument/didOpen', params: { textDocument: { uri, languageId: 'javascript', version: 1, text } } });
+		const response = await client.request('textDocument/diagnostic', { textDocument: { uri } });
+		const codes = (response.result.items as Array<{ code: string }>).map((d) => d.code);
+
+		assert.deepEqual(codes, ['eslint(no-debugger)']);
+	});
+});

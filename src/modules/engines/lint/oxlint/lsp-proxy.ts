@@ -242,12 +242,14 @@ export class OxlintLspProxy
 
 	#withOptions(options: unknown): unknown
 	{
-		if (!this.#configPath)
+		const given = options && typeof options === 'object' ? options as Record<string, unknown> : {};
+		// a config path set in the editor wins over the presets
+		if (!this.#configPath || (typeof given.configPath === 'string' && given.configPath !== ''))
 		{
 			return options;
 		}
 
-		return { ...(options && typeof options === 'object' ? options : {}), configPath: this.#configPath };
+		return { ...given, configPath: this.#configPath };
 	}
 
 	#isTransformed(uri: string): boolean
