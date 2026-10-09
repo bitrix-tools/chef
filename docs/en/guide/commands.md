@@ -157,7 +157,8 @@ chef lint main.core --linter eslint        # Lint with ESLint, as before
   inside Flow type annotations. With `--fix`, fixes are carried back to the original; type-stripped
   files are reported but not fixed.
 - **Unparsable files** are reported with a parsing error instead of being skipped silently.
-- **Speed.** All extensions of a run are linted by one batch of oxlint processes.
+- **Speed.** Extensions are sent to oxlint in groups as they are found, each oxlint process lints
+  hundreds of files; results are reported in order as soon as their group is linted.
 - **Positions** are reported in UTF-16 columns, like ESLint.
 
 ### Language server
