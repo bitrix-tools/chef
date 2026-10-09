@@ -16,10 +16,15 @@ type PackageLinterOptions = {
 	linter?: LinterName;
 };
 
+export type PackageLintBatch = {
+	add(extensionPackage: BasePackage, options: PackageLinterOptions): void;
+	close(): void;
+};
+
 export class PackageLinter
 {
-	// results linted ahead by `prefetch`, by package path
-	static readonly #prefetched = new Map<string, { optionsKey: string; result: LintResult }>();
+	// results of the packages added to a batch, by package path
+	static readonly #prefetched = new Map<string, { optionsKey: string; result: Promise<LintResult> }>();
 
 	readonly #package: BasePackage;
 
@@ -29,29 +34,46 @@ export class PackageLinter
 	}
 
 	/**
-	 * Lints several packages ahead in one batch when they are linted with oxlint, which
-	 * starts once for all of them instead of once per package. `lint()` then returns the
-	 * prepared result. Does nothing for ESLint, which is reused in-process anyway.
+	 * Starts a batch that lints the packages added to it with oxlint, in groups and as they
+	 * come (see `OxlintStrategy.createBatch`); `lint()` of an added package then returns its
+	 * result from the batch. Null for ESLint, which lints package by package and is reused
+	 * in-process anyway.
+	 */
+	static startBatch(linter?: LinterName): PackageLintBatch | null
+	{
+		const strategy = new OxlintStrategy();
+		if (!strategy.match({ sourcePath: '', rootPath: '', linter }))
+		{
+			return null;
+		}
+
+		const batch = strategy.createBatch();
+
+		return {
+			add: (extensionPackage, options) => {
+				const result = batch.add(new PackageLinter(extensionPackage).#request(options));
+				// a failure is reported by `lint()` of the package
+				result.catch(() => {});
+				PackageLinter.#prefetched.set(extensionPackage.getPath(), { optionsKey: JSON.stringify(options), result });
+			},
+			close: () => batch.close(),
+		};
+	}
+
+	/**
+	 * Starts linting several packages ahead in one batch (see `startBatch`).
 	 */
 	static async prefetch(items: Array<{ extensionPackage: BasePackage; options: PackageLinterOptions }>): Promise<void>
 	{
-		if (items.length < 2)
+		const linters = new Set(items.map(({ options }) => options.linter));
+		const batch = items.length > 1 && linters.size === 1 ? PackageLinter.startBatch([...linters][0]) : null;
+		if (!batch)
 		{
 			return;
 		}
 
-		const strategy = new OxlintStrategy();
-		const requests = items.map(({ extensionPackage, options }) => new PackageLinter(extensionPackage).#request(options));
-		if (!requests.every((request) => strategy.match(request)))
-		{
-			return;
-		}
-
-		const results = await strategy.lintMany(requests);
-		for (const [i, { extensionPackage, options }] of items.entries())
-		{
-			PackageLinter.#prefetched.set(extensionPackage.getPath(), { optionsKey: JSON.stringify(options), result: results[i] });
-		}
+		items.forEach(({ extensionPackage, options }) => batch.add(extensionPackage, options));
+		batch.close();
 	}
 
 	async lint(options: PackageLinterOptions = {}): Promise<LintResult>

@@ -11,7 +11,7 @@ import { Environment } from '../../../../environment/environment';
 import { TransformationArtifacts } from './artifacts';
 import { IGNORED_FILES, createProjectIgnoreFilter, findProjectConfig, writePresetConfig } from './oxlint-config';
 import { prepareSource, shadowName } from './prepare-source';
-import { runOxlint, toRuleId } from './run-oxlint';
+import { FILES_PER_RUN, PARALLEL_RUNS, runOxlint, toRuleId } from './run-oxlint';
 import { TextPositions } from './text-positions';
 import { carryOverEdits, diffText } from './text-diff';
 
@@ -21,6 +21,10 @@ import type { LintOptions, LintResult, LintFileResult, LintMessage } from '../li
 
 // Fix passes over the same files: one oxlint run applies only non-overlapping fixes.
 const MAX_FIX_PASSES = 10;
+
+// A batch sends sources to oxlint in groups of files: small ones first, so that the first
+// results come soon, then twice as large each time, up to the files of one oxlint run.
+const FIRST_GROUP_FILES = 50;
 
 type SourceFile = {
 	path: string;
@@ -33,6 +37,20 @@ type SourceFile = {
 type ShadowSource = SourceFile & { prepared: Exclude<PreparedSource, { kind: 'native' | 'unparsable' }> };
 
 type LintedFile = LintFileResult & { fixed: boolean };
+
+export type LintBatch = {
+	add(request: LintOptions): Promise<LintResult>;
+	close(): void;
+};
+
+type GroupItem = {
+	request: LintOptions;
+	// the files to lint, ignored ones left out
+	files: string[];
+	configPath: string;
+	resolve: (result: LintResult) => void;
+	reject: (error: unknown) => void;
+};
 
 function isShadow(source: SourceFile): source is ShadowSource
 {
@@ -89,72 +107,169 @@ export class OxlintStrategy extends LintStrategy
 	}
 
 	/**
-	 * Lints several sources in one go: one oxlint run for all of their files instead of one
-	 * per source, which saves starting oxlint and loading its JS plugins every time.
+	 * Lints several sources in batches (see `createBatch`).
 	 * All requests must share `rootPath` and `fix`.
 	 */
 	async lintMany(requests: LintOptions[]): Promise<LintResult[]>
 	{
-		if (requests.length === 0)
-		{
-			return [];
-		}
+		const batch = this.createBatch();
+		const results = requests.map((request) => batch.add(request));
+		batch.close();
 
-		const rootPath = requests[0].rootPath;
-		const fix = requests[0].fix ?? false;
-		const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'chef-oxlint-'));
+		return Promise.all(results);
+	}
 
-		try
-		{
-			// project config -> its ignorePatterns as a filter
-			const ignoreFilters = new Map<string, Promise<(filePath: string) => boolean>>();
-			const isIgnored = (configPath: string) => ignoreFilters.get(configPath) ?? Promise.resolve(() => false);
-			let presetConfig: Promise<string> | null = null;
-			const configOf = (request: LintOptions): Promise<string> => {
-				const projectConfig = findProjectConfig(request.sourcePath, request.rootPath);
-				if (projectConfig)
+	/**
+	 * Lints the sources added to it as they come. Sources are grouped by files (see
+	 * `FIRST_GROUP_FILES`), and a group goes to oxlint as soon as it is full, several groups at
+	 * a time: one oxlint run per group instead of one per source saves starting oxlint and
+	 * loading its JS plugins every time, and the first results come before the last sources
+	 * are added.
+	 * The result of a source settles when its group is linted. All sources must share
+	 * `rootPath` and `fix`; `close()` tells that no more sources come.
+	 */
+	createBatch(): LintBatch
+	{
+		let tempDir: Promise<string> | null = null;
+		const tempDirOf = () => {
+			tempDir ??= fs.promises.mkdtemp(path.join(os.tmpdir(), 'chef-oxlint-'));
+
+			return tempDir;
+		};
+
+		// project config -> its ignorePatterns as a filter
+		const ignoreFilters = new Map<string, Promise<(filePath: string) => boolean>>();
+		let presetConfig: Promise<string> | null = null;
+		const configOf = async (request: LintOptions): Promise<string> => {
+			const projectConfig = findProjectConfig(request.sourcePath, request.rootPath);
+			if (projectConfig)
+			{
+				if (!ignoreFilters.has(projectConfig))
 				{
-					if (!ignoreFilters.has(projectConfig))
-					{
-						ignoreFilters.set(projectConfig, createProjectIgnoreFilter(projectConfig));
-					}
-
-					return Promise.resolve(projectConfig);
+					ignoreFilters.set(projectConfig, createProjectIgnoreFilter(projectConfig));
 				}
 
-				presetConfig ??= writePresetConfig({
-					outputDir: tempDir,
-					sourceRepository: Environment.getType() === 'source',
-				});
+				return projectConfig;
+			}
 
-				return presetConfig;
-			};
+			presetConfig ??= tempDirOf().then((outputDir) => writePresetConfig({
+				outputDir,
+				sourceRepository: Environment.getType() === 'source',
+			}));
 
-			const requestFiles = await Promise.all(requests.map((request) => this.#collectFiles(request)));
-			const filesByConfig = new Map<string, Set<string>>();
-			for (const [i, request] of requests.entries())
+			return presetConfig;
+		};
+
+		let group: GroupItem[] = [];
+		let groupFiles = 0;
+		let groupLimit = FIRST_GROUP_FILES;
+		let groupCount = 0;
+		const queue: GroupItem[][] = [];
+		let running = 0;
+		let closed = false;
+
+		const removeTempDir = () => {
+			if (closed && running === 0 && queue.length === 0 && tempDir)
 			{
-				const configPath = await configOf(request);
-				const ignored = await isIgnored(configPath);
-				requestFiles[i] = requestFiles[i].filter((file) => !ignored(file));
-				const files = filesByConfig.get(configPath) ?? new Set<string>();
-				requestFiles[i].forEach((file) => files.add(file));
-				filesByConfig.set(configPath, files);
+				const dir = tempDir;
+				tempDir = null;
+				void dir.then((d) => fs.promises.rm(d, { recursive: true, force: true }));
+			}
+		};
+		const launch = () => {
+			while (running < PARALLEL_RUNS && queue.length > 0)
+			{
+				const items = queue.shift()!;
+				const index = groupCount++;
+				running++;
+				void this.#lintGroup(items, tempDirOf, index).finally(() => {
+					running--;
+					launch();
+					removeTempDir();
+				});
+			}
+		};
+		const flush = () => {
+			if (group.length > 0)
+			{
+				queue.push(group);
+				group = [];
+				groupFiles = 0;
+				groupLimit = Math.min(groupLimit * 2, FILES_PER_RUN);
+				launch();
+			}
+		};
+
+		// sources are grouped in the order they are added
+		let adding: Promise<void> = Promise.resolve();
+
+		return {
+			add: (request: LintOptions): Promise<LintResult> => new Promise((resolve, reject) => {
+				adding = adding.then(async () => {
+					try
+					{
+						const configPath = await configOf(request);
+						const ignored = await (ignoreFilters.get(configPath) ?? (() => false));
+						const files = (await this.#collectFiles(request)).filter((file) => !ignored(file));
+						if (files.length === 0)
+						{
+							resolve(toLintResult([]));
+
+							return;
+						}
+
+						group.push({ request, files, configPath, resolve, reject });
+						groupFiles += files.length;
+						if (groupFiles >= groupLimit)
+						{
+							flush();
+						}
+					}
+					catch (error)
+					{
+						reject(error);
+					}
+				});
+			}),
+			close: () => {
+				adding = adding.then(() => {
+					flush();
+					closed = true;
+					removeTempDir();
+				});
+			},
+		};
+	}
+
+	async #lintGroup(items: GroupItem[], tempDirOf: () => Promise<string>, index: number): Promise<void>
+	{
+		try
+		{
+			const { rootPath } = items[0].request;
+			const fix = items[0].request.fix ?? false;
+			const tempDir = await tempDirOf();
+
+			const filesByConfig = new Map<string, Set<string>>();
+			for (const { files, configPath } of items)
+			{
+				const configFiles = filesByConfig.get(configPath) ?? new Set<string>();
+				files.forEach((file) => configFiles.add(file));
+				filesByConfig.set(configPath, configFiles);
 			}
 
 			const linted = new Map<string, LintedFile>();
-			for (const [index, [configPath, files]] of [...filesByConfig.entries()].entries())
+			for (const [configIndex, [configPath, files]] of [...filesByConfig.entries()].entries())
 			{
-				const shadowRoot = path.join(tempDir, `shadow-${index}`);
+				const shadowRoot = path.join(tempDir, `shadow-${index}-${configIndex}`);
 				const result = await this.#lintFiles([...files].sort(), { rootPath, fix }, configPath, shadowRoot);
 				result.forEach((file, filePath) => linted.set(filePath, file));
 			}
 
-			return requestFiles.map((files) => toLintResult(files.map((file) => linted.get(file)!)));
+			items.forEach(({ files, resolve }) => resolve(toLintResult(files.map((file) => linted.get(file)!))));
 		}
-		finally
+		catch (error)
 		{
-			await fs.promises.rm(tempDir, { recursive: true, force: true });
+			items.forEach(({ reject }) => reject(error));
 		}
 	}
 

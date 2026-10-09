@@ -48,17 +48,29 @@ function packageLintOptions(extension: BasePackage, options: LintCommandOptions)
 	};
 }
 
+export type ExtensionLintBatch = {
+	add(extension: BasePackage): void;
+	close(): void;
+};
+
 /**
- * Lints the extensions ahead in one batch when the linter supports it (oxlint); `lint()`
- * then picks the prepared results up.
+ * Starts linting extensions in batches as they are added when the linter supports it
+ * (oxlint); `lint()` of an added extension then picks its result up as soon as it is ready.
+ * Null for ESLint, which lints extension by extension.
  */
-export async function prefetchLint(extensions: BasePackage[], options: LintCommandOptions = {}): Promise<void>
+export async function startLintBatch(options: LintCommandOptions = {}): Promise<ExtensionLintBatch | null>
 {
 	const { PackageLinter } = await import('../../../modules/services/package-linter');
-	await PackageLinter.prefetch(extensions.map((extension) => ({
-		extensionPackage: extension,
-		options: packageLintOptions(extension, options),
-	})));
+	const batch = PackageLinter.startBatch(options.linter);
+	if (!batch)
+	{
+		return null;
+	}
+
+	return {
+		add: (extension) => batch.add(extension, packageLintOptions(extension, options)),
+		close: () => batch.close(),
+	};
 }
 
 export function lint(extension: BasePackage, options: LintCommandOptions = {}): () => Promise<LintRunResult>

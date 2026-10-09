@@ -25,8 +25,8 @@ type RawDiagnostic = {
 
 // A long file list is split, and the parts run in parallel: JS plugins run on one thread
 // per oxlint process (and the launcher overflows its stack on ~10k arguments).
-const FILES_PER_RUN = 300;
-const PARALLEL_RUNS = Math.max(1, Math.min(8, Math.floor(os.availableParallelism() / 2)));
+export const FILES_PER_RUN = 300;
+export const PARALLEL_RUNS = Math.max(1, Math.min(8, Math.floor(os.availableParallelism() / 2)));
 
 export function oxlintBin(): string
 {

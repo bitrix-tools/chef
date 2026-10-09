@@ -44,6 +44,24 @@ describe('OxlintStrategy', function ()
 		assert.isFalse(strategy.match({ sourcePath, rootPath: root, linter: 'eslint' }));
 	});
 
+	it('lints the sources of a batch as they come, before the batch is closed', async () => {
+		// enough files to fill the first group
+		const manyPath = path.join(root, 'many', 'src');
+		fs.mkdirSync(manyPath, { recursive: true });
+		for (let i = 0; i < 50; i++)
+		{
+			fs.writeFileSync(path.join(manyPath, `file-${i}.js`), `export const value${i} = ${i};\n`);
+		}
+
+		const batch = new OxlintStrategy().createBatch();
+		const many = await batch.add({ sourcePath: manyPath, rootPath: root, linter: 'oxlint' });
+		const flow = batch.add({ sourcePath, rootPath: root, linter: 'oxlint' });
+		batch.close();
+
+		assert.lengthOf(many.files, 50);
+		assert.isTrue((await flow).hasErrors());
+	});
+
 	it('lints a Flow file and reports positions of the original', async () => {
 		const result = await new OxlintStrategy().lint({ sourcePath, rootPath: root, linter: 'oxlint' });
 		const messages = result.files.find((file) => file.filePath === filePath)?.messages ?? [];
