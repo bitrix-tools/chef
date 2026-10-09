@@ -11,7 +11,7 @@ import { findPackages } from '../../utils/package/find-packages';
 import { formatInternalError } from '../../diagnostics/format-error';
 import { CF } from '../../diagnostics/diagnostic-codes';
 import { pluralize } from '../../utils/pluralize';
-import { lint } from './internal/lint';
+import { lint, startLintBatch } from './internal/lint';
 import { lint as lintJson } from '../../reporters/json/lint';
 import { emitJson } from '../../reporters/json/emit';
 import { createReporterOption } from '../../shared/options/reporter-option';
@@ -151,8 +151,18 @@ lintCommand
 	.addOption(new Option('--file <patterns...>', 'Lint specific files (glob patterns relative to extension src/)'))
 	.addOption(new Option('--exclude <patterns...>', 'Exclude files from linting (glob patterns relative to extension root)'))
 	.addOption(new Option('--no-cache', 'Disable caching (cache is enabled by default)'))
+	.addOption(new Option('--lsp', 'Run the oxlint language server for editors (stdio); Flow files are supported'))
+	.addOption(new Option('--linter <name>', 'Linter to use (default: oxlint); ESLint is kept for the transition').choices(['eslint', 'oxlint']))
 	.addOption(createReporterOption())
 	.action(async (extensions: string[], args) => {
+		if (args.lsp)
+		{
+			const { runLanguageServer } = await import('./internal/language-server');
+			await runLanguageServer();
+
+			return;
+		}
+
 		if (args.reporter === 'json')
 		{
 			const result = await lintJson({
@@ -162,6 +172,7 @@ lintCommand
 				files: args.file,
 				cache: args.cache,
 				exclude: args.exclude,
+				linter: args.linter,
 			});
 			emitJson(result);
 			process.exit(result.success ? 0 : 1);
@@ -176,7 +187,11 @@ lintCommand
 			files: args.file,
 			cache: args.cache,
 			exclude: args.exclude,
+			linter: args.linter,
 		};
+		// oxlint lints the extensions in batches as they are found, ESLint one by one;
+		// results are reported in the order the extensions are found
+		const batch = await startLintBatch(lintOptions);
 
 		const extensionsStream: NodeJS.ReadableStream = (() => {
 			if (extensions.length > 0)
@@ -198,12 +213,14 @@ lintCommand
 				console.log(message);
 			})
 			.on('data', ({ extension }: { extension: BasePackage }) => {
+				batch?.add(extension);
 				queue.add(async () => {
 					const result = await lint(extension, lintOptions)();
 					lintResults.push(result);
 				});
 			})
 			.on('done', async () => {
+				batch?.close();
 				await queue.onIdle();
 
 				printSummary(lintResults, startTime);

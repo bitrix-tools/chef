@@ -76,3 +76,36 @@ The `chef create` command will scaffold the extension structure with a build con
 ## bundle.config
 
 `bundle.config.js` and `bundle.config.ts` files are displayed with a Chef icon in the project tree.
+
+## oxlint
+
+PhpStorm shows oxlint diagnostics and quick fixes through the Oxc plugin (it uses the IDE's LSP
+API). chef provides a language server that also lints Flow files:
+
+1. Install the **Oxc** plugin from the JetBrains Marketplace.
+2. In **Settings | Tools | Oxlint**, select **Manual Oxlint configuration** and set
+   **Path to Oxlint Language Server** to `chef-oxlint` from the global chef installation
+   (`$(npm root -g)/@bitrix/chef/bin/chef-oxlint`). Leave **Path to Oxlint Config** empty.
+3. Turn ESLint off for the project (**Settings | Languages & Frameworks | JavaScript |
+   Code Quality Tools | ESLint**), otherwise the same problems are reported twice.
+
+The language server lints each extension (the directory of its `bundle.config.*`) as a workspace
+of its own, opened with its first document, so it starts in seconds in a repository of any size.
+A file outside extensions gets the nearest directory with a `package.json` below the project root
+as its workspace, else its own directory. Files directly in the project root, such as
+`webpack.config.js`, get no diagnostics: their workspace would be the whole repository.
+The config is the one set in the editor, else the one `chef lint` takes for the extension: the
+nearest `oxlint.config.ts` from its `src` up to the project root, else the nearest
+`.oxlintrc.json`. Configs deeper in the extension are not applied, as in `chef lint`.
+
+The Oxc plugin sends the server only the files under the directory of the `oxlint` package it
+finds in the project. Keep `oxlint` in the `node_modules` of the project root, or nowhere: with
+`oxlint` installed only in another directory of the project (an attached repository, say), files
+outside that directory get no diagnostics.
+
+Without an oxlint config in the project the language server uses the Bitrix24 presets, the same
+as `chef lint`, and reports nothing for the files `chef lint` skips (`*.cjs`,
+`vendor`, `dist`, minified and bundled files), although the plugin sends them to the server.
+Quick fixes and **Run 'Fix All' on Save** keep Flow types intact. One 'Fix All' applies the fixes
+that do not overlap, so a line with several problems may need a second save; `chef lint --fix`
+repeats the passes itself.

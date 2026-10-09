@@ -7,13 +7,14 @@ import { pluralize } from '../../../utils/pluralize';
 
 import type { BasePackage } from '../../../modules/packages/base-package';
 import type { Task, TaskResult, TaskDetail, TaskGroupResult } from '../../../modules/task/task-types';
-import type { LintResult } from '../../../modules/engines/lint/lint-types';
+import type { LintResult, LinterName } from '../../../modules/engines/lint/lint-types';
 
 type LintCommandOptions = {
 	fix?: boolean;
 	files?: string[];
 	cache?: boolean;
 	exclude?: string[];
+	linter?: LinterName;
 };
 
 export type LintRunResult = {
@@ -33,29 +34,57 @@ const EMPTY_LINT_RESULT: LintResult = {
 	getFixedCount: () => 0,
 };
 
+function packageLintOptions(extension: BasePackage, options: LintCommandOptions)
+{
+	const root = extension.getPath();
+	const resolve = (pattern: string) => (path.isAbsolute(pattern) ? pattern : path.join(root, pattern));
+
+	return {
+		fix: options.fix,
+		files: options.files?.map(resolve),
+		cache: options.cache,
+		exclude: options.exclude?.map(resolve),
+		linter: options.linter,
+	};
+}
+
+export type ExtensionLintBatch = {
+	add(extension: BasePackage): void;
+	close(): void;
+};
+
+/**
+ * Starts linting extensions in batches as they are added when the linter supports it
+ * (oxlint); `lint()` of an added extension then picks its result up as soon as it is ready.
+ * Null for ESLint, which lints extension by extension.
+ */
+export async function startLintBatch(options: LintCommandOptions = {}): Promise<ExtensionLintBatch | null>
+{
+	const { PackageLinter } = await import('../../../modules/services/package-linter');
+	const batch = PackageLinter.startBatch(options.linter);
+	if (!batch)
+	{
+		return null;
+	}
+
+	return {
+		add: (extension) => batch.add(extension, packageLintOptions(extension, options)),
+		close: () => batch.close(),
+	};
+}
+
 export function lint(extension: BasePackage, options: LintCommandOptions = {}): () => Promise<LintRunResult>
 {
 	return async () => {
 		const name = extension.getName();
 		const root = extension.getPath();
-		const files = options.files?.map((pattern) => {
-			return path.isAbsolute(pattern) ? pattern : path.join(root, pattern);
-		});
-		const exclude = options.exclude?.map((pattern) => {
-			return path.isAbsolute(pattern) ? pattern : path.join(root, pattern);
-		});
 
 		let lintResult: LintResult = EMPTY_LINT_RESULT;
 
 		const lintTask: Task = {
 			title: `Linting ${name}...`,
 			run: async (): Promise<TaskResult> => {
-				const result = await extension.lint({
-					fix: options.fix,
-					files,
-					cache: options.cache,
-					exclude,
-				});
+				const result = await extension.lint(packageLintOptions(extension, options));
 
 				lintResult = result;
 

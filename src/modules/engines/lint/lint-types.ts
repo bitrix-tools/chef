@@ -1,3 +1,5 @@
+export type LinterName = 'eslint' | 'oxlint';
+
 export type LintOptions = {
 	sourcePath: string;
 	rootPath: string;
@@ -5,6 +7,8 @@ export type LintOptions = {
 	files?: string[];
 	cache?: boolean;
 	exclude?: string[];
+	// the linter, oxlint by default; the CHEF_LINTER environment variable does the same
+	linter?: LinterName;
 };
 
 export type LintFormatterLevel = 'succeed' | 'warn' | 'fail';

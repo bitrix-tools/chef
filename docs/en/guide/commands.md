@@ -108,7 +108,7 @@ Types are checked automatically during build (`chef build`). The `chef typecheck
 
 ## chef lint
 
-Lint extensions with ESLint.
+Lint extensions with oxlint (ESLint is kept for the transition: `--linter eslint`).
 
 ```bash
 chef lint [extensions...] [options]
@@ -122,6 +122,8 @@ chef lint [extensions...] [options]
 | `--file <patterns...>` | Lint specific files (glob patterns relative to `src/`) |
 | `--exclude <patterns...>` | Exclude files from linting (glob patterns relative to extension root) |
 | `--no-cache` | Disable caching (cache is enabled by default) |
+| `--linter <eslint\|oxlint>` | Linter to use, `oxlint` by default; also `CHEF_LINTER` |
+| `--lsp` | Run the oxlint language server for editors on stdin/stdout |
 
 ```bash
 chef lint main.core                        # Lint a specific extension
@@ -132,8 +134,39 @@ chef lint main.core --exclude 'src/old/**' # Exclude files from linting
 ```
 
 ::: tip
-`chef lint` requires an `eslint.config.{js,mjs,cjs,ts,mts,cts}` file in the project. If no config is found, linting is skipped.
+With `--linter eslint` (or `CHEF_LINTER=eslint`), `chef lint` requires an `eslint.config.{js,mjs,cjs,ts,mts,cts}` file in the project. If no config is found, linting is skipped.
 :::
+
+### oxlint
+
+oxlint is the default linter. chef uses the project's `oxlint.config.ts` or `.oxlintrc.json`
+when there is one, and the Bitrix24 presets otherwise: `@bitrix24/oxlint-config-bitrix24` and
+`@bitrix24/oxlint-config-bitrix24-mobile`. Files matching the `ignorePatterns` of the project config are not
+linted, Flow files included.
+
+```bash
+chef lint main.core                        # Lint with oxlint
+chef lint -p ui --fix                      # Fix a whole module
+chef lint main.core --linter eslint        # Lint with ESLint, as before
+```
+
+- **Flow files.** oxlint has no Flow parser. chef lints a Flow file through a copy that oxlint can
+  read and that keeps every position of the original: maybe types (`?string`) lose their `?` and
+  the file is linted as TypeScript; a file TypeScript cannot read has its types blanked out.
+  Diagnostics caused by the transformation itself are not reported, and neither is formatting
+  inside Flow type annotations. With `--fix`, fixes are carried back to the original; type-stripped
+  files are reported but not fixed.
+- **Unparsable files** are reported with a parsing error instead of being skipped silently.
+- **Speed.** Extensions are sent to oxlint in groups as they are found, each oxlint process lints
+  hundreds of files; results are reported in order as soon as their group is linted.
+- **Positions** are reported in UTF-16 columns, like ESLint.
+
+### Language server
+
+`chef lint --lsp` (or the `chef-oxlint --lsp` binary) runs the oxlint language server behind a
+proxy that understands Flow files the same way `chef lint` does. Editors that start an oxlint
+binary for the language server can be pointed at `chef-oxlint`: with `--lsp` it serves chef's
+language server, any other arguments go to oxlint unchanged. See [PhpStorm](./phpstorm-plugin.md#oxlint).
 
 ## chef diag
 

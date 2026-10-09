@@ -13,7 +13,7 @@ import { Environment } from '../../environment/environment';
 import { PackageSizeCalculator } from '../services/package-size-calculator';
 import { warnIfBrowserDataIsOutdated } from '../../utils/browser-data-age';
 
-import type { LintResult } from '../engines/lint/lint-types';
+import type { LintResult, LinterName } from '../engines/lint/lint-types';
 import type { BuildOptions, BuildResult } from '../engines/build/build-types';
 import type { DependencyNode } from './types/dependency-node';
 
@@ -488,7 +488,7 @@ export abstract class BasePackage
 		return new PackageBuilder(this).generate(overrides);
 	}
 
-	async lint(options: { fix?: boolean; files?: string[]; cache?: boolean; exclude?: string[] } = {}): Promise<LintResult>
+	async lint(options: { fix?: boolean; files?: string[]; cache?: boolean; exclude?: string[]; linter?: LinterName } = {}): Promise<LintResult>
 	{
 		const { PackageLinter } = await import('../services/package-linter');
 		return new PackageLinter(this).lint(options);

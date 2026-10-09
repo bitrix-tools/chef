@@ -1,0 +1,25 @@
+#!/usr/bin/env node
+
+// Stands in for the oxlint binary in editor integrations: `chef-oxlint --lsp` runs
+// chef's language server (oxlint that understands Flow files), anything else is passed
+// to oxlint unchanged.
+import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const args = process.argv.slice(2);
+const binDir = path.dirname(fileURLToPath(import.meta.url));
+
+if (args.includes('--lsp'))
+{
+	const child = spawn(process.execPath, [path.join(binDir, 'chef'), 'lint', '--lsp'], { stdio: 'inherit' });
+	child.on('exit', (code) => process.exit(code ?? 0));
+}
+else
+{
+	const require = createRequire(import.meta.url);
+	const oxlint = path.join(path.dirname(require.resolve('oxlint/package.json')), 'bin', 'oxlint');
+	const child = spawn(process.execPath, [oxlint, ...args], { stdio: 'inherit' });
+	child.on('exit', (code) => process.exit(code ?? 0));
+}

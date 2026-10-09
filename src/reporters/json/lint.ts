@@ -5,7 +5,7 @@ import { initializeEnvironment } from './initialize-environment';
 import { toErrorPayload } from './to-error-payload';
 import { resolveTargets, type TargetSelector } from './resolve-targets';
 
-import type { LintResult as EngineLintResult } from '../../modules/engines/lint/lint-types';
+import type { LintResult as EngineLintResult, LinterName } from '../../modules/engines/lint/lint-types';
 import type { BasePackage } from '../../modules/packages/base-package';
 import type {
 	JsonInputOptions, JsonErrorPayload, JsonExtensionResult,
@@ -17,6 +17,7 @@ export type LintOptions = JsonInputOptions & TargetSelector & {
 	files?: string[],
 	cache?: boolean,
 	exclude?: string[],
+	linter?: LinterName,
 };
 
 export type LintDetails = {
@@ -59,6 +60,12 @@ export async function lint(options: LintOptions = {}): Promise<LintJsonResult>
 
 		notFound = targets.notFound;
 
+		const { PackageLinter } = await import('../../modules/services/package-linter');
+		await PackageLinter.prefetch(targets.found.map((extensionPackage) => ({
+			extensionPackage,
+			options: lintOptions(options),
+		})));
+
 		for (const extensionPackage of targets.found)
 		{
 			extensions.push(await lintOne(extensionPackage, options));
@@ -79,6 +86,17 @@ export async function lint(options: LintOptions = {}): Promise<LintJsonResult>
 	};
 }
 
+function lintOptions(options: LintOptions)
+{
+	return {
+		fix: options.fix,
+		files: options.files,
+		cache: options.cache,
+		exclude: options.exclude,
+		linter: options.linter,
+	};
+}
+
 async function lintOne(
 	extensionPackage: BasePackage,
 	options: LintOptions,
@@ -90,12 +108,7 @@ async function lintOne(
 
 	try
 	{
-		const lintResult: EngineLintResult = await extensionPackage.lint({
-			fix: options.fix,
-			files: options.files,
-			cache: options.cache,
-			exclude: options.exclude,
-		});
+		const lintResult: EngineLintResult = await extensionPackage.lint(lintOptions(options));
 
 		const errorCount = lintResult.getErrorsCount();
 		const warningCount = lintResult.getWarningsCount();

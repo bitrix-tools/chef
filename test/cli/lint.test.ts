@@ -19,8 +19,15 @@ describe('chef lint', () => {
 		fs.rmSync(tmpRepo, { recursive: true, force: true });
 	});
 
-	it('should skip lint when no eslint config is found', async () => {
-		const { exitCode, output } = await runChef(['lint', 'ui.buttons'], { cwd: tmpRepo });
+	it('should lint with oxlint and the Bitrix24 presets by default', async () => {
+		const { exitCode, output } = await runChef(['lint', 'ui.lint-errors'], { cwd: tmpRepo });
+
+		assert.equal(exitCode, 1);
+		assert.include(output, 'src/legacy.js');
+	});
+
+	it('should skip lint with ESLint when no eslint config is found', async () => {
+		const { exitCode, output } = await runChef(['lint', 'ui.buttons', '--linter', 'eslint'], { cwd: tmpRepo });
 
 		assert.equal(exitCode, 0);
 		assert.include(output, 'No matching lint strategy');
@@ -38,7 +45,7 @@ export default [
 ];
 `);
 
-		const { exitCode } = await runChef(['lint', 'ui.lint-errors'], { cwd: tmpRepo });
+		const { exitCode } = await runChef(['lint', 'ui.lint-errors', '--linter', 'eslint'], { cwd: tmpRepo });
 
 		assert.equal(exitCode, 1);
 	});

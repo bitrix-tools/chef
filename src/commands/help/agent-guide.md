@@ -14,7 +14,7 @@ chef (`@bitrix/chef`) builds, type-checks, lints and tests Bitrix JS extensions.
 
 - **Build** — `chef build <name>` or `chef build -p <path>` compiles TypeScript, JavaScript, CSS and Vue sources into bundles and updates `config.php`. TypeScript types are checked during the build. `--production` builds minified bundles.
 - **Check types** — `chef typecheck <name>` checks types without writing bundles; `--file` narrows the check to specific files.
-- **Lint** — `chef lint <name>`; `--fix` applies automatic fixes.
+- **Lint** — `chef lint <name>`; `--fix` applies automatic fixes. oxlint by default (the project's oxlint config, or the Bitrix24 presets); `--linter eslint` (`CHEF_LINTER=eslint`) runs ESLint as before. oxlint lints Flow files through position-preserving copies; a file nothing can parse is reported as a parsing error.
 - **Test** — `chef test <name>` runs unit tests (Mocha in a browser) and e2e tests (Playwright); `chef test unit` and `chef test e2e` run one kind, `chef test module` runs module-level scenario tests. `--list` shows tests without running them, `--grep` filters them by name. E2E tests need `playwright.config.ts` and `.env.test` (`chef init tests`).
 - **Create** — `chef create <name>` scaffolds an extension: `bundle.config`, `config.php`, an entry point in `src/`, unit and e2e test stubs.
 - **Path aliases** — `chef aliases` regenerates `aliases.tsconfig.json`, which lets TypeScript resolve imports of other extensions by name.
