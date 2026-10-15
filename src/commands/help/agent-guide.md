@@ -29,6 +29,7 @@ chef (`@bitrix/chef`) builds, type-checks, lints and tests Bitrix JS extensions.
 - Types are checked by the TypeScript 7 bundled with chef, not by the project's `typescript` package: an editor or `npx tsc` running TypeScript 5 or 6 can report different errors, mostly for types taken from JS dependencies.
 - `--force` builds even when type or import checks fail.
 - `--watch` keeps running until interrupted.
+- A test file that fails to build or load (syntax error, missing import, a throw outside `it`) does not stop the run: the other files still run, and the broken one is reported as a failed test named after the file, with the cause and its location.
 - `CF2001` — an option is not allowed: the project's `chef.config` denies it, or it conflicts with another option.
 
 ## Machine-readable output

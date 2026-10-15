@@ -85,6 +85,9 @@ export type BuildCodeOptions = {
 	resolve?: boolean,
 	inline?: string[];
 	sourcemap?: boolean;
+	// Test files whose top-level code is handed to `globalThis[loader](file, body)` instead
+	// of running inline, so an error while one file loads doesn't stop the files after it.
+	isolatedFiles?: { files: string[]; loader: string };
 };
 
 export interface BuildCodeResult {

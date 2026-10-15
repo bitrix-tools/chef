@@ -6,7 +6,7 @@ export type ParsedEvent =
 	| { type: 'begin'; totalTests: number; browserCount: number }
 	| { type: 'status'; text: string }
 	| { type: 'token'; token: TestToken; browser?: string }
-	| { type: 'runError'; message: string; stack?: string }
+	| { type: 'runError'; message: string; stack?: string; location?: { file: string; line: number; column: number } }
 	| { type: 'stdio'; text: string }
 	| { type: 'end' };
 
@@ -58,6 +58,7 @@ export function parseTokenStream(buffer: string): { events: ParsedEvent[]; remai
 					type: 'runError',
 					message: data.error?.message ?? 'Playwright run error',
 					stack: data.error?.stack,
+					...(data.error?.location ? { location: data.error.location } : {}),
 				});
 				continue;
 			}

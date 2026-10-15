@@ -12,8 +12,11 @@ import { resolvePlaywright } from './resolve-playwright';
 import { mapStack } from './map-stack';
 import { embedSourceMap } from './embed-source-map';
 import { signalReady, waitForDebugger } from './debug-signal';
+import { normalizePath } from '../../../../../utils/path/normalize';
+import { TEST_FILE_LOADER, TEST_FILE_LOADER_SCRIPT } from './test-file-loader';
 
 import type { SourceMap } from 'rollup';
+import type { TestFileLoadError } from './test-file-loader';
 import type {
 	UnitTestOptions,
 	TestResult,
@@ -25,6 +28,21 @@ type TestBundle = {
 	code: string;
 	map: SourceMap | null;
 	css: string;
+	// Test files, or modules they share, that failed to build: left out of the bundle.
+	brokenFiles: BrokenTestFile[];
+};
+
+type BrokenTestFile = {
+	// A test file, or a module test files share, that failed to build or load (absolute
+	// path); null for an error that escaped the per-file loader.
+	file: string | null;
+	error: { message: string; stack?: string };
+};
+
+type BuildFailure = {
+	brokenFiles: BrokenTestFile[];
+	// Test files to leave out of the bundle because of these failures.
+	skippedFiles: string[];
 };
 
 export class PlaywrightUnitStrategy extends UnitTestStrategy
@@ -47,13 +65,42 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 		PlaywrightUnitStrategy.#bundleCache.clear();
 	}
 
+	// A test file that fails to build (syntax error, unresolved import) is left out of the
+	// bundle and reported on its own, so it doesn't take the other files down with it.
 	async #buildTestBundle(options: UnitTestOptions): Promise<TestBundle>
 	{
-		const filteredTests = options.file
+		const brokenFiles: BrokenTestFile[] = [];
+		let files = options.file
 			? options.testFiles.filter((filePath) => filePath.includes(path.basename(options.file)))
 			: options.testFiles;
 
-		const sourceTestsCode = filteredTests
+		while (files.length > 0)
+		{
+			try
+			{
+				const bundle = await this.#buildTestFiles(files, options);
+
+				return { ...bundle, brokenFiles };
+			}
+			catch (error)
+			{
+				const failure = await this.#findBuildFailure(files, error, options);
+				if (!failure)
+				{
+					throw error;
+				}
+
+				brokenFiles.push(...failure.brokenFiles);
+				files = files.filter((file) => !failure.skippedFiles.includes(file));
+			}
+		}
+
+		return { code: '', map: null, css: '', brokenFiles };
+	}
+
+	async #buildTestFiles(files: string[], options: UnitTestOptions): Promise<Omit<TestBundle, 'brokenFiles'>>
+	{
+		const sourceTestsCode = files
 			.map((filePath) => `import ${JSON.stringify(filePath.replaceAll('\\', '/'))};`)
 			.join('\n');
 
@@ -68,12 +115,137 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 			inline: options.inline,
 			namespace: 'BX.TestsBundle',
 			sourcemap: true,
+			isolatedFiles: { files, loader: TEST_FILE_LOADER },
 		});
 
 		return {
 			code: buildResult.code,
 			map: buildResult.map ?? null,
 			css: buildResult.css,
+		};
+	}
+
+	// Finds what to blame for a failed bundle build. Returns null when it's not a test
+	// file problem: every file fails on the same shared module (the extension source).
+	async #findBuildFailure(files: string[], error: unknown, options: UnitTestOptions): Promise<BuildFailure | null>
+	{
+		// Usual case: the error is in a test file itself, and Rollup names the module.
+		const culprit = files.find((file) => PlaywrightUnitStrategy.#isFailedModule(file, error));
+		if (culprit)
+		{
+			return {
+				brokenFiles: [PlaywrightUnitStrategy.#toBuildFailure(culprit, error, [], options)],
+				skippedFiles: [culprit],
+			};
+		}
+
+		// The error is in a module test files share (a helper, the extension source):
+		// build each file alone and group the failures by the module that broke.
+		const failures = new Map<string, { error: unknown; testFiles: string[] }>();
+		for (const file of files)
+		{
+			try
+			{
+				await this.#buildTestFiles([file], options);
+			}
+			catch (fileError)
+			{
+				const failedModule = (fileError as { id?: string })?.id ?? file;
+				const group = failures.get(failedModule) ?? { error: fileError, testFiles: [] };
+				group.testFiles.push(file);
+				failures.set(failedModule, group);
+			}
+		}
+
+		const skippedFiles = [...failures.values()].flatMap((group) => group.testFiles);
+		const isWholeBundleBroken = failures.size === 1
+			&& skippedFiles.length === files.length
+			&& !files.some((file) => PlaywrightUnitStrategy.#isFailedModule(file, [...failures.values()][0].error));
+
+		if (skippedFiles.length === 0 || isWholeBundleBroken)
+		{
+			return null;
+		}
+
+		return {
+			brokenFiles: [...failures].map(([failedModule, group]) => {
+				// A test file failing on its own error needs no list of what it took down.
+				const affectedFiles = group.testFiles.filter((file) => normalizePath(file) !== normalizePath(failedModule));
+
+				return PlaywrightUnitStrategy.#toBuildFailure(failedModule, group.error, affectedFiles, options);
+			}),
+			skippedFiles,
+		};
+	}
+
+	static #isFailedModule(file: string, error: unknown): boolean
+	{
+		const moduleId = (error as { id?: string })?.id;
+
+		return Boolean(moduleId) && normalizePath(file) === normalizePath(moduleId);
+	}
+
+	// One entry per file: the first error is the one to fix, later ones may follow from it.
+	static #toLoadFailures(loadErrors: TestFileLoadError[], tracer: TraceMap | null): BrokenTestFile[]
+	{
+		const failures = new Map<string | null, BrokenTestFile>();
+
+		for (const { file, message, stack } of loadErrors)
+		{
+			if (failures.has(file))
+			{
+				continue;
+			}
+
+			failures.set(file, {
+				file,
+				error: {
+					message: file
+						? `Test file failed to load: ${message}`
+						: `Test bundle stopped loading: ${message}. Test files after this point were not loaded`,
+					stack: stack && tracer ? mapStack(stack, tracer) : stack,
+				},
+			});
+		}
+
+		return [...failures.values()];
+	}
+
+	static #brokenFileTitle(broken: BrokenTestFile, options: UnitTestOptions): string
+	{
+		return broken.file ? PlaywrightUnitStrategy.#relativePath(broken.file, options) : 'test bundle';
+	}
+
+	static #relativePath(file: string, options: UnitTestOptions): string
+	{
+		return normalizePath(path.relative(options.packageRoot, file));
+	}
+
+	static #toBuildFailure(file: string, error: unknown, affectedFiles: string[], options: UnitTestOptions): BrokenTestFile
+	{
+		const { message, id, loc } = (error ?? {}) as {
+			message?: string;
+			id?: string;
+			loc?: { file?: string; line: number; column: number };
+		};
+
+		// Rollup prefixes the message with the module path and appends a code frame;
+		// the frame is rendered from the location below instead.
+		const firstLine = String(message ?? error).split('\n')[0];
+		const reason = id ? firstLine.replace(`${id}: `, '') : firstLine;
+		const location = loc ? `${loc.file ?? id}:${loc.line}:${loc.column + 1}` : null;
+		const notRun = affectedFiles
+			.map((affected) => `\n  • ${PlaywrightUnitStrategy.#relativePath(affected, options)}`)
+			.join('');
+
+		return {
+			file,
+			error: {
+				message: affectedFiles.length > 0
+					? `Module failed to build: ${reason}\nTest files that import it were not run:${notRun}`
+					: `Test file failed to build: ${reason}`,
+				stack: location ? `    at ${location}` : undefined,
+			},
 		};
 	}
 
@@ -306,7 +478,7 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 				}
 			});
 
-			const { code: testsCodeBundle, map: sourceMap, css } = await this.#getCachedBundle(options);
+			const { code: testsCodeBundle, map: sourceMap, css, brokenFiles: bundleBrokenFiles } = await this.#getCachedBundle(options);
 
 			tracer = sourceMap ? new TraceMap(sourceMap as any) : null;
 
@@ -405,10 +577,22 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 				await page.addStyleTag({ content: css });
 			}
 
-			// Inject test scripts (after debugger is connected when cdpPort is set)
-			await page.addScriptTag({
-				content: codeWithSourceMap,
-			});
+			await page.addScriptTag({ content: TEST_FILE_LOADER_SCRIPT });
+
+			// Inject test scripts (after debugger is connected when cdpPort is set). Empty when
+			// every selected file failed to build: there is nothing to inject.
+			if (codeWithSourceMap)
+			{
+				await page.addScriptTag({
+					content: codeWithSourceMap,
+				});
+			}
+
+			const loadErrors: TestFileLoadError[] = await page.evaluate(() => (globalThis as any).__chefTestFiles.finish());
+			const brokenFiles = [
+				...bundleBrokenFiles,
+				...PlaywrightUnitStrategy.#toLoadFailures(loadErrors, tracer),
+			];
 
 			type TestStats = Promise<{ stats: any }>;
 
@@ -416,6 +600,23 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 			// instead of running we walk the suite tree and emit TEST_LISTED for each test.
 			if (options.listOnly)
 			{
+				if (brokenFiles.length > 0)
+				{
+					await browser.close();
+
+					return {
+						report: [],
+						stats: {},
+						consoleLogs,
+						errors: brokenFiles.map((broken) => {
+							const error = new Error(`${PlaywrightUnitStrategy.#brokenFileTitle(broken, options)}: ${broken.error.message}`);
+							error.stack = broken.error.stack;
+
+							return error;
+						}),
+					};
+				}
+
 				const listed = await page.evaluate(() => {
 					// Iterative DFS on purpose: a named nested function would make the bundler
 					// inject a `__name(...)` helper into the serialized page.evaluate body,
@@ -458,6 +659,21 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 				}
 
 				return { report, stats: {}, consoleLogs, errors: [] };
+			}
+
+			// A broken file is reported as one failed entry named after it: it shows up among
+			// the failures and fails the run, while the other files run as usual.
+			for (const broken of brokenFiles)
+			{
+				const token: TestToken = {
+					id: 'TEST_FAILED',
+					title: PlaywrightUnitStrategy.#brokenFileTitle(broken, options),
+					suite: [],
+					error: broken.error,
+					browser: browserType,
+				};
+				report.push(token);
+				options.onToken?.(token);
 			}
 
 			const { stats } = await page.evaluate((): TestStats => {

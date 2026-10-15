@@ -145,6 +145,41 @@ cover the whole set proves nothing, and exiting 0 on it is not an option:
 The count is in test runs, not unique tests: one test in three engines is three runs. So the
 deduplication in the output (`4 passed` for 12 runs) is not a mismatch by itself.
 
+### Broken test file
+
+When a test file does not build (a syntax error, an import of a missing module) or fails while
+loading (an error at the top level of the file or in the body of a `describe`, outside `it`),
+the other files still run. The broken file shows up in the report as a separate failed entry,
+with the cause and a code frame at the error, and fails the run:
+
+```
+   ui.bbcode.parser › test/parser/broken.test.js [Chromium · Firefox · WebKit]
+
+     Test file failed to build: Unexpected token (3:12)
+
+     1 | describe('broken', () => {
+     2 |     it('x', () => {
+   > 3 |         const a = ;
+       |                   ^
+     4 |     });
+
+     at /…/ui/bbcode/parser/test/parser/broken.test.js:3:13
+```
+
+- An error in a module several test files import (a shared helper) gives one entry named after
+  that module, listing the files that did not run because of it.
+- An error in code every test file shares (usually the extension's own sources) leaves nothing
+  to run — the task ends with the `build failed` status.
+- An error inside a `describe` stops only that block: the tests declared before it and the
+  following blocks of the file still run.
+- When a module the test files share throws while loading, the entry is named `test bundle`:
+  the files after that point did not load.
+- E2E: Playwright runs no test at all when any spec fails to load. chef reruns without the
+  broken files and reports them the same way, as separate entries. When a specific file is
+  given (`chef test e2e <name> <file>`), the load error is printed as is.
+- With `--reporter json` and `--reporter teamcity` such an entry is an ordinary failed test
+  named after the file. With `--list` the broken files are listed in the `Errors` block.
+
 ### Debugging
 
 ```bash
@@ -243,7 +278,7 @@ Chef shows the failure reason inline next to each extension:
 |--------|---------|
 | `✓ Unit tests` | All tests passed |
 | `✗ Unit tests (3 failed)` | Some tests failed, the number is how many |
-| `✗ Unit tests (build failed)` | The test bundle did not compile (Rollup) |
+| `✗ Unit tests (build failed)` | Code shared by every test file did not build — usually the extension's sources. A broken test file fails only itself (see [Broken test file](#broken-test-file)) |
 | `✗ Unit tests (crashed before any tests ran)` | Crashed before the first `it` — usually a setup error |
 | `⚠ Unit tests (no tests collected)` | Files exist but Mocha found no `it` (empty `describe`, `.skip`) |
 | `— Unit tests (no test files)` | No `*.test.{ts,js}` in the `test/unit/` (or `test/`) directory |

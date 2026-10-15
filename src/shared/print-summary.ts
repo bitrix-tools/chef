@@ -146,6 +146,17 @@ function printTestFailures(extensions: ExtensionTestFailures[]): void
 	}
 }
 
+// Errors of failed tasks only (no failed tests, no counters): --list prints its own
+// summary but must still say why an extension could not be listed.
+export function printTaskErrors(results: TaskGroupResult[]): void
+{
+	const errors = collectBuildErrors(results);
+	if (errors.length > 0)
+	{
+		printBuildErrors(errors);
+	}
+}
+
 function printBuildErrors(errors: ExtensionBuildError[]): void
 {
 	console.log(`   ${chalk.red.bold(`Errors (${errors.length}):`)}`);

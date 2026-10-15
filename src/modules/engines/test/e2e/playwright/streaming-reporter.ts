@@ -164,6 +164,8 @@ export default class StreamingReporter implements Reporter
 			error: {
 				message: error.message ?? error.value ?? 'Playwright run error',
 				stack: error.stack,
+				// Set for a spec that fails to compile: lets chef rerun without that file.
+				location: error.location,
 			},
 		});
 	}

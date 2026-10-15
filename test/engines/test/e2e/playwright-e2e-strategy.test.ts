@@ -69,7 +69,8 @@ describe('PlaywrightE2EStrategy error surfacing', function () {
 		assert.isNotEmpty(result.errors, 'an unloadable config must produce an error');
 	});
 
-	it('surfaces the real reason when a spec fails to compile', async () => {
+	function writeBrokenSpecs(): void
+	{
 		fs.writeFileSync(
 			path.join(tmpDir, 'playwright.config.ts'),
 			"export default { testDir: './tests', projects: [{ name: 'chromium', use: { defaultBrowserType: 'chromium' } }] };",
@@ -78,12 +79,47 @@ describe('PlaywrightE2EStrategy error surfacing', function () {
 			path.join(testsDir, 'broken.spec.ts'),
 			"import { thing } from './missing-module';\nimport { test } from '@playwright/test';\ntest('x', () => { void thing; });",
 		);
+		fs.writeFileSync(
+			path.join(testsDir, 'syntax.spec.ts'),
+			"import { test } from '@playwright/test';\ntest('y', () => {\n\tconst value = ;\n});",
+		);
+	}
+
+	it('reports a spec that fails to load as a failed entry and runs the other specs', async () => {
+		writeBrokenSpecs();
+		fs.writeFileSync(
+			path.join(testsDir, 'working.spec.ts'),
+			"import { test, expect } from '@playwright/test';\ntest('works', () => { expect(1).toBe(1); });",
+		);
 
 		const result = await new PlaywrightE2EStrategy().run({ ...options(), project: 'chromium' });
 
+		assert.isEmpty(result.errors, 'broken specs must not fail the whole run');
+		assert.isTrue(result.report.some((token) => token.id === 'TEST_PASSED' && token.title === 'works'));
+
+		const failed = result.report.filter((token) => token.id === 'TEST_FAILED');
+		assert.deepEqual(failed.map((token) => token.title).sort(), ['broken.spec.ts', 'syntax.spec.ts']);
+		// The entry must carry the actual cause, not just a bare exit code.
+		assert.include(failed.find((token) => token.title === 'broken.spec.ts').error.message, 'missing-module');
+		assert.include(failed.find((token) => token.title === 'syntax.spec.ts').error.stack, 'syntax.spec.ts:3:');
+	});
+
+	it('reports the broken specs without an error when no spec can load', async () => {
+		writeBrokenSpecs();
+
+		const result = await new PlaywrightE2EStrategy().run({ ...options(), project: 'chromium' });
+
+		assert.isEmpty(result.errors);
+		assert.deepEqual(result.report.map((token) => token.id), ['TEST_FAILED', 'TEST_FAILED']);
+	});
+
+	it('keeps the load error as a run error when a file filter is set', async () => {
+		writeBrokenSpecs();
+
+		// Excluding a file would widen the user's own file filter, so the run is not retried.
+		const result = await new PlaywrightE2EStrategy().run({ ...options(), project: 'chromium', file: 'broken' });
+
 		assert.isNotEmpty(result.errors, 'a spec that cannot compile must produce an error');
-		// The message must carry the actual cause, not just a bare exit code — Playwright
-		// routes compile errors through the reporter's onError with a custom reporter.
 		assert.include(result.errors[0].message, 'missing-module');
 	});
 

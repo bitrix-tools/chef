@@ -104,6 +104,14 @@ describe('parseTokenStream', () => {
 		assert.deepEqual(events[0], { type: 'runError', message: 'Cannot find module', stack: 'at spec.ts:1' });
 	});
 
+	it('should carry the location of a RUN_ERROR raised by a spec that fails to load', () => {
+		const location = { file: '/tests/broken.spec.ts', line: 3, column: 11 };
+		const buffer = wrap({ id: 'RUN_ERROR', error: { message: 'SyntaxError: Unexpected token', location } });
+		const { events } = parseTokenStream(buffer);
+
+		assert.deepEqual(events[0], { type: 'runError', message: 'SyntaxError: Unexpected token', stack: undefined, location });
+	});
+
 	it('should parse a STDIO event and decode its base64 text (incl. newlines and cyrillic)', () => {
 		const text = 'DEBUG: значение = 42\nвторая строка';
 		const buffer = wrap({ id: 'STDIO', textBase64: Buffer.from(text, 'utf-8').toString('base64') });

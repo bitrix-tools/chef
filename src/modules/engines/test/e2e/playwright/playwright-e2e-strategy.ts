@@ -8,6 +8,7 @@ import { findPlaywrightConfig, getBrowsersFromConfig } from '../../unit/playwrig
 import { ChefError } from '../../../../../diagnostics/chef-error';
 import { CF } from '../../../../../diagnostics/diagnostic-codes';
 import { parseTokenStream } from '../parse-token-stream';
+import { normalizePath } from '../../../../../utils/path/normalize';
 
 import type {
 	E2ETestOptions,
@@ -15,6 +16,25 @@ import type {
 	TestToken,
 	ConsoleLog,
 } from '../../test-types';
+
+// A spec that failed to load: Playwright then runs none of the tests.
+type BrokenSpecFile = {
+	file: string;
+	error: { message: string; stack?: string };
+};
+
+type RunError = {
+	message: string;
+	stack?: string;
+	location?: { file: string; line: number; column: number };
+};
+
+type RunOnceResult = TestResult & {
+	// Set when the run failed only because these specs failed to load.
+	brokenFiles: BrokenSpecFile[];
+};
+
+const SPEC_FILE_PATTERN = /\.(spec|test)\.[cm]?[jt]sx?$/;
 
 const STREAMING_REPORTER_DIR = path.dirname(fileURLToPath(import.meta.url));
 const STREAMING_REPORTER_PATH = fs.existsSync(path.resolve(STREAMING_REPORTER_DIR, 'streaming-reporter.ts'))
@@ -142,6 +162,12 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 			projects = [];
 		}
 
+		// Excluding broken specs adds a file filter, and Playwright ORs file filters: next
+		// to one the user (or the no-config testsDirectory argument) set it would widen the
+		// run instead of narrowing it. Runner arguments are options only, never filters.
+		// --list keeps reporting the load error as it is.
+		const canExcludeBrokenFiles = Boolean(playwrightConfig) && !options.file && !options.listOnly;
+
 		// Single process: an explicit single project, or the no-config fallback.
 		if (projects.length <= 1)
 		{
@@ -151,7 +177,9 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 				args.push(`--project=${project}`);
 			}
 
-			return this.#runOnce(args, options);
+			const browser = projects[0] ? PlaywrightE2EStrategy.#formatBrowserName(projects[0]) : undefined;
+
+			return this.#runExcludingBrokenFiles(args, options, { canExcludeBrokenFiles, browser });
 		}
 
 		// Sequential: one process per project, only one browser engine resident at a
@@ -162,8 +190,7 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 		let beganOnce = false;
 
 		// Localized engine names in run order, for the status bar (done/running/waiting).
-		const browserLabels: Record<string, string> = { chromium: 'Chromium', firefox: 'Firefox', webkit: 'WebKit' };
-		const browserNames = projects.map((p) => browserLabels[p] ?? (p.charAt(0).toUpperCase() + p.slice(1)));
+		const browserNames = projects.map((project) => PlaywrightE2EStrategy.#formatBrowserName(project));
 
 		for (let index = 0; index < projects.length; index++)
 		{
@@ -172,7 +199,7 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 			const args = [...baseArgs, `--project=${project}`];
 
 			// eslint-disable-next-line no-await-in-loop
-			const result = await this.#runOnce(args, {
+			const result = await this.#runExcludingBrokenFiles(args, {
 				...options,
 				// The reporter de-duplicates a test across browsers (it counts unique
 				// tests, not per-browser runs), so the progress total must be the
@@ -197,7 +224,7 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 						});
 					}
 				},
-			}, browserLabel);
+			}, { canExcludeBrokenFiles, browser: browserLabel, browserLabel });
 
 			aggregated.report.push(...result.report);
 			aggregated.consoleLogs.push(...result.consoleLogs);
@@ -216,7 +243,147 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 		return aggregated;
 	}
 
-	#runOnce(args: string[], options: E2ETestOptions, browserLabel?: string): Promise<TestResult>
+	static #formatBrowserName(project: string): string
+	{
+		const labels: Record<string, string> = { chromium: 'Chromium', firefox: 'Firefox', webkit: 'WebKit' };
+
+		return labels[project] ?? (project.charAt(0).toUpperCase() + project.slice(1));
+	}
+
+	// Playwright runs no test at all when any spec fails to load. Run again without the
+	// broken specs, and report each of them as a failed entry named after the file.
+	async #runExcludingBrokenFiles(
+		args: string[],
+		options: E2ETestOptions,
+		run: { canExcludeBrokenFiles: boolean; browser?: string; browserLabel?: string },
+	): Promise<TestResult>
+	{
+		const result = await this.#runOnce(args, options, run.browserLabel);
+		if (!run.canExcludeBrokenFiles || result.brokenFiles.length === 0)
+		{
+			return result;
+		}
+
+		const brokenTokens = result.brokenFiles.map((broken): TestToken => ({
+			id: 'TEST_FAILED',
+			title: PlaywrightE2EStrategy.#relativeToTests(broken.file, options.testsDirectory),
+			suite: [],
+			error: broken.error,
+			browser: run.browser,
+		}));
+
+		// --pass-with-no-tests: when every spec is broken, nothing is left to run.
+		const retry = await this.#runOnce(
+			[...args, '--pass-with-no-tests', PlaywrightE2EStrategy.#excludeFilesFilter(result.brokenFiles)],
+			{
+				...options,
+				// The broken entries are results too: count them so the summary adds up.
+				onBegin: (info) => options.onBegin?.({ ...info, totalTests: info.totalTests + brokenTokens.length }),
+			},
+			run.browserLabel,
+		);
+
+		for (const token of brokenTokens)
+		{
+			retry.report.push(token);
+			options.onToken?.(token, run.browser);
+		}
+
+		return retry;
+	}
+
+	// Positional arguments are regular expressions matched against absolute file paths
+	// before the files are loaded; this one matches every file except the broken ones.
+	static #excludeFilesFilter(brokenFiles: BrokenSpecFile[]): string
+	{
+		const files = brokenFiles.map((broken) => normalizePath(broken.file)
+			.split('/')
+			.map((segment) => segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+			.join('[\\\\/]'));
+
+		return `/^(?!.*(?:${files.join('|')})$)/`;
+	}
+
+	// Every run error must come from a spec that failed to load; otherwise the run failed
+	// for another reason (global setup, config) and excluding files would not help.
+	static #toBrokenFiles(runErrors: RunError[], testsDirectory: string): BrokenSpecFile[]
+	{
+		const brokenFiles = new Map<string, BrokenSpecFile>();
+
+		for (const runError of runErrors)
+		{
+			// Follows from the load errors when no spec loaded at all.
+			if (/^(Error: )?No tests found/.test(runError.message))
+			{
+				continue;
+			}
+
+			const file = runError.location?.file ?? PlaywrightE2EStrategy.#findSpecInStack(runError.stack, testsDirectory);
+			if (!file)
+			{
+				return [];
+			}
+
+			if (brokenFiles.has(file))
+			{
+				continue;
+			}
+
+			// The message repeats the file path and ends with a code frame; the frame is
+			// rendered from the location instead.
+			const firstLine = runError.message.split('\n')[0].replace(`${file}: `, '');
+			const location = runError.location
+				? `    at ${file}:${runError.location.line}:${runError.location.column + 1}`
+				: runError.stack;
+
+			brokenFiles.set(file, {
+				file,
+				error: { message: `Test file failed to load: ${firstLine}`, stack: location },
+			});
+		}
+
+		return [...brokenFiles.values()];
+	}
+
+	static #findSpecInStack(stack: string | undefined, testsDirectory: string): string | null
+	{
+		for (const match of (stack ?? '').matchAll(/(?:\(|at )((?:[A-Za-z]:)?[\\/][^():\n]+):\d+:\d+/g))
+		{
+			const file = match[1];
+			if (PlaywrightE2EStrategy.#findTestsDirectory(file, testsDirectory) && SPEC_FILE_PATTERN.test(file))
+			{
+				return file;
+			}
+		}
+
+		return null;
+	}
+
+	static #relativeToTests(file: string, testsDirectory: string): string
+	{
+		const directory = PlaywrightE2EStrategy.#findTestsDirectory(file, testsDirectory) ?? testsDirectory;
+
+		return normalizePath(path.relative(directory, file));
+	}
+
+	// Playwright reports real paths, while the tests directory may come through a symlink
+	// (/var → /private/var on macOS): match the file against both forms.
+	static #findTestsDirectory(file: string, testsDirectory: string): string | null
+	{
+		const directories = [testsDirectory];
+		try
+		{
+			directories.push(fs.realpathSync(testsDirectory));
+		}
+		catch
+		{
+			// Not on disk: only the path as given can match.
+		}
+
+		return directories.find((directory) => normalizePath(file).startsWith(normalizePath(directory) + '/')) ?? null;
+	}
+
+	#runOnce(args: string[], options: E2ETestOptions, browserLabel?: string): Promise<RunOnceResult>
 	{
 		const onStatus = options.onStatus ?? (() => {});
 		const onToken = options.onToken ?? (() => {});
@@ -244,7 +411,7 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 		const report: TestToken[] = [];
 		const consoleLogs: ConsoleLog[] = [];
 		const errors: Error[] = [];
-		const runErrors: string[] = [];
+		const runErrors: RunError[] = [];
 		const nodeMessages: string[] = [];
 		let stdoutBuffer = '';
 		let totalTests = -1;
@@ -281,7 +448,7 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 					// A run-level failure the reporter captured (spec that won't compile,
 					// global-setup throw, "No tests found"). Keep the real reason so it can
 					// be reported instead of a bare exit code.
-					runErrors.push(event.stack || event.message);
+					runErrors.push({ message: event.message, stack: event.stack, location: event.location });
 				}
 				else if (event.type === 'stdio')
 				{
@@ -323,7 +490,7 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 			// pending — the user would never learn why the run produced no tests.
 			childProcess.on('error', (spawnError: Error) => {
 				errors.push(PlaywrightE2EStrategy.#runError(`Failed to start Playwright: ${spawnError.message}`));
-				resolve({ report, stats: {}, consoleLogs: [], errors });
+				resolve({ report, stats: {}, consoleLogs: [], errors, brokenFiles: [] });
 			});
 
 			childProcess.on('close', (code) => {
@@ -337,7 +504,7 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 					// failure) — with a custom reporter Playwright routes those through
 					// onError instead of printing them. Fall back to stderr, then to the
 					// (token-stripped) stdout tail, then to a bare exit code.
-					const details = runErrors.join('\n\n').trim()
+					const details = runErrors.map((runError) => runError.stack || runError.message).join('\n\n').trim()
 						|| consoleLogs.map((l) => l.text).join('\n').trim()
 						|| stdoutTail.trim();
 					const message = details
@@ -347,11 +514,14 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 					errors.push(PlaywrightE2EStrategy.#runError(message));
 				}
 
+				const failedToLoad = report.length === 0 && code !== 0 && runErrors.length > 0;
+
 				resolve({
 					report,
 					stats: {},
 					consoleLogs: report.length > 0 ? consoleLogs : [],
 					errors,
+					brokenFiles: failedToLoad ? PlaywrightE2EStrategy.#toBrokenFiles(runErrors, options.testsDirectory) : [],
 					...(nodeMessages.length > 0 ? { nodeOutput: [{ browser: browserLabel, messages: nodeMessages }] } : {}),
 				});
 			});

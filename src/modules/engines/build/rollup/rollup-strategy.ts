@@ -31,6 +31,8 @@ import stripCommentsPlugin from './plugins/strip-comments';
 import safeNamespacesPlugin from './plugins/safe-namespaces';
 import tabIndentPlugin from './plugins/tab-indent';
 import bannerPlugin from './plugins/banner';
+import isolateTestFilesPlugin from './plugins/isolate-test-files';
+import escapeLineSeparatorsPlugin from './plugins/escape-line-separators';
 
 import type { ParsedCommandLine } from 'typescript/unstable/sync';
 import type {
@@ -1747,7 +1749,26 @@ export class RollupBuildStrategy extends BuildStrategy
 				commonjs({
 					sourceMap: false,
 				}),
+				// After Babel and TypeScript: the wrapper parses plain JS.
+				...(options.isolatedFiles ? [isolateTestFilesPlugin(options.isolatedFiles)] : []),
+				escapeLineSeparatorsPlugin(),
 				tabIndentPlugin(),
+				{
+					// A module reused from the build cache has its imports resolved from the
+					// cache, so no UNRESOLVED_IMPORT warning reports its external dependencies.
+					// Without them the IIFE gets no global for e.g. main.core.
+					name: 'collect-external-dependencies',
+					buildEnd()
+					{
+						for (const id of this.getModuleIds())
+						{
+							if (this.getModuleInfo(id)?.isExternal && isExternalDependencyName(id) && !dependenciesRef.includes(id))
+							{
+								dependenciesRef.push(id);
+							}
+						}
+					},
+				},
 			],
 			onwarn: onWarning,
 			treeshake: false,

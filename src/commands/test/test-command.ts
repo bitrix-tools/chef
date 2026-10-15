@@ -20,7 +20,7 @@ import { PlaywrightUnitStrategy } from '../../modules/engines/test/unit/playwrig
 import { Environment } from '../../environment/environment';
 import { formatInternalError } from '../../diagnostics/format-error';
 import { CF } from '../../diagnostics/diagnostic-codes';
-import { printSummary } from '../../shared/print-summary';
+import { printSummary, printTaskErrors } from '../../shared/print-summary';
 import { isValidConsoleValue, consoleTargetValues } from './console-target';
 
 function parseConsoleOption(value: string): string
@@ -175,6 +175,8 @@ function createTestTasks(extension: BasePackage, args: Record<string, any>, type
  */
 function printListingSummary(testResults: TaskGroupResult[]): void
 {
+	printTaskErrors(testResults);
+
 	const totals = {
 		unit: { total: 0, runnable: 0, skipped: 0 },
 		e2e: { total: 0, runnable: 0, skipped: 0 },
