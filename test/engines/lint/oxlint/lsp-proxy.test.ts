@@ -196,7 +196,7 @@ describe('chef-oxlint without arguments', function ()
 		fs.rmSync(root, { recursive: true, force: true });
 	});
 
-	it('starts the language server when an editor talks to it over pipes', async () => {
+	it('starts the language server when an editor sends it an LSP message', async () => {
 		const client = new Client(root, []);
 		const response = await client.request('initialize', {
 			processId: process.pid,
@@ -211,6 +211,20 @@ describe('chef-oxlint without arguments', function ()
 	it('lints the working directory when stdin is not a pipe', () => {
 		const bin = path.resolve('bin', 'chef-oxlint');
 		const result = spawnSync(process.execPath, [bin], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf-8' });
+
+		assert.include(result.stdout, 'no-debugger');
+	});
+
+	it('lints the working directory when a CI step gives it an empty pipe', () => {
+		const bin = path.resolve('bin', 'chef-oxlint');
+		const result = spawnSync(process.execPath, [bin], { cwd: root, input: '', encoding: 'utf-8' });
+
+		assert.include(result.stdout, 'no-debugger');
+	});
+
+	it('lints the working directory when the pipe brings something other than LSP', () => {
+		const bin = path.resolve('bin', 'chef-oxlint');
+		const result = spawnSync(process.execPath, [bin], { cwd: root, input: 'not a language server message\n', encoding: 'utf-8' });
 
 		assert.include(result.stdout, 'no-debugger');
 	});

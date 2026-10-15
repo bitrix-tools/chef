@@ -166,8 +166,8 @@ chef lint main.core --linter eslint        # Lint with ESLint, as before
 `chef lint --lsp` (or the `chef-oxlint --lsp` binary) runs the oxlint language server behind a
 proxy that understands Flow files the same way `chef lint` does. Editors that start an oxlint
 binary for the language server can be pointed at `chef-oxlint`: with `--lsp` it serves chef's
-language server, any other arguments go to oxlint unchanged. Run with no arguments and stdin from
-a pipe (the way editors start language servers), `chef-oxlint` serves the language server too.
+language server, any other arguments go to oxlint unchanged. Run with no arguments, `chef-oxlint`
+serves the language server too when the first thing on its stdin is an LSP message, as editors send.
 See [PhpStorm](./phpstorm-plugin.md#oxlint).
 
 ## chef diag
