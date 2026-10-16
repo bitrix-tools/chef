@@ -889,7 +889,8 @@ export class TestReporter
 				{
 					activeIndex = lines.length;
 				}
-				lines.push(this.#formatGroupedLine(live, isLive));
+				// A test outside any suite has no heading to sit under: it starts where headings do.
+				lines.push(this.#formatGroupedLine(live, isLive, suitePath ? '   ' : ' '));
 			}
 		}
 
@@ -919,7 +920,7 @@ export class TestReporter
 
 	// One test line under a suite heading: the same icon/duration/browser tag as the flat
 	// view, but only the test's own title (the suite path is the heading above), indented.
-	#formatGroupedLine(live: LiveLine, isLive: boolean): string
+	#formatGroupedLine(live: LiveLine, isLive: boolean, indent: string): string
 	{
 		const { status, fullPath, duration, retries } = live;
 		const title = fullPath.split(' > ').at(-1) ?? fullPath;
@@ -931,17 +932,17 @@ export class TestReporter
 
 		if (status === 'passed')
 		{
-			return `${PREFIX}   ${chalk.green('✓')} ${chalk.dim(title)}${durationStr}${retryTag}${browserTag}`;
+			return `${PREFIX}${indent}${chalk.green('✓')} ${chalk.dim(title)}${durationStr}${retryTag}${browserTag}`;
 		}
 
 		if (status === 'failed')
 		{
-			return `${PREFIX}   ${chalk.red('✗')} ${title}${durationStr}${retryTag}${browserTag}`;
+			return `${PREFIX}${indent}${chalk.red('✗')} ${title}${durationStr}${retryTag}${browserTag}`;
 		}
 
 		if (status === 'pending')
 		{
-			return `${PREFIX}   ${chalk.yellow('○')} ${chalk.dim(title)} ${chalk.yellow('skipped')}`;
+			return `${PREFIX}${indent}${chalk.yellow('○')} ${chalk.dim(title)} ${chalk.yellow('skipped')}`;
 		}
 
 		return '';

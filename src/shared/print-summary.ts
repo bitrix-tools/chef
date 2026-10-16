@@ -165,7 +165,14 @@ function printBuildErrors(errors: ExtensionBuildError[]): void
 	for (const { name, code, message } of errors)
 	{
 		const codePrefix = code ? chalk.red(`[${code}]`) + ' ' : '';
-		console.log(`   ${chalk.dim(name)} ${chalk.gray('›')} ${codePrefix}${message}`);
+		// A multi-line message (Playwright's call log, a code frame) continues under the
+		// first line instead of at the left edge.
+		const [firstLine, ...rest] = message.trimEnd().split('\n');
+		console.log(`   ${chalk.dim(name)} ${chalk.gray('›')} ${codePrefix}${firstLine}`);
+		for (const line of rest)
+		{
+			console.log(line.trim() === '' ? '' : `${PREFIX}  ${line}`);
+		}
 	}
 }
 
@@ -243,6 +250,10 @@ export function printSummary(
 		const buildErrors = collectBuildErrors(results);
 		if (buildErrors.length > 0)
 		{
+			if (testFailures.length > 0)
+			{
+				console.log('');
+			}
 			printBuildErrors(buildErrors);
 		}
 	}
