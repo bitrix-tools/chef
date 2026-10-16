@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.0.1 <Badge type="tip" text="10/16/2026" />
+
+`chef-oxlint` run with no arguments serves the language server when the first thing on its stdin is an LSP message, the way an editor connects. The Oxc plugin for JetBrains IDEs before 0.0.44 starts a manually set binary without `--lsp` unless **Add --lsp CLI argument** is checked. `chef-oxlint` then linted the working directory like plain oxlint and never answered the editor, and after 100 seconds the IDE reported `'initialized' response not received from the server`. Running it from a terminal or in CI works as before. The PhpStorm guide describes the setting for older plugin versions.
+
+A broken test file no longer stops the whole run. A file that does not build (a syntax error, an import of a missing module) or fails while loading (an error outside `it`) is reported as a separate group with a failed `Failed to build` or `Failed to load` entry, the cause and a code frame, and the other files still run. Before, in unit tests such a file turned the whole extension into `build failed` or silently dropped the tests of the files after it, and the run could stay green. In e2e, chef reruns Playwright without the broken spec files. A TypeScript syntax error points at the source line, not the transpiled code, and unit test stack traces no longer shift in sources with U+2028/U+2029 characters. When tests could not start in one browser, the results of the others stay in the report. With `--list` the errors that kept tests from being listed are printed.
+
 ## v2.0.0 <Badge type="tip" text="10/14/2026" />
 
 Major version: the default linter has changed. `chef lint` now lints with oxlint and does not read `eslint.config.*`, so results may differ from before, including in CI. To keep ESLint, run `chef lint --linter eslint` or set `CHEF_LINTER=eslint`.
