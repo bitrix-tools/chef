@@ -302,7 +302,11 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 			.map((segment) => escapeRegExp(segment))
 			.join('[\\\\/]'));
 
-		return `/^(?!.*(?:${files.join('|')})$)/`;
+		const filter = `/^(?!.*(?:${files.join('|')})$)/`;
+
+		// On Windows Playwright is started through cmd.exe, which joins the arguments as they
+		// are: unquoted, its "|" and "^" would be read as a pipe and an escape.
+		return process.platform === 'win32' ? `"${filter}"` : filter;
 	}
 
 	// Every run error must come from a spec that failed to load; otherwise the run failed
