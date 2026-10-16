@@ -15,6 +15,7 @@ import { signalReady, waitForDebugger } from './debug-signal';
 import { normalizePath } from '../../../../../utils/path/normalize';
 import { escapeRegExp } from '../../../../../utils/escape-reg-exp';
 import { TEST_FILE_LOADER, TEST_FILE_LOADER_SCRIPT } from './test-file-loader';
+import { createBrokenFileTokens } from '../../broken-file-tokens';
 
 import type { SourceMap } from 'rollup';
 import type { TestFileLoadError } from './test-file-loader';
@@ -37,6 +38,8 @@ type BrokenTestFile = {
 	// A test file, or a module test files share, that failed to build or load (absolute
 	// path); null for an error that escaped the per-file loader.
 	file: string | null;
+	// What happened, shown under the file: "Failed to build" or "Failed to load".
+	title: string;
 	error: { message: string; stack?: string };
 };
 
@@ -200,10 +203,9 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 
 			failures.set(file, {
 				file,
+				title: 'Failed to load',
 				error: {
-					message: file
-						? `Test file failed to load: ${message}`
-						: `Test bundle stopped loading: ${message}. Test files after this point were not loaded`,
+					message: file ? message : `${message}\nTest files after this point were not loaded`,
 					stack: stack && tracer ? mapStack(stack, tracer) : stack,
 				},
 			});
@@ -212,7 +214,7 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 		return [...failures.values()];
 	}
 
-	static #brokenFileTitle(broken: BrokenTestFile, options: UnitTestOptions): string
+	static #brokenFileName(broken: BrokenTestFile, options: UnitTestOptions): string
 	{
 		return broken.file ? PlaywrightUnitStrategy.#relativePath(broken.file, options) : 'test bundle';
 	}
@@ -244,10 +246,11 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 
 		return {
 			file,
+			title: 'Failed to build',
 			error: {
 				message: affectedFiles.length > 0
-					? `Module failed to build: ${reason}\nTest files that import it were not run:${notRun}`
-					: `Test file failed to build: ${reason}`,
+					? `${reason}\nTest files that import it were not run:${notRun}`
+					: reason,
 				stack: location ? `    at ${location}` : undefined,
 			},
 		};
@@ -613,7 +616,7 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 						stats: {},
 						consoleLogs,
 						errors: brokenFiles.map((broken) => {
-							const error = new Error(`${PlaywrightUnitStrategy.#brokenFileTitle(broken, options)}: ${broken.error.message}`);
+							const error = new Error(`${PlaywrightUnitStrategy.#brokenFileName(broken, options)}: ${broken.title}: ${broken.error.message}`);
 							error.stack = broken.error.stack;
 
 							return error;
@@ -677,20 +680,17 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 
 			// Tokens arrive via exposeFunction (CDP) — already received by this point
 
-			// A broken file is reported as one failed entry named after it: it shows up among
-			// the failures and fails the run, while the other files run as usual. Reported after
-			// the run, so in a long list it ends up next to the summary rather than at the top.
+			// A broken file is reported as a failed entry under its name: it shows up among the
+			// failures and fails the run, while the other files run as usual. Reported after the
+			// run, so in a long list it ends up next to the summary rather than at the top.
 			for (const broken of brokenFiles)
 			{
-				const token: TestToken = {
-					id: 'TEST_FAILED',
-					title: PlaywrightUnitStrategy.#brokenFileTitle(broken, options),
-					suite: [],
-					error: broken.error,
-					browser: browserType,
-				};
-				report.push(token);
-				options.onToken?.(token);
+				const name = PlaywrightUnitStrategy.#brokenFileName(broken, options);
+				for (const token of createBrokenFileTokens(name, broken.title, broken.error, browserType))
+				{
+					report.push(token);
+					options.onToken?.(token);
+				}
 			}
 
 			const keepOpen = isDebug || !!cdpPort;

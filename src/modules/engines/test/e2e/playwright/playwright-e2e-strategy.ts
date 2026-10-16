@@ -8,6 +8,7 @@ import { findPlaywrightConfig, getBrowsersFromConfig } from '../../unit/playwrig
 import { ChefError } from '../../../../../diagnostics/chef-error';
 import { CF } from '../../../../../diagnostics/diagnostic-codes';
 import { parseTokenStream } from '../parse-token-stream';
+import { createBrokenFileTokens } from '../../broken-file-tokens';
 import { normalizePath } from '../../../../../utils/path/normalize';
 import { escapeRegExp } from '../../../../../utils/escape-reg-exp';
 
@@ -265,13 +266,12 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 			return result;
 		}
 
-		const brokenTokens = result.brokenFiles.map((broken): TestToken => ({
-			id: 'TEST_FAILED',
-			title: PlaywrightE2EStrategy.#relativeToTests(broken.file, options.testsDirectory),
-			suite: [],
-			error: broken.error,
-			browser: run.browser,
-		}));
+		const brokenTokens = result.brokenFiles.flatMap((broken) => createBrokenFileTokens(
+			PlaywrightE2EStrategy.#relativeToTests(broken.file, options.testsDirectory),
+			'Failed to load',
+			broken.error,
+			run.browser,
+		));
 
 		// --pass-with-no-tests: when every spec is broken, nothing is left to run.
 		const retry = await this.#runOnce(
@@ -279,7 +279,7 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 			{
 				...options,
 				// The broken entries are results too: count them so the summary adds up.
-				onBegin: (info) => options.onBegin?.({ ...info, totalTests: info.totalTests + brokenTokens.length }),
+				onBegin: (info) => options.onBegin?.({ ...info, totalTests: info.totalTests + result.brokenFiles.length }),
 			},
 			run.browserLabel,
 		);
@@ -339,7 +339,7 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 
 			brokenFiles.set(file, {
 				file,
-				error: { message: `Test file failed to load: ${firstLine}`, stack: location },
+				error: { message: firstLine, stack: location },
 			});
 		}
 

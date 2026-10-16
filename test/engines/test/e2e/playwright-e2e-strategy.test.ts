@@ -97,11 +97,13 @@ describe('PlaywrightE2EStrategy error surfacing', function () {
 		assert.isEmpty(result.errors, 'broken specs must not fail the whole run');
 		assert.isTrue(result.report.some((token) => token.id === 'TEST_PASSED' && token.title === 'works'));
 
+		// Each broken spec is a failed entry in a suite named after the file.
 		const failed = result.report.filter((token) => token.id === 'TEST_FAILED');
-		assert.deepEqual(failed.map((token) => token.title).sort(), ['broken.spec.ts', 'syntax.spec.ts']);
+		assert.deepEqual(failed.map((token) => token.suite[0]).sort(), ['broken.spec.ts', 'syntax.spec.ts']);
+		assert.isTrue(failed.every((token) => token.title === 'Failed to load'));
 		// The entry must carry the actual cause, not just a bare exit code.
-		assert.include(failed.find((token) => token.title === 'broken.spec.ts').error.message, 'missing-module');
-		assert.include(failed.find((token) => token.title === 'syntax.spec.ts').error.stack, 'syntax.spec.ts:3:');
+		assert.include(failed.find((token) => token.suite[0] === 'broken.spec.ts').error.message, 'missing-module');
+		assert.include(failed.find((token) => token.suite[0] === 'syntax.spec.ts').error.stack, 'syntax.spec.ts:3:');
 	});
 
 	it('reports the broken specs without an error when no spec can load', async () => {
@@ -110,7 +112,10 @@ describe('PlaywrightE2EStrategy error surfacing', function () {
 		const result = await new PlaywrightE2EStrategy().run({ ...options(), project: 'chromium' });
 
 		assert.isEmpty(result.errors);
-		assert.deepEqual(result.report.map((token) => token.id), ['TEST_FAILED', 'TEST_FAILED']);
+		assert.deepEqual(
+			result.report.map((token) => token.id),
+			['SUITE_START', 'TEST_FAILED', 'SUITE_END', 'SUITE_START', 'TEST_FAILED', 'SUITE_END'],
+		);
 	});
 
 	it('keeps the load error as a run error when a file filter is set', async () => {

@@ -152,13 +152,18 @@ chef test vendor.my-extension -w
 
 Если тестовый файл не собирается (синтаксическая ошибка, импорт несуществующего модуля) или
 падает при загрузке (ошибка на верхнем уровне файла или в теле `describe`, вне `it`), остальные
-файлы всё равно выполняются. Битый файл попадает в отчёт отдельной упавшей записью с причиной и
-code frame на месте ошибки — и роняет прогон:
+файлы всё равно выполняются. Битый файл попадает в отчёт отдельной группой с упавшей записью
+`Failed to build` или `Failed to load` — с причиной и code frame на месте ошибки — и роняет прогон:
 
 ```
-   ui.bbcode.parser › test/parser/broken.test.js [Chromium · Firefox · WebKit]
+   test/parser/broken.test.js
+     ✗ Failed to build [Chromium ✗ · Firefox ✗ · WebKit ✗]
 
-     Test file failed to build: Unexpected token (3:12)
+   Failed Tests (1):
+
+   ui.bbcode.parser › test/parser/broken.test.js > Failed to build [Chromium · Firefox · WebKit]
+
+     Unexpected token (3:12)
 
      1 | describe('broken', () => {
      2 |     it('x', () => {
@@ -180,8 +185,8 @@ code frame на месте ошибки — и роняет прогон:
 - E2E: Playwright не запускает ни одного теста, если не загрузился хотя бы один spec. chef
   повторяет прогон без битых файлов и показывает их так же, отдельными записями. Если указан
   конкретный файл (`chef test e2e <name> <file>`), ошибка загрузки выводится как есть.
-- С `--reporter json` и `--reporter teamcity` такая запись — обычный упавший тест с именем
-  файла. В `--list` битые файлы перечисляются в блоке `Errors`.
+- С `--reporter json` и `--reporter teamcity` такая запись — обычный упавший тест в сьюте с
+  именем файла. В `--list` битые файлы перечисляются в блоке `Errors`.
 
 ### Отладка
 

@@ -149,13 +149,19 @@ deduplication in the output (`4 passed` for 12 runs) is not a mismatch by itself
 
 When a test file does not build (a syntax error, an import of a missing module) or fails while
 loading (an error at the top level of the file or in the body of a `describe`, outside `it`),
-the other files still run. The broken file shows up in the report as a separate failed entry,
-with the cause and a code frame at the error, and fails the run:
+the other files still run. The broken file shows up in the report as a separate group with a
+failed `Failed to build` or `Failed to load` entry, the cause and a code frame at the error, and
+fails the run:
 
 ```
-   ui.bbcode.parser › test/parser/broken.test.js [Chromium · Firefox · WebKit]
+   test/parser/broken.test.js
+     ✗ Failed to build [Chromium ✗ · Firefox ✗ · WebKit ✗]
 
-     Test file failed to build: Unexpected token (3:12)
+   Failed Tests (1):
+
+   ui.bbcode.parser › test/parser/broken.test.js > Failed to build [Chromium · Firefox · WebKit]
+
+     Unexpected token (3:12)
 
      1 | describe('broken', () => {
      2 |     it('x', () => {
@@ -177,8 +183,8 @@ with the cause and a code frame at the error, and fails the run:
 - E2E: Playwright runs no test at all when any spec fails to load. chef reruns without the
   broken files and reports them the same way, as separate entries. When a specific file is
   given (`chef test e2e <name> <file>`), the load error is printed as is.
-- With `--reporter json` and `--reporter teamcity` such an entry is an ordinary failed test
-  named after the file. With `--list` the broken files are listed in the `Errors` block.
+- With `--reporter json` and `--reporter teamcity` such an entry is an ordinary failed test in a
+  suite named after the file. With `--list` the broken files are listed in the `Errors` block.
 
 ### Debugging
 
