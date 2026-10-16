@@ -368,20 +368,25 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 	}
 
 	// Playwright reports real paths, while the tests directory may come through a symlink
-	// (/var → /private/var on macOS): match the file against both forms.
+	// (/var → /private/var on macOS) or a Windows short name (C:\Users\RUNNER~1): match the
+	// file against both forms. Windows paths are compared regardless of case.
 	static #findTestsDirectory(file: string, testsDirectory: string): string | null
 	{
 		const directories = [testsDirectory];
 		try
 		{
-			directories.push(fs.realpathSync(testsDirectory));
+			directories.push(fs.realpathSync.native(testsDirectory));
 		}
 		catch
 		{
 			// Not on disk: only the path as given can match.
 		}
 
-		return directories.find((directory) => normalizePath(file).startsWith(normalizePath(directory) + '/')) ?? null;
+		const comparable = (value: string): string => (process.platform === 'win32'
+			? normalizePath(value).toLowerCase()
+			: normalizePath(value));
+
+		return directories.find((directory) => comparable(file).startsWith(comparable(directory) + '/')) ?? null;
 	}
 
 	#runOnce(args: string[], options: E2ETestOptions, browserLabel?: string): Promise<RunOnceResult>

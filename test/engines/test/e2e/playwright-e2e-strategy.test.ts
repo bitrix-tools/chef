@@ -94,7 +94,7 @@ describe('PlaywrightE2EStrategy error surfacing', function () {
 
 		const result = await new PlaywrightE2EStrategy().run({ ...options(), project: 'chromium' });
 
-		assert.isEmpty(result.errors, 'broken specs must not fail the whole run');
+		assert.isEmpty(result.errors.map((error) => error.message), 'broken specs must not fail the whole run');
 		assert.isTrue(result.report.some((token) => token.id === 'TEST_PASSED' && token.title === 'works'));
 
 		// Each broken spec is a failed entry in a suite named after the file.
@@ -111,7 +111,7 @@ describe('PlaywrightE2EStrategy error surfacing', function () {
 
 		const result = await new PlaywrightE2EStrategy().run({ ...options(), project: 'chromium' });
 
-		assert.isEmpty(result.errors);
+		assert.isEmpty(result.errors.map((error) => error.message));
 		assert.deepEqual(
 			result.report.map((token) => token.id),
 			['SUITE_START', 'TEST_FAILED', 'SUITE_END', 'SUITE_START', 'TEST_FAILED', 'SUITE_END'],

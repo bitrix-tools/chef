@@ -8,6 +8,7 @@ import { rollup } from 'rollup';
 import { TraceMap, originalPositionFor } from '@jridgewell/trace-mapping';
 
 import isolateTestFilesPlugin from '../../src/modules/engines/build/rollup/plugins/isolate-test-files';
+import { normalizePath } from '../../src/utils/path/normalize';
 
 type LoadError = { file: string; message: string };
 
@@ -85,7 +86,8 @@ describe('isolateTestFilesPlugin', () => {
 		const { registered, errors } = run(code);
 
 		assert.deepEqual(registered, ['first', 'last']);
-		assert.deepEqual(errors, [{ file: broken, message: 'missingHelper is not defined' }]);
+		// The loader gets the path with forward slashes on every platform.
+		assert.deepEqual(errors, [{ file: normalizePath(broken), message: 'missingHelper is not defined' }]);
 	});
 
 	it('keeps imports at the top level, including ones after the code', async () => {
@@ -111,7 +113,7 @@ describe('isolateTestFilesPlugin', () => {
 
 		const { code } = await bundle(test, [test]);
 
-		assert.deepEqual(run(code).errors, [{ file: test, message: 'missingHelper is not defined' }]);
+		assert.deepEqual(run(code).errors, [{ file: normalizePath(test), message: 'missingHelper is not defined' }]);
 	});
 
 	it('does not wrap modules that are not test files', async () => {
