@@ -3,7 +3,7 @@ import fs from 'node:fs';
 
 import { createFilter } from '@rollup/pluginutils';
 
-import type { Plugin } from 'rollup';
+import type { Plugin, TransformPluginContext } from 'rollup';
 import type { CompilerOptions, Diagnostic } from 'typescript/unstable/sync';
 import type { BuildDiagnostic } from '../../build-types';
 
@@ -171,7 +171,7 @@ export async function checkTypes(options: TypeCheckOptions): Promise<TypeCheckRe
 export default async function typescriptPlugin(options: TypeScriptPluginOptions): Promise<Plugin>
 {
 	const api = await getTypeScriptApi();
-	const { ModuleKind, ModuleResolutionKind } = await import('typescript/unstable/sync');
+	const { DiagnosticCategory, ModuleKind, ModuleResolutionKind } = await import('typescript/unstable/sync');
 	const { ScriptTarget } = await import('typescript/unstable/ast');
 
 	const {
@@ -272,7 +272,9 @@ export default async function typescriptPlugin(options: TypeScriptPluginOptions)
 				const result = api.transpileModule(code, {
 					compilerOptions: transpileCompilerOptions,
 					fileName: id,
+					reportDiagnostics: true,
 				});
+				reportSyntaxError(this, result.diagnostics, DiagnosticCategory.Error);
 
 				return {
 					code: normalizeIndent(result.outputText),
@@ -295,7 +297,9 @@ export default async function typescriptPlugin(options: TypeScriptPluginOptions)
 			const result = api.transpileModule(code, {
 				compilerOptions: transpileCompilerOptions,
 				fileName: normalizedId,
+				reportDiagnostics: true,
 			});
+			reportSyntaxError(this, result.diagnostics, DiagnosticCategory.Error);
 
 			return {
 				code: normalizeIndent(result.outputText),
@@ -303,6 +307,27 @@ export default async function typescriptPlugin(options: TypeScriptPluginOptions)
 			};
 		},
 	};
+}
+
+// A transpile still emits code for a file with a syntax error. Left to Babel, that code fails
+// with a position in the transpiled output, not in the source the user wrote.
+function reportSyntaxError(
+	context: TransformPluginContext,
+	diagnostics: readonly Diagnostic[] | undefined,
+	errorCategory: Diagnostic['category'],
+): void
+{
+	const syntaxError = diagnostics?.find((diagnostic) => diagnostic.category === errorCategory && diagnostic.startPosition);
+	if (!syntaxError)
+	{
+		return;
+	}
+
+	const { line, character } = syntaxError.startPosition;
+	context.error(
+		{ message: `TS${syntaxError.code} ${flattenDiagnosticText(syntaxError)}`, pluginCode: CF.SYNTAX_ERROR },
+		{ line: line + 1, column: character },
+	);
 }
 
 function collectSourceFiles(directory: string, extensions: string[]): string[]

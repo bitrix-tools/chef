@@ -13,6 +13,7 @@ import { mapStack } from './map-stack';
 import { embedSourceMap } from './embed-source-map';
 import { signalReady, waitForDebugger } from './debug-signal';
 import { normalizePath } from '../../../../../utils/path/normalize';
+import { escapeRegExp } from '../../../../../utils/escape-reg-exp';
 import { TEST_FILE_LOADER, TEST_FILE_LOADER_SCRIPT } from './test-file-loader';
 
 import type { SourceMap } from 'rollup';
@@ -229,10 +230,13 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 			loc?: { file?: string; line: number; column: number };
 		};
 
-		// Rollup prefixes the message with the module path and appends a code frame;
-		// the frame is rendered from the location below instead.
-		const firstLine = String(message ?? error).split('\n')[0];
-		const reason = id ? firstLine.replace(`${id}: `, '') : firstLine;
+		// The message starts with the plugin and the module path ("[plugin x] path (10:0): ")
+		// and ends with a code frame; both are rendered from the location below instead.
+		const firstLine = String(message ?? error).split('\n')[0].replace(/^\[plugin [^\]]+\] /, '');
+		const modulePrefix = id
+			? new RegExp(`^\\S*${escapeRegExp(path.basename(id))}(?: \\(\\d+:\\d+\\))?: `)
+			: null;
+		const reason = modulePrefix ? firstLine.replace(modulePrefix, '') : firstLine;
 		const location = loc ? `${loc.file ?? id}:${loc.line}:${loc.column + 1}` : null;
 		const notRun = affectedFiles
 			.map((affected) => `\n  • ${PlaywrightUnitStrategy.#relativePath(affected, options)}`)
@@ -661,8 +665,21 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 				return { report, stats: {}, consoleLogs, errors: [] };
 			}
 
+			const { stats } = await page.evaluate((): TestStats => {
+				return new Promise((resolve) => {
+					// @ts-ignore
+					globalThis.mocha.run(() => {
+						// @ts-ignore
+						resolve({ stats: globalThis.mocha.stats });
+					});
+				});
+			});
+
+			// Tokens arrive via exposeFunction (CDP) — already received by this point
+
 			// A broken file is reported as one failed entry named after it: it shows up among
-			// the failures and fails the run, while the other files run as usual.
+			// the failures and fails the run, while the other files run as usual. Reported after
+			// the run, so in a long list it ends up next to the summary rather than at the top.
 			for (const broken of brokenFiles)
 			{
 				const token: TestToken = {
@@ -675,18 +692,6 @@ export class PlaywrightUnitStrategy extends UnitTestStrategy
 				report.push(token);
 				options.onToken?.(token);
 			}
-
-			const { stats } = await page.evaluate((): TestStats => {
-				return new Promise((resolve) => {
-					// @ts-ignore
-					globalThis.mocha.run(() => {
-						// @ts-ignore
-						resolve({ stats: globalThis.mocha.stats });
-					});
-				});
-			});
-
-			// Tokens arrive via exposeFunction (CDP) — already received by this point
 
 			const keepOpen = isDebug || !!cdpPort;
 

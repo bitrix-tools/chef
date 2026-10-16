@@ -1,3 +1,5 @@
+import { escapeRegExp } from '../../../../../utils/escape-reg-exp';
+
 import type { Plugin } from 'rollup';
 
 /**
@@ -134,9 +136,4 @@ function getClassName(path: any): string | null
 	}
 
 	return null;
-}
-
-function escapeRegExp(str: string): string
-{
-	return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

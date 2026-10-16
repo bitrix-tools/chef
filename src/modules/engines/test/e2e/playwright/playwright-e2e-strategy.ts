@@ -9,6 +9,7 @@ import { ChefError } from '../../../../../diagnostics/chef-error';
 import { CF } from '../../../../../diagnostics/diagnostic-codes';
 import { parseTokenStream } from '../parse-token-stream';
 import { normalizePath } from '../../../../../utils/path/normalize';
+import { escapeRegExp } from '../../../../../utils/escape-reg-exp';
 
 import type {
 	E2ETestOptions,
@@ -298,7 +299,7 @@ export class PlaywrightE2EStrategy extends E2ETestStrategy
 	{
 		const files = brokenFiles.map((broken) => normalizePath(broken.file)
 			.split('/')
-			.map((segment) => segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+			.map((segment) => escapeRegExp(segment))
 			.join('[\\\\/]'));
 
 		return `/^(?!.*(?:${files.join('|')})$)/`;
