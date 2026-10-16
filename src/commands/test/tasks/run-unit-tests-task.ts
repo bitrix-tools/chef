@@ -302,6 +302,21 @@ export function runUnitTestsTask(extension: BasePackage, args: Record<string, an
 					(detail) => detail.type === 'error' && isBuildErrorCode(detail.code),
 				);
 
+				// One browser failing (say, it could not reach the test page) must not hide what
+				// the others ran: their failures are reported next to the error.
+				if (hasTests)
+				{
+					const allConsoleLogs = showsBrowserConsole(args.console) ? deduplicateConsoleLogs(consoleLogSets) : [];
+					const { passed, failed, failures, flaky, flakyTests } = reporter.finish({ consoleLogs: allConsoleLogs });
+
+					return {
+						title: failed > 0 ? `Unit tests (${failed} failed)` : 'Unit tests',
+						status: 'failed',
+						details,
+						metrics: { passed, failed, failures, flaky, flakyTests },
+					};
+				}
+
 				reporter.clearStatus();
 
 				return {

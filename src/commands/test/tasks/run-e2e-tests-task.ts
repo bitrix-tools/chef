@@ -39,22 +39,15 @@ export function createE2eTestsTask(target: E2eTarget, args: Record<string, any>)
 
 				if (listResult.errors.length > 0)
 				{
-					// A --list run ends in printListingSummary, which has no error block, and
-					// the task reporter suppresses error details (on a normal run they are the
-					// test reporter's job). So the reason — e.g. an argument Playwright rejected
-					// — would vanish, leaving a bare "errored". Print it here instead, once per
-					// distinct message: listing runs one process per browser project, and a bad
-					// argument fails identically in each.
-					for (const message of new Set(listResult.errors.map((error) => error.message)))
-					{
-						console.log('');
-						console.log(message);
-					}
+					// The listing summary prints these in its Errors block. Once per distinct
+					// message: listing runs one process per browser project, and a bad argument
+					// fails identically in each.
+					const uniqueErrors = [...new Map(listResult.errors.map((error) => [error.message, error])).values()];
 
 					return {
 						title: 'E2E tests (errored)',
 						status: 'failed',
-						details: listResult.errors.map((error: Error) => ({
+						details: uniqueErrors.map((error: Error) => ({
 							type: 'error' as const,
 							code: 'code' in error ? (error as any).code : undefined,
 							message: error.message,
@@ -92,15 +85,32 @@ export function createE2eTestsTask(target: E2eTarget, args: Record<string, any>)
 
 			if (testResult.errors.length > 0)
 			{
-				reporter.stop();
-				reporter.clearStatus();
-
 				const details: TaskDetail[] = testResult.errors.map((error: Error) => ({
 					type: 'error' as const,
 					code: 'code' in error ? (error as any).code : undefined,
 					message: error.message,
 					stack: error.stack,
 				}));
+
+				// Browser projects run one by one: one that errored must not hide what the
+				// others ran. Their failures are reported next to the error.
+				if (testResult.report.length > 0)
+				{
+					const { passed, failed, failures, browsers, flaky, flakyTests } = reporter.finish({
+						consoleLogs: showsBrowserConsole(args.console) ? testResult.consoleLogs : [],
+						nodeOutput: showsNodeOutput(args.console) ? testResult.nodeOutput : undefined,
+					});
+
+					return {
+						title: failed > 0 ? `E2E tests (${failed} failed)` : 'E2E tests (errored)',
+						status: 'failed',
+						details,
+						metrics: { passed, failed, failures, browsers, flaky, flakyTests },
+					};
+				}
+
+				reporter.stop();
+				reporter.clearStatus();
 
 				return {
 					title: 'E2E tests (errored)',
