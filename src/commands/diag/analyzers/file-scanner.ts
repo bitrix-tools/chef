@@ -9,6 +9,7 @@ export const PHP_PATTERNS = ['**/*.php'];
 
 export const JS_IGNORE = [
 	'**/node_modules/**',
+	'**/lang/**',
 	'**/dist/**',
 	'**/*.bundle.js',
 	'**/*.bundle.css',

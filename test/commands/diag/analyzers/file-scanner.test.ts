@@ -1,6 +1,41 @@
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+
 import { assert } from 'chai';
 
-import { stripLineComments, stripComments } from '../../../../src/commands/diag/analyzers/file-scanner';
+import { scanJsFiles, stripLineComments, stripComments } from '../../../../src/commands/diag/analyzers/file-scanner';
+
+describe('scanJsFiles', () => {
+	let tmpDir: string;
+
+	beforeEach(() => {
+		tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'chef-file-scanner-')));
+	});
+
+	afterEach(() => {
+		fs.rmSync(tmpDir, { recursive: true, force: true });
+	});
+
+	function writeFile(relativePath: string, content: string): void
+	{
+		const filePath = path.join(tmpDir, relativePath);
+		fs.mkdirSync(path.dirname(filePath), { recursive: true });
+		fs.writeFileSync(filePath, content);
+	}
+
+	it('should skip phrase files in lang directories', async () => {
+		writeFile('ui/install/js/ui/buttons/src/index.js', `import 'main.core';`);
+		writeFile('ui/install/js/ui/buttons/lang/ru/ui.buttons.ru.js', 'BX.Loc.setMessage({"UI_BUTTONS_SAVE": "main.core"});');
+		writeFile('ui/install/js/ui/buttons/lang/en/config.js', 'BX.Loc.setMessage({"UI_BUTTONS_SAVE": "Save"});');
+
+		const files: string[] = [];
+		const count = await scanJsFiles(tmpDir, (file) => files.push(path.relative(tmpDir, file)));
+
+		assert.equal(count, 1);
+		assert.deepEqual(files, [path.join('ui', 'install', 'js', 'ui', 'buttons', 'src', 'index.js')]);
+	});
+});
 
 describe('stripLineComments', () => {
 	it('should return code as-is when no comments', () => {
