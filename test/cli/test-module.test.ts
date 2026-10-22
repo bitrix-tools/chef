@@ -1,6 +1,7 @@
 import * as path from 'node:path';
+import * as fs from 'node:fs';
 
-import { describe, it } from 'mocha';
+import { describe, it, beforeEach, afterEach } from 'mocha';
 import { assert } from 'chai';
 
 import { runChef, sourceRepo, projectRepo } from './run-chef';
@@ -100,5 +101,100 @@ describe('chef test module', () => {
 		assert.include(output, '--project');
 		assert.include(output, '--reporter');
 		assert.include(output, '--cdp-port');
+	});
+
+	describe('exit status on test results', function () {
+		this.timeout(60000);
+
+		const pwConfig = path.join(sourceRepo, 'playwright.config.ts');
+		const envTest = path.join(sourceRepo, '.env.test');
+		const nmSymlink = path.join(sourceRepo, 'node_modules');
+		const crmTestsDir = path.join(sourceRepo, 'crm', 'tests');
+		const buttonsTestDir = path.join(sourceRepo, 'ui', 'install', 'js', 'ui', 'buttons', 'test');
+
+		function cleanup(): void
+		{
+			fs.rmSync(crmTestsDir, { recursive: true, force: true });
+			fs.rmSync(buttonsTestDir, { recursive: true, force: true });
+			fs.rmSync(pwConfig, { force: true });
+			fs.rmSync(envTest, { force: true });
+			if (fs.existsSync(nmSymlink))
+			{
+				try
+				{
+					fs.unlinkSync(nmSymlink);
+				}
+				catch
+				{
+					fs.rmdirSync(nmSymlink);
+				}
+			}
+		}
+
+		function setupEnvironment(): void
+		{
+			cleanup();
+			fs.writeFileSync(
+				pwConfig,
+				"import { defineConfig } from '@playwright/test';\nexport default defineConfig({ projects: [{ name: 'test' }] });\n",
+			);
+			fs.writeFileSync(envTest, 'LOGIN=admin\nPASSWORD=secret\n');
+			if (!fs.existsSync(nmSymlink))
+			{
+				const repoNodeModules = path.resolve(import.meta.dirname, '../../node_modules');
+				const symlinkType = process.platform === 'win32' ? 'junction' : 'dir';
+				fs.symlinkSync(repoNodeModules, nmSymlink, symlinkType);
+			}
+		}
+
+		beforeEach(() => {
+			setupEnvironment();
+		});
+
+		afterEach(() => {
+			cleanup();
+		});
+
+		it('exits with code 1 when module tests fail', async () => {
+			const e2eDir = path.join(sourceRepo, 'crm', 'tests', 'chef', 'e2e');
+			fs.mkdirSync(e2eDir, { recursive: true });
+			fs.writeFileSync(
+				path.join(e2eDir, 'fail.spec.ts'),
+				"import { test, expect } from '@playwright/test';\ntest('fails', () => { expect(1).toBe(2); });\n",
+			);
+
+			const { exitCode, output } = await runChef(['test', 'module', 'crm', '--project', 'test'], { cwd: sourceRepo });
+
+			assert.equal(exitCode, 1);
+			assert.include(output, '1 failed');
+		});
+
+		it('exits with code 0 when module tests pass', async () => {
+			const e2eDir = path.join(sourceRepo, 'crm', 'tests', 'chef', 'e2e');
+			fs.mkdirSync(e2eDir, { recursive: true });
+			fs.writeFileSync(
+				path.join(e2eDir, 'pass.spec.ts'),
+				"import { test, expect } from '@playwright/test';\ntest('passes', () => { expect(1).toBe(1); });\n",
+			);
+
+			const { exitCode, output } = await runChef(['test', 'module', 'crm', '--project', 'test'], { cwd: sourceRepo });
+
+			assert.equal(exitCode, 0);
+			assert.include(output, '1 passed');
+		});
+
+		it('exits with code 1 when extension tests fail', async () => {
+			const e2eDir = path.join(buttonsTestDir, 'e2e');
+			fs.mkdirSync(e2eDir, { recursive: true });
+			fs.writeFileSync(
+				path.join(e2eDir, 'fail.spec.ts'),
+				"import { test, expect } from '@playwright/test';\ntest('fails', () => { expect(1).toBe(2); });\n",
+			);
+
+			const { exitCode, output } = await runChef(['test', 'e2e', 'ui.buttons', '--project', 'test'], { cwd: sourceRepo });
+
+			assert.equal(exitCode, 1);
+			assert.include(output, '1 failed');
+		});
 	});
 });
