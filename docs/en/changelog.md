@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.0.2 <Badge type="tip" text="10/22/2026" />
+
+`chef diag find-usages` and `chef diag unused` no longer read JS files in `lang` directories. These hold phrase files, not code: Bitrix can keep an extension's phrases in a JS file in `lang/<language>/` instead of `config.php`. Previously such files were scanned as sources, and phrase text could produce a false usage of an extension. PHP files in `lang` were already skipped. JS files are now skipped too, as the command help states.
+
 ## v2.0.1 <Badge type="tip" text="10/16/2026" />
 
 `chef-oxlint` run with no arguments serves the language server when the first thing on its stdin is an LSP message, the way an editor connects. The Oxc plugin for JetBrains IDEs before 0.0.44 starts a manually set binary without `--lsp` unless **Add --lsp CLI argument** is checked. `chef-oxlint` then linted the working directory like plain oxlint and never answered the editor, and after 100 seconds the IDE reported `'initialized' response not received from the server`. Running it from a terminal or in CI works as before. The PhpStorm guide describes the setting for older plugin versions.
