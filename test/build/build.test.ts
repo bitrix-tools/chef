@@ -571,48 +571,40 @@ describe('build', () => {
 			assert.notInclude(content, 'formatName');
 		});
 
-		it('should place types and interfaces outside the namespace', async () => {
+		it('should place types and interfaces inside the namespace', async () => {
 			const content = await emitAndRead();
 			const namespaceStart = content.indexOf('declare namespace');
 
-			// type aliases and interfaces should appear before the namespace
-			assert.isBelow(content.indexOf('type SortOrder'), namespaceStart);
-			assert.isBelow(content.indexOf('type FilterOptions'), namespaceStart);
-			assert.isBelow(content.indexOf('interface Identifiable'), namespaceStart);
-
-			// exported interfaces should be outside the namespace
-			assert.isBelow(content.indexOf('interface User'), namespaceStart);
-			assert.isBelow(content.indexOf('interface SearchResult'), namespaceStart);
-
-			// classes should be inside
+			assert.isAbove(content.indexOf('type SortOrder'), namespaceStart);
+			assert.isAbove(content.indexOf('type FilterOptions'), namespaceStart);
+			assert.isAbove(content.indexOf('interface Identifiable'), namespaceStart);
+			assert.isAbove(content.indexOf('interface User'), namespaceStart);
+			assert.isAbove(content.indexOf('interface SearchResult'), namespaceStart);
 			assert.isAbove(content.indexOf('class UserService'), namespaceStart);
 			assert.isAbove(content.indexOf('class BaseEvent'), namespaceStart);
 		});
 
-		it('should place JSDoc-annotated interfaces outside the namespace', async () => {
+		it('should keep JSDoc of interfaces placed inside the namespace', async () => {
 			const content = await emitAndRead();
 			const namespaceStart = content.indexOf('declare namespace');
 
-			// Interfaces with JSDoc should still be placed outside, not inside namespace
-			const userInterface = content.indexOf('interface User');
-			const searchInterface = content.indexOf('interface SearchResult');
-
-			assert.isAbove(userInterface, -1, 'User interface should exist');
-			assert.isAbove(searchInterface, -1, 'SearchResult interface should exist');
-			assert.isBelow(userInterface, namespaceStart, 'JSDoc-annotated User interface should be outside namespace');
-			assert.isBelow(searchInterface, namespaceStart, 'JSDoc-annotated SearchResult interface should be outside namespace');
+			assert.isAbove(content.indexOf('/** Represents a user in the system */\n\tinterface User'), namespaceStart);
+			assert.isAbove(
+				content.indexOf('/** Result of a user search operation */\n\tinterface SearchResult'),
+				namespaceStart,
+			);
 		});
 
-		it('should resolve cross-references between top-level interfaces', async () => {
+		it('should resolve cross-references between interfaces', async () => {
 			const content = await emitAndRead();
 
-			// SearchResult references User — both are top-level, so User should NOT be qualified
+			// SearchResult references User — both are types, so User should NOT be qualified
 			const searchResultBlock = content.slice(
 				content.indexOf('interface SearchResult'),
 				content.indexOf('}', content.indexOf('interface SearchResult')) + 1,
 			);
 			assert.include(searchResultBlock, 'User | null', 'SearchResult should reference User without namespace prefix');
-			assert.notInclude(searchResultBlock, 'BX.Test.Users.User', 'User should not be namespace-qualified in top-level type');
+			assert.notInclude(searchResultBlock, 'BX.Test.Users.User', 'User should not be namespace-qualified in a type');
 		});
 
 		it('should produce valid TypeScript declarations', async () => {
@@ -628,17 +620,17 @@ describe('build', () => {
 				`const em: BX.Test.Users.EventEmitter = new BX.Test.Users.EventEmitter();`,
 				`const evt: BX.Test.Users.BaseEvent = new BX.Test.Users.BaseEvent('test');`,
 				``,
-				`// Verify top-level types`,
-				`const order: SortOrder = 'asc';`,
-				`const opts: FilterOptions = { query: 'test', limit: 10 };`,
-				`const item: Identifiable = { id: 1 };`,
+				`// Verify types`,
+				`const order: BX.Test.Users.SortOrder = 'asc';`,
+				`const opts: BX.Test.Users.FilterOptions = { query: 'test', limit: 10 };`,
+				`const item: BX.Test.Users.Identifiable = { id: 1 };`,
 				``,
-				`// Verify exported interfaces with JSDoc (should be top-level, not in namespace)`,
-				`const user: User = { name: 'John', age: 30 };`,
-				`const result: SearchResult = { user, found: true };`,
+				`// Verify exported interfaces with JSDoc`,
+				`const user: BX.Test.Users.User = { name: 'John', age: 30 };`,
+				`const result: BX.Test.Users.SearchResult = { user, found: true };`,
 				``,
-				`// Verify class methods reference top-level types correctly`,
-				`const searchResult: SearchResult = svc.findByName('test');`,
+				`// Verify class methods reference types correctly`,
+				`const searchResult: BX.Test.Users.SearchResult = svc.findByName('test');`,
 			].join('\n'), 'utf-8');
 
 			const errors = await getSemanticErrors([testFile]);

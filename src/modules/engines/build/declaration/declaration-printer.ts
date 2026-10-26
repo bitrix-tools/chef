@@ -22,20 +22,15 @@ export function printBundle(bundle: LaidOutBundle, options: PrintOptions): strin
 
 	if (mode === 'ambient' || mode === 'both')
 	{
-		const topLevel = bundle.topLevelMembers
+		// Types go into the extension namespace too: printed globally, same-named types
+		// of different extensions would collide and merge with each other.
+		const members = [...bundle.topLevelMembers, ...bundle.namespaceMembers]
 			.map((m) => convertIndentationToTabs(m.text))
 			.filter((text) => text.length > 0);
 
-		if (topLevel.length > 0)
+		if (members.length > 0)
 		{
-			parts.push(topLevel.join('\n\n'));
-		}
-
-		if (bundle.namespaceMembers.length > 0)
-		{
-			const nsBody = bundle.namespaceMembers
-				.map((m) => convertIndentationToTabs(m.text))
-				.join('\n\n');
+			const nsBody = members.join('\n\n');
 
 			const indented = indentBody(nsBody);
 			parts.push(`declare namespace ${bundle.namespace} {\n${indented}\n}`);

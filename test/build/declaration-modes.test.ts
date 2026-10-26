@@ -71,7 +71,7 @@ describe('DeclarationEmitter — declaration modes', () => {
 	});
 
 	describe('ambient mode (default)', () => {
-		it('should produce declare namespace with top-level types outside', async () => {
+		it('should produce declare namespace with types inside', async () => {
 			const content = await emitWithMode({
 				'index.ts': `
 					export type Mode = 'light' | 'dark';
@@ -85,9 +85,9 @@ describe('DeclarationEmitter — declaration modes', () => {
 			assert.include(content, 'type Mode');
 			assert.notInclude(content, "declare module 'ui.widget'");
 
-			const typeIdx = content.indexOf('type Mode');
+			const typeIdx = content.indexOf('\ttype Mode');
 			const nsIdx = content.indexOf('declare namespace');
-			assert.isBelow(typeIdx, nsIdx, 'top-level types should come before namespace block');
+			assert.isAbove(typeIdx, nsIdx, 'types should be inside the namespace block');
 		});
 	});
 
@@ -142,7 +142,7 @@ describe('DeclarationEmitter — declaration modes', () => {
 			assert.match(content, /class Widget\s*\{[^}]*render\(\): string;/s);
 		});
 
-		it('should put top-level types outside for ambient and inside for module', async () => {
+		it('should put types inside both the namespace and the module', async () => {
 			const content = await emitWithMode({
 				'index.ts': `
 					export type Mode = 'light' | 'dark';
@@ -152,13 +152,13 @@ describe('DeclarationEmitter — declaration modes', () => {
 				`,
 			}, 'both');
 
-			// ambient: type outside, widget inside namespace
+			// ambient: type and widget inside namespace
 			assert.include(content, 'declare namespace BX.UI.Widget');
 			// module: both inside
 			assert.include(content, "declare module 'ui.widget'");
 
 			const matches = content.match(/type Mode/g);
-			assert.isAtLeast(matches?.length ?? 0, 2, 'Mode should appear in both ambient top-level and module');
+			assert.isAtLeast(matches?.length ?? 0, 2, 'Mode should appear in both namespace and module');
 		});
 
 		it('should produce TypeScript-valid declarations for both modes', async () => {
@@ -177,7 +177,7 @@ describe('DeclarationEmitter — declaration modes', () => {
 				testFile,
 				`/// <reference path="./bundle.d.ts" />\n`
 				+ `const t1: BX.UI.Widget.Toggle = new BX.UI.Widget.Toggle();\n`
-				+ `const s1: Status = 'on';\n`
+				+ `const s1: BX.UI.Widget.Status = 'on';\n`
 				+ `t1.status = s1;\n`,
 			);
 

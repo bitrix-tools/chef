@@ -236,6 +236,11 @@ interface CollectedMember
 	sourceDecl?: ts.Node;
 	sourceTextStart?: number;
 	renames?: Array<{ start: number; end: number; replacement: string }>;
+	/** Position of the declared name inside `text`. */
+	nameRange?: { start: number; end: number };
+	symbol?: TypeScriptSymbol;
+	/** Target of a pre-rendered `type Alias = Target;` member. */
+	aliasTarget?: { symbol: TypeScriptSymbol; name: string };
 }
 
 interface SymbolCollectorOptions
@@ -284,6 +289,10 @@ class SymbolCollector
 	// Cache for #findExtensionReExportingPath: maps "<modulePath> <qualifier>" to the
 	// extension that re-exports that file (namespace + exported name), or null when none does.
 	readonly #pathOwningExtension = new Map<string, { namespace: string; exportedName: string } | null>();
+	/** Symbols exported from the entry: their names are the public API and are never changed. */
+	readonly #publicSymbols = new Set<TypeScriptSymbol>();
+	/** Internal members renamed because their name is taken in the namespace. */
+	readonly #renamedSymbols = new Map<TypeScriptSymbol, string>();
 	#currentNamespace = '';
 
 	/** Files parsed outside the dts program; they live in the compiler process until disposed. */
@@ -443,7 +452,9 @@ class SymbolCollector
 			this.#collectExportSymbol(exportSymbol, exportSymbol.name);
 		}
 
-		this.#applyCollectedReplacements(namespace);
+		const siblingExports = this.#collectSiblingNamespaceExports();
+		this.#deconflictNames(namespace, siblingExports);
+		this.#applyCollectedReplacements(namespace, siblingExports);
 
 		return this.#result;
 	}
@@ -935,7 +946,209 @@ class SymbolCollector
 		}
 	}
 
-	#applyCollectedReplacements(namespace: string): void
+	/**
+	 * Names that imported sibling extensions declare, grouped by the sibling namespace: their
+	 * exports and the members of their generated declarations. They share the global namespace
+	 * tree with this extension's members.
+	 */
+	#collectSiblingNamespaceExports(): Array<{ namespace: string; names: Set<string> }>
+	{
+		const result: Array<{ namespace: string; names: Set<string> }> = [];
+
+		for (const siblingName of this.#importedSiblings.keys())
+		{
+			if (siblingName === this.#options.extensionName) continue;
+
+			const pkg = PackageResolver.resolve(siblingName);
+			const namespace = pkg?.getGlobal()[pkg.getName()];
+			if (!pkg || !namespace || namespace === 'window') continue;
+
+			const dtsPath = pkg.getOutputJsPath().replace(/\.js$/, '.d.ts');
+			const names = this.#readGeneratedNamespaceMembers(dtsPath, namespace);
+
+			const sourceFile = this.#resolveSiblingSourceFile(siblingName);
+			const file = this.#resolveSiblingDtsFile(siblingName)
+				?? (sourceFile ? this.#program.getSourceFile(sourceFile.fileName) : undefined);
+			const moduleSymbol = file ? this.#getSymbolAtLocation(file) : undefined;
+			if (moduleSymbol)
+			{
+				for (const exportSymbol of this.#checker.getExportsOfModule(moduleSymbol))
+				{
+					if (exportSymbol.name !== 'default') names.add(exportSymbol.name);
+				}
+			}
+
+			result.push({ namespace, names });
+		}
+
+		return result;
+	}
+
+	/**
+	 * Members of `declare namespace <namespace>` in a previously generated .d.ts. Internal
+	 * members of a sibling are not among its exports but still take names in the namespace.
+	 */
+	#readGeneratedNamespaceMembers(dtsPath: string, namespace: string): Set<string>
+	{
+		const ts = this.#ts;
+		const names = new Set<string>();
+		if (!fs.existsSync(dtsPath)) return names;
+
+		const text = fs.readFileSync(dtsPath, 'utf-8');
+		const sourceFile = this.#parseStandaloneSourceFile(dtsPath, text, ts.ScriptKind.TS);
+
+		const visit = (statements: readonly ts.Statement[], prefix: string): void => {
+			for (const statement of statements)
+			{
+				if (ts.isModuleDeclaration(statement) && ts.isIdentifier(statement.name))
+				{
+					const name = prefix ? `${prefix}.${statement.name.text}` : statement.name.text;
+					let body = statement.body;
+					let bodyName = name;
+					while (body && ts.isModuleDeclaration(body))
+					{
+						bodyName = `${bodyName}.${body.name.text}`;
+						body = body.body;
+					}
+
+					if (body && ts.isModuleBlock(body))
+					{
+						visit(body.statements, bodyName);
+					}
+
+					continue;
+				}
+
+				if (prefix !== namespace) continue;
+
+				if (ts.isVariableStatement(statement))
+				{
+					for (const declaration of statement.declarationList.declarations)
+					{
+						getBindingIdentifiers(ts, declaration.name).forEach((identifier) => names.add(identifier.text));
+					}
+				}
+				else if (
+					(ts.isClassDeclaration(statement) || ts.isFunctionDeclaration(statement)
+						|| ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement)
+						|| ts.isEnumDeclaration(statement))
+					&& statement.name
+				)
+				{
+					names.add(statement.name.text);
+				}
+			}
+		};
+
+		visit(sourceFile.statements, '');
+
+		return names;
+	}
+
+	/**
+	 * All members share one namespace, though they come from different modules. An internal
+	 * member whose name is already taken there — by a public member, by another internal one
+	 * or by an export of a sibling in the same namespace — gets a free `Name$N` name.
+	 */
+	#deconflictNames(namespace: string, siblingExports: Array<{ namespace: string; names: Set<string> }>): void
+	{
+		const TYPE = 1;
+		const VALUE = 2;
+		const taken = new Map<string, Array<{ symbol: TypeScriptSymbol | null; meaning: number }>>();
+
+		const reserve = (name: string, symbol: TypeScriptSymbol | null, meaning: number): void => {
+			const entries = taken.get(name) ?? [];
+			entries.push({ symbol, meaning });
+			taken.set(name, entries);
+		};
+
+		const isTaken = (name: string, symbol: TypeScriptSymbol, meaning: number): boolean => {
+			return (taken.get(name) ?? []).some((entry) => entry.symbol !== symbol && (entry.meaning & meaning) !== 0);
+		};
+
+		const getMeaning = (member: CollectedMember): number => {
+			const decl = member.sourceDecl;
+			if (!decl || this.#ts.isInterfaceDeclaration(decl) || this.#ts.isTypeAliasDeclaration(decl)) return TYPE;
+			if (this.#ts.isClassDeclaration(decl) || this.#ts.isEnumDeclaration(decl)) return TYPE | VALUE;
+
+			return VALUE;
+		};
+
+		for (const sibling of siblingExports)
+		{
+			if (sibling.namespace !== namespace) continue;
+
+			for (const name of sibling.names)
+			{
+				reserve(name, null, TYPE | VALUE);
+			}
+		}
+
+		const internal = new Map<TypeScriptSymbol, CollectedMember[]>();
+
+		for (const member of this.#result)
+		{
+			if (!member.name) continue;
+
+			if (!member.symbol || !member.sourceDecl || this.#publicSymbols.has(member.symbol))
+			{
+				reserve(member.name, member.symbol ?? null, getMeaning(member));
+				continue;
+			}
+
+			const members = internal.get(member.symbol) ?? [];
+			members.push(member);
+			internal.set(member.symbol, members);
+		}
+
+		for (const [symbol, members] of internal)
+		{
+			const name = members[0].name!;
+			const meaning = members.reduce((result, member) => result | getMeaning(member), 0);
+
+			if (!isTaken(name, symbol, meaning))
+			{
+				reserve(name, symbol, meaning);
+				continue;
+			}
+
+			let index = 1;
+			while (taken.has(`${name}$${index}`))
+			{
+				index++;
+			}
+
+			const newName = `${name}$${index}`;
+			reserve(newName, symbol, meaning);
+			this.#renamedSymbols.set(symbol, newName);
+
+			for (const member of members)
+			{
+				member.name = newName;
+				const nameRange = member.nameRange;
+				if (nameRange)
+				{
+					member.renames = (member.renames ?? []).filter((edit) => !rangesOverlap(edit, nameRange));
+					member.renames.push({ ...nameRange, replacement: newName });
+				}
+			}
+		}
+
+		for (const member of this.#result)
+		{
+			const target = member.aliasTarget;
+			const newName = target ? this.#renamedSymbols.get(target.symbol) : undefined;
+			if (target && newName)
+			{
+				member.text = member.text.replace(` = ${target.name}`, ` = ${newName}`);
+			}
+		}
+	}
+
+	#applyCollectedReplacements(
+		namespace: string,
+		siblingExports: Array<{ namespace: string; names: Set<string> }>,
+	): void
 	{
 		const namespaceMemberSymbols = this.#collectNamespaceMemberSymbols();
 		const hasExternal = this.#siblingReplacements.size > 0 || this.#npmReplacements.size > 0;
@@ -945,6 +1158,22 @@ class SymbolCollector
 		// extension is looked up through tsconfig `paths`.
 		const resolvesCrossExtensionImports = Boolean(this.#options.tsconfigPaths);
 		const needsNamespaceQualification = namespaceMemberSymbols.size > 0;
+
+		// Inside `declare namespace BX.UI.X` a name is looked up in BX.UI.X, BX.UI and BX before
+		// the global scope, so a builtin type like `Event` may resolve to `BX.Event` instead.
+		const shadowingNames = new Set<string>();
+		for (const member of this.#result)
+		{
+			if (member.name) shadowingNames.add(member.name);
+		}
+
+		for (const sibling of siblingExports)
+		{
+			if (namespace === sibling.namespace || namespace.startsWith(`${sibling.namespace}.`))
+			{
+				sibling.names.forEach((name) => shadowingNames.add(name));
+			}
+		}
 
 		for (const member of this.#result)
 		{
@@ -983,11 +1212,27 @@ class SymbolCollector
 				return !nsEdits.some((ns) => rangesOverlap(ns, ext));
 			});
 
-			member.textUnqualified = applyPositionalEdits(sourceText, externalEditsFiltered, renames);
+			const referenceEdits = this.#findReferenceRenameEdits(
+				member.sourceDecl,
+				member.sourceTextStart,
+				shadowingNames,
+			).filter((edit) => {
+				return ![...externalEditsFiltered, ...nsEdits].some((other) => rangesOverlap(other, edit));
+			});
+
+			member.textUnqualified = applyPositionalEdits(
+				sourceText,
+				[...externalEditsFiltered, ...referenceEdits],
+				renames,
+			);
 
 			if (nsEdits.length > 0)
 			{
-				member.text = applyPositionalEdits(sourceText, [...externalEditsFiltered, ...nsEdits], renames);
+				member.text = applyPositionalEdits(
+					sourceText,
+					[...externalEditsFiltered, ...nsEdits, ...referenceEdits],
+					renames,
+				);
 			}
 			else
 			{
@@ -1052,7 +1297,55 @@ class SymbolCollector
 				{
 					const nodeStart = node.getStart(sourceFile, false) - textStart;
 					const nodeEnd = node.getEnd() - textStart;
-					edits.push({ start: nodeStart, end: nodeEnd, replacement: `${namespace}.${node.text}` });
+					const name = this.#renamedSymbols.get(resolved) ?? node.text;
+					edits.push({ start: nodeStart, end: nodeEnd, replacement: `${namespace}.${name}` });
+				}
+			}
+
+			node.forEachChild(visit);
+		};
+
+		visit(decl);
+
+		return edits;
+	}
+
+	/**
+	 * Points references at renamed members, and references to builtin types whose name is
+	 * also declared in the namespace tree at the global ones (`globalThis.Event`).
+	 */
+	#findReferenceRenameEdits(
+		decl: ts.Node,
+		textStart: number,
+		shadowingNames: Set<string>,
+	): Array<{ start: number; end: number; replacement: string }>
+	{
+		const ts = this.#ts;
+		const edits: Array<{ start: number; end: number; replacement: string }> = [];
+		const sourceFile = decl.getSourceFile();
+		// A renamed member may be referenced under a local import name, so any reference can be one.
+		const hasRenames = this.#renamedSymbols.size > 0;
+
+		const visit = (node: ts.Node): void => {
+			if (
+				ts.isIdentifier(node)
+				&& (hasRenames || shadowingNames.has(node.text))
+				&& this.#isReferencePosition(node)
+			)
+			{
+				const symbol = this.#getSymbolAtLocation(node);
+				const resolved = symbol ? (this.#resolveAliasDeep(symbol) ?? symbol) : null;
+				const newName = resolved ? this.#renamedSymbols.get(resolved) : undefined;
+				const isBuiltin = !newName && resolved !== null && shadowingNames.has(node.text)
+					&& getDeclarations(resolved).some((d) => this.#isBuiltinLibFile(d.getSourceFile()));
+
+				if (newName || isBuiltin)
+				{
+					edits.push({
+						start: node.getStart(sourceFile, false) - textStart,
+						end: node.getEnd() - textStart,
+						replacement: newName ?? `globalThis.${node.text}`,
+					});
 				}
 			}
 
@@ -1297,9 +1590,10 @@ class SymbolCollector
 		const collected = this.#findCollectedMember(resolved);
 		if (!collected) return null;
 
+		const name = this.#renamedSymbols.get(resolved) ?? memberName;
 		const replacement = collected.kind === 'type'
-			? `${memberName}${restOfQualifier}`
-			: `${this.#currentNamespace}.${memberName}${restOfQualifier}`;
+			? `${name}${restOfQualifier}`
+			: `${this.#currentNamespace}.${name}${restOfQualifier}`;
 
 		return { start: headStart, end: headEnd, replacement };
 	}
@@ -1322,7 +1616,7 @@ class SymbolCollector
 		if (declarations.length === 0) return null;
 
 		const targetFile = declarations[0].getSourceFile().fileName;
-		const symName = symbol.name;
+		const symName = this.#renamedSymbols.get(symbol) ?? symbol.name;
 
 		for (const member of this.#result)
 		{
@@ -1433,6 +1727,8 @@ class SymbolCollector
 			return;
 		}
 
+		this.#publicSymbols.add(resolved);
+
 		const key = `${publicName}:${getSymbolKey(resolved)}`;
 		if (this.#seen.has(key))
 		{
@@ -1468,7 +1764,7 @@ class SymbolCollector
 				this.#seenSourceDecls.add(member.sourceDecl);
 			}
 
-			this.#result.push(member);
+			this.#result.push({ ...member, symbol: resolved });
 			this.#collectReferencedSymbols(decl);
 		}
 	}
@@ -1724,7 +2020,7 @@ class SymbolCollector
 			const member = this.#buildMemberFromDeclaration(decl, name, resolved);
 			if (member)
 			{
-				this.#result.push(member);
+				this.#result.push({ ...member, symbol: resolved });
 				this.#collectReferencedSymbols(decl);
 			}
 		}
@@ -2340,7 +2636,7 @@ class SymbolCollector
 			? `type ${aliasName}${generics.params} = ${targetName}${generics.args};`
 			: `type ${aliasName} = ${targetName};`;
 
-		this.#result.push({ text, name: aliasName, kind: 'type' });
+		this.#result.push({ text, name: aliasName, kind: 'type', aliasTarget: { symbol: resolved, name: targetName } });
 	}
 
 	#extractDeclarationName(symbol: TypeScriptSymbol, declarations: readonly ts.Declaration[]): string | null
@@ -2438,7 +2734,12 @@ function renderDeclaration(
 	nameNode: ts.Identifier | null,
 	originalName: string | null,
 	publicName: string,
-): { text: string; sourceTextStart: number; renames: Array<{ start: number; end: number; replacement: string }> }
+): {
+	text: string;
+	sourceTextStart: number;
+	renames: Array<{ start: number; end: number; replacement: string }>;
+	nameRange?: { start: number; end: number };
+}
 {
 	const sourceFile = statement.getSourceFile();
 	const source = sourceFile.text;
@@ -2451,14 +2752,16 @@ function renderDeclaration(
 
 	const renames: Array<{ start: number; end: number; replacement: string }> = [];
 
-	if (originalName && originalName !== publicName && nameNode)
+	const nameRange = nameNode
+		? { start: nameNode.getStart(sourceFile, false) - start, end: nameNode.getEnd() - start }
+		: undefined;
+
+	if (originalName && originalName !== publicName && nameRange)
 	{
-		const nameStart = nameNode.getStart(sourceFile, false) - start;
-		const nameEnd = nameNode.getEnd() - start;
-		renames.push({ start: nameStart, end: nameEnd, replacement: publicName });
+		renames.push({ ...nameRange, replacement: publicName });
 	}
 
-	return { text, sourceTextStart: start, renames };
+	return { text, sourceTextStart: start, renames, nameRange };
 }
 
 function rangesOverlap(

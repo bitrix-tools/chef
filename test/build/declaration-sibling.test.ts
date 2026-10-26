@@ -44,7 +44,11 @@ function createSiblingExtension(params: {
 	};
 }
 
-async function emitConsumer(consumer: { packageRoot: string; input: string }, namespace: string): Promise<string>
+async function emitConsumer(
+	consumer: { packageRoot: string; input: string },
+	namespace: string,
+	siblingPaths?: Record<string, string[]>,
+): Promise<string>
 {
 	const outputPath = path.join(consumer.packageRoot, 'dist', 'bundle.d.ts');
 	fs.mkdirSync(path.dirname(outputPath), { recursive: true });
@@ -55,6 +59,7 @@ async function emitConsumer(consumer: { packageRoot: string; input: string }, na
 		input: consumer.input,
 		namespace,
 		outputPath,
+		compilerOptions: siblingPaths ? { paths: siblingPaths } : undefined,
 	});
 
 	return fs.existsSync(outputPath) ? fs.readFileSync(outputPath, 'utf-8') : '';
@@ -188,5 +193,122 @@ describe('DeclarationEmitter — sibling extensions', () => {
 
 		// Emission should not substitute with BX.Nowhere.Missing (not registered)
 		assert.notInclude(output, 'BX.Nowhere.Missing');
+	});
+
+	it('should refer to a builtin type shadowed by a sibling in a parent namespace through globalThis', async () => {
+		const core = createSiblingExtension({
+			moduleName: 'main',
+			extensionName: 'main.core',
+			namespace: 'BX',
+			files: {
+				'src/index.ts': `
+					export class Event { getData(): unknown { return null; } }
+					export class Dom { static clean(): void {} }
+				`,
+			},
+		});
+
+		const consumer = createSiblingExtension({
+			moduleName: 'ui',
+			extensionName: 'ui.switcher',
+			namespace: 'BX.UI',
+			files: {
+				'src/index.ts': `
+					import { Dom } from 'main.core';
+
+					export type SwitcherEvent = Partial<Pick<Event, 'stopPropagation' | 'target'>>;
+					export class Switcher { dom: typeof Dom = Dom; }
+				`,
+			},
+		});
+
+		const output = await emitConsumer(consumer, 'BX.UI', { 'main.core': [core.input] });
+
+		assert.include(output, 'Pick<globalThis.Event,');
+	});
+
+	it('should rename an internal type whose name a sibling in the same namespace declares', async () => {
+		const store = createSiblingExtension({
+			moduleName: 'ui',
+			extensionName: 'ui.store',
+			namespace: 'BX.UI.Lib',
+			files: {
+				'src/index.ts': `export { bookingStore } from './store';`,
+				'src/store.ts': `
+					class BookingStore { get(): { count: number } { return { count: 0 }; } }
+					export const bookingStore: BookingStore = new BookingStore();
+				`,
+			},
+		});
+
+		const storeDtsPath = PackageResolver.resolve('ui.store')!.getOutputJsPath().replace(/\.js$/, '.d.ts');
+		fs.mkdirSync(path.dirname(storeDtsPath), { recursive: true });
+		await new DeclarationEmitter().emit({ ...store, namespace: 'BX.UI.Lib', outputPath: storeDtsPath });
+		assert.include(fs.readFileSync(storeDtsPath, 'utf-8'), 'class BookingStore {');
+
+		const consumer = createSiblingExtension({
+			moduleName: 'ui',
+			extensionName: 'ui.store-filter',
+			namespace: 'BX.UI.Lib',
+			files: {
+				'src/index.ts': `
+					import { bookingStore } from 'ui.store';
+
+					type BookingStore = ReturnType<typeof bookingStore.get>;
+
+					export class BookingFilter {
+						get store(): BookingStore { return bookingStore.get(); }
+					}
+				`,
+			},
+		});
+
+		const output = await emitConsumer(consumer, 'BX.UI.Lib', { 'ui.store': [store.input] });
+
+		assert.match(output, /type BookingStore\$1 = /);
+		assert.include(output, 'get store(): BookingStore$1;');
+	});
+
+	it('should point an inferred import type at a renamed internal type', async () => {
+		const core = createSiblingExtension({
+			moduleName: 'main',
+			extensionName: 'main.core',
+			namespace: 'BX',
+			files: {
+				'src/index.ts': 'export class Dom { static clean(): void {} }',
+			},
+		});
+
+		const consumer = createSiblingExtension({
+			moduleName: 'ui',
+			extensionName: 'ui.widget',
+			namespace: 'BX.UI.Widget',
+			files: {
+				'src/index.ts': `
+					export { Widget } from './widget';
+					export type { Frame } from './public-types';
+				`,
+				'src/public-types.ts': 'export type Frame = { id: string };',
+				'src/frames.ts': `
+					export type Frame = { index: number };
+					export function getFrame(): Frame { return { index: 0 }; }
+				`,
+				'src/widget.ts': `
+					import { Dom } from 'main.core';
+					import { getFrame } from './frames';
+
+					export class Widget {
+						dom: typeof Dom = Dom;
+						frame() { return getFrame(); }
+					}
+				`,
+			},
+		});
+
+		const output = await emitConsumer(consumer, 'BX.UI.Widget', { 'main.core': [core.input] });
+
+		assert.match(output, /type Frame\$1 = \{\s+index: number;/);
+		assert.include(output, 'frame(): Frame$1;');
+		assert.notInclude(output, 'import(');
 	});
 });

@@ -637,7 +637,7 @@ describe('DeclarationEmitter', () => {
 	// ─── Namespace vs top-level placement ───
 
 	describe('placement', () => {
-		it('should place types and interfaces outside namespace', async () => {
+		it('should place types and interfaces inside namespace before classes', async () => {
 			const content = await emitAndRead({
 				'index.ts': `
 					export type Mode = 'light' | 'dark';
@@ -648,11 +648,141 @@ describe('DeclarationEmitter', () => {
 				`,
 			});
 
-			const nsStart = content.indexOf('declare namespace');
+			const nsStart = content.indexOf('declare namespace BX.Test {');
 			assert.isAbove(nsStart, 0);
-			assert.isBelow(content.indexOf('type Mode'), nsStart);
-			assert.isBelow(content.indexOf('interface Theme'), nsStart);
-			assert.isAbove(content.indexOf('class ThemeManager'), nsStart);
+			assert.isAbove(content.indexOf('\ttype Mode'), nsStart);
+			assert.isAbove(content.indexOf('\tinterface Theme'), nsStart);
+			assert.isAbove(content.indexOf('class ThemeManager'), content.indexOf('interface Theme'));
+		});
+
+		it('should keep same-named types of extensions with different namespaces apart', async () => {
+			const popup = await emitAndRead({
+				'index.ts': `
+					export type ButtonOptions = { text?: string };
+					export class PopupButton {
+						constructor(options: ButtonOptions) {}
+					}
+				`,
+			}, 'BX.Main');
+			fs.writeFileSync(path.join(tmpDir, 'dist', 'popup.d.ts'), popup, 'utf-8');
+
+			const buttons = await emitAndRead({
+				'index.ts': `
+					export type ButtonOptions = { text?: string; color?: string; maxWidth?: number };
+					export class Button {
+						constructor(options: ButtonOptions) {}
+					}
+				`,
+			}, 'BX.UI');
+
+			const errors = await validateDeclarations(buttons, `
+				/// <reference path="./popup.d.ts" />
+				new BX.UI.Button({ text: 'OK', color: 'ui-btn-primary', maxWidth: 90 });
+				new BX.Main.PopupButton({ text: 'OK' });
+				const options: BX.UI.ButtonOptions = { color: 'ui-btn-primary' };
+				// @ts-expect-error popup buttons have no color
+				new BX.Main.PopupButton({ text: 'OK', color: 'ui-btn-primary' });
+				// @ts-expect-error unknown option
+				new BX.UI.Button({ text: 'OK', size: 'xl' });
+			`);
+
+			assert.deepEqual(errors, [], `Type errors in generated .d.ts:\n${popup}\n${buttons}`);
+		});
+
+		it('should rename an internal member whose name is taken by a public type', async () => {
+			const content = await emitAndRead({
+				'index.ts': `
+					import { Button } from './button';
+					import type { ToolbarItem } from './types';
+					export { Button };
+					export type { ToolbarItem };
+				`,
+				'types.ts': `
+					export type ToolbarItem = string;
+				`,
+				'toolbar-item.ts': `
+					export class ToolbarItem {
+						getName(): string { return ''; }
+					}
+					export type ToolbarItemFactory = () => ToolbarItem;
+				`,
+				'button.ts': `
+					import { ToolbarItem, type ToolbarItemFactory } from './toolbar-item';
+					export class Button extends ToolbarItem {
+						static factory: ToolbarItemFactory;
+						clone(): ToolbarItem { return this; }
+					}
+				`,
+			});
+
+			assert.include(content, 'type ToolbarItem = string;');
+			assert.include(content, 'class ToolbarItem$1 {');
+			assert.include(content, 'class Button extends ToolbarItem$1 {');
+			assert.include(content, 'clone(): ToolbarItem$1;');
+
+			const errors = await validateDeclarations(content, `
+				const item: BX.Test.ToolbarItem = 'bold';
+				const button: BX.Test.Button = new BX.Test.Button();
+				const itemName: string = button.clone().getName();
+				const created: BX.Test.Button = BX.Test.Button.factory() as BX.Test.Button;
+			`);
+
+			assert.deepEqual(errors, [], `Type errors in generated .d.ts:\n${content}`);
+		});
+
+		it('should keep the name of a public type reached through a reference first', async () => {
+			const content = await emitAndRead({
+				'index.ts': `
+					export { Editor } from './editor';
+					export type { Options } from './types';
+				`,
+				'types.ts': `
+					export type Options = { readonly: boolean };
+				`,
+				'helper.ts': `
+					type Options = { depth: number };
+					export class Helper { options: Options = { depth: 0 }; }
+				`,
+				'editor.ts': `
+					import { Helper } from './helper';
+					import type { Options } from './types';
+					export class Editor {
+						constructor(helper: Helper, options: Options) {}
+					}
+				`,
+			});
+
+			assert.include(content, 'type Options = {\n\t\treadonly: boolean;');
+			assert.include(content, 'type Options$1 = {\n\t\tdepth: number;');
+			assert.include(content, 'options: Options$1;');
+			assert.include(content, 'constructor(helper: Helper, options: Options);');
+		});
+
+		it('should refer to a builtin type shadowed by a namespace member through globalThis', async () => {
+			const content = await emitAndRead({
+				'index.ts': `
+					export { Event } from './event';
+					export type { DomEventPart } from './types';
+				`,
+				'event.ts': `
+					export class Event {
+						getData(): unknown { return null; }
+					}
+				`,
+				'types.ts': `
+					export type DomEventPart = Pick<Event, 'target' | 'preventDefault'>;
+				`,
+			});
+
+			assert.include(content, 'Pick<globalThis.Event,');
+
+			const errors = await validateDeclarations(content, `
+				declare const domEvent: MouseEvent;
+				const part: BX.Test.DomEventPart = domEvent;
+				const data: unknown = new BX.Test.Event().getData();
+			`);
+
+			assert.deepEqual(errors, [], `Type errors in generated .d.ts:\n${content}`);
 		});
 
 		it('should qualify namespace member references in top-level types', async () => {
@@ -675,13 +805,11 @@ describe('DeclarationEmitter', () => {
 				`,
 			});
 
-			// ListenerMap is a type → outside namespace
-			// Emitter is a class → inside namespace
 			// ListenerMap should reference BX.Test.Emitter, not just Emitter
 			assert.include(content, 'BX.Test.Emitter');
 		});
 
-		it('should produce output with only types (no namespace block)', async () => {
+		it('should place types inside namespace when there are no namespace members', async () => {
 			const content = await emitAndRead({
 				'index.ts': `
 					export type Flag = boolean;
@@ -689,9 +817,10 @@ describe('DeclarationEmitter', () => {
 				`,
 			});
 
-			assert.include(content, 'type Flag');
-			assert.include(content, 'interface Coords');
-			assert.notInclude(content, 'declare namespace');
+			const nsStart = content.indexOf('declare namespace BX.Test {');
+			assert.isAbove(nsStart, 0);
+			assert.isAbove(content.indexOf('\ttype Flag'), nsStart);
+			assert.isAbove(content.indexOf('\tinterface Coords'), nsStart);
 		});
 
 		it('should produce output with only namespace members (no top-level types)', async () => {
@@ -1722,11 +1851,11 @@ readonly tags?: string[];
 			});
 
 			const errors = await validateDeclarations(content, `
-				const userStatus: Status = 'active';
-				const user: UserData = { name: 'John', status: 'active' };
+				const userStatus: BX.Test.Status = 'active';
+				const user: BX.Test.UserData = { name: 'John', status: 'active' };
 				const mgr: BX.Test.UserManager = new BX.Test.UserManager();
 				mgr.add(user);
-				const found: UserData | undefined = mgr.findByName('John');
+				const found: BX.Test.UserData | undefined = mgr.findByName('John');
 			`);
 
 			assert.deepEqual(errors, [], `Type errors in generated .d.ts:\n${content}`);
@@ -1755,8 +1884,8 @@ readonly tags?: string[];
 			});
 
 			const errors = await validateDeclarations(content, `
-				const priority: Priority = 'high';
-				const job: Job = { name: 'task', priority: 'low' };
+				const priority: BX.Test.Priority = 'high';
+				const job: BX.Test.Job = { name: 'task', priority: 'low' };
 				const proc: BX.Test.Processor = new BX.Test.Processor();
 				proc.run(job);
 			`);
@@ -1834,7 +1963,7 @@ readonly tags?: string[];
 
 			const errors = await validateDeclarations(content, `
 				const emitter: BX.Test.Emitter = new BX.Test.Emitter();
-				const opts: EmitterOptions = { target: emitter, maxListeners: 10 };
+				const opts: BX.Test.EmitterOptions = { target: emitter, maxListeners: 10 };
 			`);
 
 			assert.deepEqual(errors, [], `Type errors in generated .d.ts:\n${content}`);
