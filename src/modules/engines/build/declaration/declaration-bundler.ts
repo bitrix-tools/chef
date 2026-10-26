@@ -37,9 +37,10 @@ export interface DeclarationBundleOptions
 
 export interface DeclarationBundle
 {
-	topLevelMembers: DeclarationMember[];
-	namespaceMembers: DeclarationMember[];
-	namespaceMemberNames: Set<string>;
+	/** Type aliases and interfaces. */
+	typeMembers: DeclarationMember[];
+	/** Classes, functions, enums and variables. */
+	valueMembers: DeclarationMember[];
 	npmModules: NpmModule[];
 }
 
@@ -54,16 +55,19 @@ export interface DeclarationMember
 	text: string;
 	/**
 	 * Unqualified variant of the member text — without namespace prefix applied to
-	 * namespace members. Used when rendering the member inside `declare module '...' { ... }`
+	 * public members. Used when rendering the member inside `declare module '...' { ... }`
 	 * where the members share the same lexical scope.
 	 */
 	textUnqualified?: string;
 	name: string | null;
+	/** Exported from the entry. Internal members only describe the signatures of public ones. */
+	isPublic: boolean;
 }
 
 export interface NpmModule
 {
 	moduleName: string;
+	packageName: string;
 	body: string;
 }
 
@@ -241,6 +245,16 @@ interface CollectedMember
 	symbol?: TypeScriptSymbol;
 	/** Target of a pre-rendered `type Alias = Target;` member. */
 	aliasTarget?: { symbol: TypeScriptSymbol; name: string };
+	isPublic?: boolean;
+}
+
+interface TextEdit
+{
+	start: number;
+	end: number;
+	replacement: string;
+	/** Replacement in the unqualified text, when it differs from `replacement`. */
+	unqualifiedReplacement?: string;
 }
 
 interface SymbolCollectorOptions
@@ -422,6 +436,7 @@ class SymbolCollector
 		{
 			result.push({
 				moduleName: `${this.#options.extensionName}/internal/${pkgName}`,
+				packageName: pkgName,
 				body: buffer.statements.join('\n\n'),
 			});
 		}
@@ -456,7 +471,36 @@ class SymbolCollector
 		this.#deconflictNames(namespace, siblingExports);
 		this.#applyCollectedReplacements(namespace, siblingExports);
 
+		for (const member of this.#result)
+		{
+			member.isPublic = this.#isPublicMember(member);
+		}
+
 		return this.#result;
+	}
+
+	/**
+	 * Members exported from the entry. A pre-rendered alias stands for a local import name
+	 * and is internal.
+	 */
+	#isPublicMember(member: CollectedMember): boolean
+	{
+		return !member.aliasTarget && member.symbol !== undefined && this.#publicSymbols.has(member.symbol);
+	}
+
+	/** Public members by symbol, with the names they are declared under in the namespace. */
+	#collectPublicMemberNames(): Map<TypeScriptSymbol, string>
+	{
+		const result = new Map<TypeScriptSymbol, string>();
+		for (const member of this.#result)
+		{
+			if (member.name && this.#isPublicMember(member))
+			{
+				result.set(member.symbol!, member.name);
+			}
+		}
+
+		return result;
 	}
 
 	/**
@@ -1000,6 +1044,13 @@ class SymbolCollector
 		const visit = (statements: readonly ts.Statement[], prefix: string): void => {
 			for (const statement of statements)
 			{
+				if (isGlobalAugmentation(ts, statement))
+				{
+					visit(statement.body.statements, prefix);
+
+					continue;
+				}
+
 				if (ts.isModuleDeclaration(statement) && ts.isIdentifier(statement.name))
 				{
 					const name = prefix ? `${prefix}.${statement.name.text}` : statement.name.text;
@@ -1046,9 +1097,12 @@ class SymbolCollector
 	}
 
 	/**
-	 * All members share one namespace, though they come from different modules. An internal
-	 * member whose name is already taken there — by a public member, by another internal one
-	 * or by an export of a sibling in the same namespace — gets a free `Name$N` name.
+	 * Members come from different modules but share one scope: public members are declared in
+	 * the namespace, internal ones next to it, where references from the namespace reach them
+	 * only when no member of the namespace tree has the same name. An internal member whose
+	 * name is already taken — by a public member, by another internal one or by an export of
+	 * a sibling in this namespace or an enclosing one (`BX.Type` for `BX.UI.X`) — gets a free
+	 * `Name$N` name.
 	 */
 	#deconflictNames(namespace: string, siblingExports: Array<{ namespace: string; names: Set<string> }>): void
 	{
@@ -1076,7 +1130,7 @@ class SymbolCollector
 
 		for (const sibling of siblingExports)
 		{
-			if (sibling.namespace !== namespace) continue;
+			if (!isSameOrEnclosingNamespace(sibling.namespace, namespace)) continue;
 
 			for (const name of sibling.names)
 			{
@@ -1150,14 +1204,13 @@ class SymbolCollector
 		siblingExports: Array<{ namespace: string; names: Set<string> }>,
 	): void
 	{
-		const namespaceMemberSymbols = this.#collectNamespaceMemberSymbols();
+		const publicMemberNames = this.#collectPublicMemberNames();
 		const hasExternal = this.#siblingReplacements.size > 0 || this.#npmReplacements.size > 0;
 		// A cross-extension type reached through a container (e.g. `Cache.MemoryCache`) is
 		// emitted as an import type of the other extension's source file, with no registered
 		// sibling/npm replacement. Such import types are detected separately; the owning
 		// extension is looked up through tsconfig `paths`.
 		const resolvesCrossExtensionImports = Boolean(this.#options.tsconfigPaths);
-		const needsNamespaceQualification = namespaceMemberSymbols.size > 0;
 
 		// Inside `declare namespace BX.UI.X` a name is looked up in BX.UI.X, BX.UI and BX before
 		// the global scope, so a builtin type like `Event` may resolve to `BX.Event` instead.
@@ -1169,7 +1222,7 @@ class SymbolCollector
 
 		for (const sibling of siblingExports)
 		{
-			if (namespace === sibling.namespace || namespace.startsWith(`${sibling.namespace}.`))
+			if (isSameOrEnclosingNamespace(sibling.namespace, namespace))
 			{
 				sibling.names.forEach((name) => shadowingNames.add(name));
 			}
@@ -1177,6 +1230,19 @@ class SymbolCollector
 
 		for (const member of this.#result)
 		{
+			if (member.aliasTarget)
+			{
+				// An internal alias is declared outside the namespace and reaches a public target through it.
+				const targetName = publicMemberNames.get(member.aliasTarget.symbol);
+				member.textUnqualified = member.text;
+				if (targetName)
+				{
+					member.text = member.text.replace(` = ${member.aliasTarget.name}`, ` = ${namespace}.${targetName}`);
+				}
+
+				continue;
+			}
+
 			if (member.sourceDecl === undefined || member.sourceTextStart === undefined)
 			{
 				// Pre-rendered member (e.g. builtin alias) — already finalized.
@@ -1196,14 +1262,15 @@ class SymbolCollector
 
 			const sourceText = member.text;
 
-			const nsEdits = (needsNamespaceQualification && member.kind === 'type')
-				? this.#findNamespaceQualificationEdits(
+			// Internal members are declared outside the namespace, so they reach public ones through it.
+			const nsEdits = this.#isPublicMember(member)
+				? []
+				: this.#findNamespaceQualificationEdits(
 					member.sourceDecl,
 					member.sourceTextStart,
-					namespaceMemberSymbols,
+					publicMemberNames,
 					namespace,
-				)
-				: [];
+				);
 
 			// Namespace qualification takes priority over external (npm/sibling) edits
 			// that overlap the same position — a symbol that exists as our namespace member
@@ -1220,72 +1287,34 @@ class SymbolCollector
 				return ![...externalEditsFiltered, ...nsEdits].some((other) => rangesOverlap(other, edit));
 			});
 
+			const unqualifiedExternalEdits = externalEditsFiltered.map((edit) => ({
+				...edit,
+				replacement: edit.unqualifiedReplacement ?? edit.replacement,
+			}));
+
 			member.textUnqualified = applyPositionalEdits(
 				sourceText,
-				[...externalEditsFiltered, ...referenceEdits],
+				[...unqualifiedExternalEdits, ...referenceEdits],
 				renames,
 			);
 
-			if (nsEdits.length > 0)
-			{
-				member.text = applyPositionalEdits(
-					sourceText,
-					[...externalEditsFiltered, ...nsEdits, ...referenceEdits],
-					renames,
-				);
-			}
-			else
-			{
-				member.text = member.textUnqualified;
-			}
+			member.text = applyPositionalEdits(
+				sourceText,
+				[...externalEditsFiltered, ...nsEdits, ...referenceEdits],
+				renames,
+			);
 		}
-	}
-
-	#collectNamespaceMemberSymbols(): Set<TypeScriptSymbol>
-	{
-		const ts = this.#ts;
-		const result = new Set<TypeScriptSymbol>();
-
-		for (const member of this.#result)
-		{
-			if (member.kind !== 'namespaceMember' || !member.sourceDecl) continue;
-
-			const decl = member.sourceDecl;
-			const nameNodes: ts.Identifier[] = [];
-
-			if (ts.isClassDeclaration(decl) || ts.isFunctionDeclaration(decl))
-			{
-				if (decl.name) nameNodes.push(decl.name);
-			}
-			else if (ts.isEnumDeclaration(decl))
-			{
-				nameNodes.push(decl.name);
-			}
-			else if (ts.isVariableStatement(decl))
-			{
-				const first = decl.declarationList.declarations[0];
-				if (first) nameNodes.push(...getBindingIdentifiers(ts, first.name));
-			}
-
-			for (const nameNode of nameNodes)
-			{
-				const sym = this.#getSymbolAtLocation(nameNode);
-				if (sym) result.add(sym);
-			}
-		}
-
-		return result;
 	}
 
 	#findNamespaceQualificationEdits(
 		decl: ts.Node,
 		textStart: number,
-		namespaceMemberSymbols: Set<TypeScriptSymbol>,
+		publicMemberNames: Map<TypeScriptSymbol, string>,
 		namespace: string,
-	): Array<{ start: number; end: number; replacement: string }>
+	): TextEdit[]
 	{
 		const ts = this.#ts;
-		const edits: Array<{ start: number; end: number; replacement: string }> = [];
+		const edits: TextEdit[] = [];
 		const sourceFile = decl.getSourceFile();
 
 		const visit = (node: ts.Node): void => {
@@ -1293,11 +1322,11 @@ class SymbolCollector
 			{
 				const symbol = this.#getSymbolAtLocation(node);
 				const resolved = symbol ? (this.#resolveAliasDeep(symbol) ?? symbol) : null;
-				if (resolved && namespaceMemberSymbols.has(resolved))
+				const name = resolved ? publicMemberNames.get(resolved) : undefined;
+				if (name)
 				{
 					const nodeStart = node.getStart(sourceFile, false) - textStart;
 					const nodeEnd = node.getEnd() - textStart;
-					const name = this.#renamedSymbols.get(resolved) ?? node.text;
 					edits.push({ start: nodeStart, end: nodeEnd, replacement: `${namespace}.${name}` });
 				}
 			}
@@ -1357,10 +1386,10 @@ class SymbolCollector
 		return edits;
 	}
 
-	#findExternalEdits(decl: ts.Node, textStart: number): Array<{ start: number; end: number; replacement: string }>
+	#findExternalEdits(decl: ts.Node, textStart: number): TextEdit[]
 	{
 		const ts = this.#ts;
-		const edits: Array<{ start: number; end: number; replacement: string }> = [];
+		const edits: TextEdit[] = [];
 		const sourceFile = decl.getSourceFile();
 
 		const visit = (node: ts.Node): void => {
@@ -1552,7 +1581,7 @@ class SymbolCollector
 		headStart: number,
 		headEnd: number,
 		qualifierText: string,
-	): { start: number; end: number; replacement: string } | null
+	): TextEdit | null
 	{
 		const ts = this.#ts;
 
@@ -1590,12 +1619,12 @@ class SymbolCollector
 		const collected = this.#findCollectedMember(resolved);
 		if (!collected) return null;
 
-		const name = this.#renamedSymbols.get(resolved) ?? memberName;
-		const replacement = collected.kind === 'type'
-			? `${name}${restOfQualifier}`
-			: `${this.#currentNamespace}.${name}${restOfQualifier}`;
+		const unqualified = `${collected.name ?? memberName}${restOfQualifier}`;
+		const replacement = this.#isPublicMember(collected)
+			? `${this.#currentNamespace}.${unqualified}`
+			: unqualified;
 
-		return { start: headStart, end: headEnd, replacement };
+		return { start: headStart, end: headEnd, replacement, unqualifiedReplacement: unqualified };
 	}
 
 	#hasCollectedMember(symbol: TypeScriptSymbol): boolean
@@ -1636,7 +1665,7 @@ class SymbolCollector
 		node: ts.ImportTypeNode,
 		sourceFile: ts.SourceFile,
 		textStart: number,
-	): { start: number; end: number; replacement: string } | null
+	): TextEdit | null
 	{
 		const ts = this.#ts;
 
@@ -2700,32 +2729,29 @@ class SymbolCollector
 
 function splitMembers(members: CollectedMember[], npmModules: NpmModule[]): DeclarationBundle
 {
-	const topLevelMembers: DeclarationMember[] = [];
-	const namespaceMembers: DeclarationMember[] = [];
-	const namespaceMemberNames = new Set<string>();
+	const typeMembers: DeclarationMember[] = [];
+	const valueMembers: DeclarationMember[] = [];
 
 	for (const member of members)
 	{
+		const declarationMember: DeclarationMember = {
+			text: member.text,
+			textUnqualified: member.textUnqualified,
+			name: member.name,
+			isPublic: member.isPublic === true,
+		};
+
 		if (member.kind === 'type')
 		{
-			topLevelMembers.push({ text: member.text, textUnqualified: member.textUnqualified, name: member.name });
+			typeMembers.push(declarationMember);
 		}
 		else
 		{
-			namespaceMembers.push({ text: member.text, textUnqualified: member.textUnqualified, name: member.name });
-			if (member.name)
-			{
-				namespaceMemberNames.add(member.name);
-			}
+			valueMembers.push(declarationMember);
 		}
 	}
 
-	return {
-		topLevelMembers,
-		namespaceMembers,
-		namespaceMemberNames,
-		npmModules,
-	};
+	return { typeMembers, valueMembers, npmModules };
 }
 
 function renderDeclaration(
@@ -2762,6 +2788,27 @@ function renderDeclaration(
 	}
 
 	return { text, sourceTextStart: start, renames, nameRange };
+}
+
+/**
+ * `declare global { ... }`: generated declarations put the extension namespace there.
+ */
+function isGlobalAugmentation(
+	tsModule: TypeScript,
+	statement: ts.Statement,
+): statement is ts.ModuleDeclaration & { body: ts.ModuleBlock }
+{
+	return tsModule.isModuleDeclaration(statement)
+		&& statement.keyword === tsModule.SyntaxKind.ModuleKeyword
+		&& tsModule.isIdentifier(statement.name)
+		&& statement.name.text === 'global'
+		&& statement.body !== undefined
+		&& tsModule.isModuleBlock(statement.body);
+}
+
+function isSameOrEnclosingNamespace(candidate: string, namespace: string): boolean
+{
+	return namespace === candidate || namespace.startsWith(`${candidate}.`);
 }
 
 function rangesOverlap(

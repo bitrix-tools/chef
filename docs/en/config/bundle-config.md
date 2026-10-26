@@ -344,7 +344,7 @@ When an array of names is provided, all other classes remain native. This allows
 
 When building TypeScript extensions, Chef automatically generates a `.d.ts` file with ambient namespace declarations alongside the bundle. This enables IDE hints when accessing exports via namespace, e.g. `new BX.UI.Bbcode.App()`.
 
-Type aliases and interfaces of the extension are declared in the same namespace as its classes, e.g. `BX.UI.Bbcode.AppOptions`, so same-named types of different extensions do not conflict.
+The file adds only the extension namespace to the global scope. It declares everything the entry exports: classes, functions, type aliases and interfaces, e.g. `BX.UI.Bbcode.AppOptions`. Internal types and classes that public signatures refer to stay private to the file: they cannot be referenced from outside and do not conflict with same-named types of other extensions.
 
 ```
 dist/

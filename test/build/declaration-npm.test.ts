@@ -6,6 +6,7 @@ import { describe, it, beforeEach, afterEach } from 'mocha';
 import { assert } from 'chai';
 
 import { DeclarationEmitter } from '../../src/modules/engines/build/declaration-emitter';
+import type { DeclarationMode } from '../../src/modules/engines/build/declaration/declaration-printer';
 import { getSemanticErrors } from '../test-utils/semantic-errors';
 
 let tmpDir: string;
@@ -52,7 +53,12 @@ function createExtension(files: Record<string, string>): { packageRoot: string; 
 
 async function emitAndRead(
 	files: Record<string, string>,
-	params: { namespace?: string; extensionName?: string; npmPackages?: Array<{ name: string; typings: string }> } = {},
+	params: {
+		namespace?: string;
+		extensionName?: string;
+		mode?: DeclarationMode;
+		npmPackages?: Array<{ name: string; typings: string }>;
+	} = {},
 ): Promise<string>
 {
 	const namespace = params.namespace ?? 'BX.Test';
@@ -75,6 +81,8 @@ async function emitAndRead(
 		namespace,
 		extensionName,
 		outputPath,
+		mode: params.mode,
+		moduleName: extensionName,
 	});
 
 	return fs.existsSync(outputPath) ? fs.readFileSync(outputPath, 'utf-8') : '';
@@ -109,10 +117,36 @@ describe('DeclarationEmitter — npm types inline', () => {
 			],
 		});
 
-		assert.include(content, "declare module 'bx.http/internal/axios'");
-		assert.include(content, 'interface AxiosInstance');
+		assert.include(content, '\ndeclare namespace npm$axios {\n\texport interface AxiosInstance');
 		assert.include(content, 'class HttpClient');
+		assert.include(content, 'client: npm$axios.AxiosInstance;');
+		assert.notInclude(content, 'declare module');
+	});
+
+	it('should keep npm types in internal modules when declarations are a script', async () => {
+		const content = await emitAndRead({
+			'index.ts': `
+				import type { AxiosInstance } from 'axios';
+
+				export class HttpClient {
+					client: AxiosInstance = null as any;
+				}
+			`,
+		}, {
+			extensionName: 'bx.http',
+			namespace: 'BX.Http',
+			mode: 'both',
+			npmPackages: [
+				{
+					name: 'axios',
+					typings: 'export interface AxiosInstance { get(url: string): void; }',
+				},
+			],
+		});
+
+		assert.include(content, "declare module 'bx.http/internal/axios'");
 		assert.include(content, "import('bx.http/internal/axios').AxiosInstance");
+		assert.notInclude(content, 'npm$axios');
 	});
 
 	it('should use separate internal modules per npm package', async () => {
@@ -135,10 +169,10 @@ describe('DeclarationEmitter — npm types inline', () => {
 			],
 		});
 
-		assert.include(content, "declare module 'bx.svc/internal/pkg-a'");
-		assert.include(content, "declare module 'bx.svc/internal/pkg-b'");
-		assert.include(content, "import('bx.svc/internal/pkg-a').Foo");
-		assert.include(content, "import('bx.svc/internal/pkg-b').Bar");
+		assert.include(content, 'declare namespace npm$pkg_a {');
+		assert.include(content, 'declare namespace npm$pkg_b {');
+		assert.include(content, 'a: npm$pkg_a.Foo;');
+		assert.include(content, 'b: npm$pkg_b.Bar;');
 	});
 
 	it('should handle scoped npm packages', async () => {
@@ -158,8 +192,8 @@ describe('DeclarationEmitter — npm types inline', () => {
 			],
 		});
 
-		assert.include(content, "declare module 'bx.cont/internal/@scope/foo'");
-		assert.include(content, "import('bx.cont/internal/@scope/foo').Widget");
+		assert.include(content, 'declare namespace npm$scope_foo {');
+		assert.include(content, 'widget: npm$scope_foo.Widget;');
 	});
 
 	it('should produce TypeScript-valid declarations for npm-typed namespace class', async () => {
@@ -217,7 +251,7 @@ describe('DeclarationEmitter — npm types inline', () => {
 			],
 		});
 
-		assert.include(content, "declare module 'bx.wrap/internal/parent'");
+		assert.include(content, 'declare namespace npm$parent {');
 		assert.include(content, 'interface Client');
 		assert.include(content, 'interface ChildOption');
 	});

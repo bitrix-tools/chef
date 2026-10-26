@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 
 import { bundleDeclarations, type DeclarationDiagnostic } from './declaration/declaration-bundler';
-import { qualifyTopLevelReferences } from './declaration/declaration-layout';
 import { printBundle, hasAnyStatements, type DeclarationMode } from './declaration/declaration-printer';
 
 export interface DeclarationEmitOptions
@@ -58,16 +57,14 @@ export class DeclarationEmitter
 		options: DeclarationEmitOptions,
 	): string | null
 	{
-		const mode = options.mode ?? 'ambient';
-		const layout = qualifyTopLevelReferences(bundle, namespace);
-
-		if (!hasAnyStatements(layout))
+		if (!hasAnyStatements(bundle))
 		{
 			return null;
 		}
 
-		return printBundle(layout, {
-			mode,
+		return printBundle(bundle, {
+			mode: options.mode ?? 'ambient',
+			namespace,
 			moduleName: options.moduleName,
 		}) || null;
 	}

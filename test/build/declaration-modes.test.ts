@@ -81,12 +81,12 @@ describe('DeclarationEmitter — declaration modes', () => {
 				`,
 			}, 'ambient');
 
-			assert.include(content, 'declare namespace BX.UI.Widget');
+			assert.include(content, 'declare global {\n\tnamespace BX.UI.Widget {');
 			assert.include(content, 'type Mode');
 			assert.notInclude(content, "declare module 'ui.widget'");
 
 			const typeIdx = content.indexOf('\ttype Mode');
-			const nsIdx = content.indexOf('declare namespace');
+			const nsIdx = content.indexOf('namespace BX.UI.Widget');
 			assert.isAbove(typeIdx, nsIdx, 'types should be inside the namespace block');
 		});
 	});
@@ -128,6 +128,21 @@ describe('DeclarationEmitter — declaration modes', () => {
 	});
 
 	describe('both mode', () => {
+		it('should declare internal members in the namespace of a script', async () => {
+			const content = await emitWithMode({
+				'index.ts': `
+					type Size = 'small' | 'large';
+					export class Widget {
+						size: Size = 'small';
+					}
+				`,
+			}, 'both');
+
+			assert.notInclude(content, 'declare global');
+			assert.notInclude(content, 'export {};');
+			assert.match(content, /declare namespace BX\.UI\.Widget \{\n\ttype Size = /);
+		});
+
 		it('should produce both namespace and module declarations', async () => {
 			const content = await emitWithMode({
 				'index.ts': `

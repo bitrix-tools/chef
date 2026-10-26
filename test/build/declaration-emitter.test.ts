@@ -127,7 +127,7 @@ describe('DeclarationEmitter', () => {
 				`,
 			});
 
-			assert.include(content, 'declare namespace BX.Test');
+			assert.include(content, 'declare global {\n\tnamespace BX.Test {');
 			assert.include(content, 'class Widget');
 			assert.include(content, 'render(): string');
 		});
@@ -554,8 +554,7 @@ describe('DeclarationEmitter', () => {
 			});
 
 			assert.include(content, 'class Token');
-			assert.include(content, 'const tag: unique symbol');
-			assert.notInclude(content, 'declare const tag');
+			assert.include(content, '\ndeclare const tag: unique symbol;');
 		});
 
 		it('should resolve default import alias for builtin re-export', async () => {
@@ -648,7 +647,7 @@ describe('DeclarationEmitter', () => {
 				`,
 			});
 
-			const nsStart = content.indexOf('declare namespace BX.Test {');
+			const nsStart = content.indexOf('namespace BX.Test {');
 			assert.isAbove(nsStart, 0);
 			assert.isAbove(content.indexOf('\ttype Mode'), nsStart);
 			assert.isAbove(content.indexOf('\tinterface Theme'), nsStart);
@@ -752,8 +751,8 @@ describe('DeclarationEmitter', () => {
 				`,
 			});
 
-			assert.include(content, 'type Options = {\n\t\treadonly: boolean;');
-			assert.include(content, 'type Options$1 = {\n\t\tdepth: number;');
+			assert.include(content, 'type Options = {\n\t\t\treadonly: boolean;');
+			assert.include(content, '\ntype Options$1 = {\n\tdepth: number;');
 			assert.include(content, 'options: Options$1;');
 			assert.include(content, 'constructor(helper: Helper, options: Options);');
 		});
@@ -785,12 +784,12 @@ describe('DeclarationEmitter', () => {
 			assert.deepEqual(errors, [], `Type errors in generated .d.ts:\n${content}`);
 		});
 
-		it('should qualify namespace member references in top-level types', async () => {
+		it('should reach public members from internal ones through the namespace', async () => {
 			const content = await emitAndRead({
 				'index.ts': `
 					import Emitter from './emitter';
-					export { Emitter };
-					export type * from './types';
+					import Bus from './bus';
+					export { Emitter, Bus };
 				`,
 				'emitter.ts': `
 					export default class Emitter {
@@ -803,10 +802,86 @@ describe('DeclarationEmitter', () => {
 						emitter: Emitter;
 					};
 				`,
+				'bus.ts': `
+					import type { ListenerMap } from './types';
+					export default class Bus {
+						listeners: ListenerMap | null = null;
+					}
+				`,
 			});
 
-			// ListenerMap should reference BX.Test.Emitter, not just Emitter
-			assert.include(content, 'BX.Test.Emitter');
+			assert.include(content, '\ntype ListenerMap = {\n\temitter: BX.Test.Emitter;');
+
+			const errors = await validateDeclarations(content, `
+				new BX.Test.Bus().listeners?.emitter.emit('change');
+			`);
+
+			assert.deepEqual(errors, [], `Type errors in generated .d.ts:\n${content}`);
+		});
+
+		it('should keep internal members out of the namespace and the global scope', async () => {
+			const content = await emitAndRead({
+				'index.ts': `
+					export { Widget } from './widget';
+				`,
+				'widget.ts': `
+					type WidgetOptions = { title: string };
+					class Renderer {
+						render(): string { return ''; }
+					}
+					export class Widget {
+						constructor(options: WidgetOptions) {}
+						getRenderer(): Renderer { return new Renderer(); }
+					}
+				`,
+			});
+
+			assert.include(content, '\ntype WidgetOptions = {');
+			assert.include(content, '\ndeclare class Renderer {');
+			assert.match(content, /\nexport \{\};\n$/);
+
+			const errors = await validateDeclarations(content, `
+				const html: string = new BX.Test.Widget({ title: 'Title' }).getRenderer().render();
+				// @ts-expect-error the type is internal
+				const options: BX.Test.WidgetOptions = { title: 'Title' };
+				// @ts-expect-error the type is internal
+				const globalOptions: WidgetOptions = { title: 'Title' };
+				// @ts-expect-error the class is internal
+				const renderer: BX.Test.Renderer = new BX.Test.Widget({ title: 'Title' }).getRenderer();
+			`);
+
+			assert.deepEqual(errors, [], `Type errors in generated .d.ts:\n${content}`);
+		});
+
+		it('should keep same-named internal types of different extensions apart', async () => {
+			const popup = await emitAndRead({
+				'index.ts': `
+					type Options = { text?: string };
+					export class Popup {
+						constructor(options: Options) {}
+					}
+				`,
+			}, 'BX.Main');
+			fs.writeFileSync(path.join(tmpDir, 'dist', 'popup.d.ts'), popup, 'utf-8');
+
+			const button = await emitAndRead({
+				'index.ts': `
+					type Options = { color?: string };
+					export class Button {
+						constructor(options: Options) {}
+					}
+				`,
+			}, 'BX.UI');
+
+			const errors = await validateDeclarations(button, `
+				/// <reference path="./popup.d.ts" />
+				new BX.Main.Popup({ text: 'OK' });
+				new BX.UI.Button({ color: 'ui-btn-primary' });
+				// @ts-expect-error popup options have no color
+				new BX.Main.Popup({ color: 'ui-btn-primary' });
+			`);
+
+			assert.deepEqual(errors, [], `Type errors in generated .d.ts:\n${popup}\n${button}`);
 		});
 
 		it('should place types inside namespace when there are no namespace members', async () => {
@@ -817,7 +892,7 @@ describe('DeclarationEmitter', () => {
 				`,
 			});
 
-			const nsStart = content.indexOf('declare namespace BX.Test {');
+			const nsStart = content.indexOf('namespace BX.Test {');
 			assert.isAbove(nsStart, 0);
 			assert.isAbove(content.indexOf('\ttype Flag'), nsStart);
 			assert.isAbove(content.indexOf('\tinterface Coords'), nsStart);
@@ -832,7 +907,7 @@ describe('DeclarationEmitter', () => {
 				`,
 			});
 
-			assert.include(content, 'declare namespace BX.Test');
+			assert.include(content, 'namespace BX.Test {');
 			assert.include(content, 'class Only');
 		});
 	});
@@ -861,13 +936,13 @@ describe('DeclarationEmitter', () => {
 				'index.ts': 'export class Item { value: string = ""; }',
 			});
 
-			const nsBody = content.split('declare namespace BX.Test {')[1];
+			const nsBody = content.split('namespace BX.Test {\n')[1]?.split('\n\t}\n')[0];
 			assert.isOk(nsBody);
 
-			const lines = nsBody.split('\n').filter((l) => l.trim().length > 0 && l.trim() !== '}');
+			const lines = nsBody.split('\n').filter((l) => l.trim().length > 0);
 			for (const line of lines)
 			{
-				assert.isTrue(line.startsWith('\t'), `Line should start with tab: "${line}"`);
+				assert.isTrue(line.startsWith('\t\t'), `Line should start with two tabs: "${line}"`);
 			}
 		});
 
@@ -908,7 +983,7 @@ describe('DeclarationEmitter', () => {
 				`,
 			});
 
-			assert.notMatch(content, /^export\s/m);
+			assert.notMatch(content, /^\s*(export|declare)\s+(class|type)\b/m);
 		});
 	});
 

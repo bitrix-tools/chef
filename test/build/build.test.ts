@@ -516,7 +516,7 @@ describe('build', () => {
 		it('should generate .d.ts with namespace declaration', async () => {
 			const content = await emitAndRead();
 
-			assert.include(content, 'declare namespace BX.Test.Users');
+			assert.include(content, 'declare global {\n\tnamespace BX.Test.Users {');
 			assert.include(content, 'class UserService');
 			assert.include(content, 'findByName');
 			assert.include(content, 'get count(): number');
@@ -573,7 +573,7 @@ describe('build', () => {
 
 		it('should place types and interfaces inside the namespace', async () => {
 			const content = await emitAndRead();
-			const namespaceStart = content.indexOf('declare namespace');
+			const namespaceStart = content.indexOf('namespace BX.Test.Users {');
 
 			assert.isAbove(content.indexOf('type SortOrder'), namespaceStart);
 			assert.isAbove(content.indexOf('type FilterOptions'), namespaceStart);
@@ -586,11 +586,12 @@ describe('build', () => {
 
 		it('should keep JSDoc of interfaces placed inside the namespace', async () => {
 			const content = await emitAndRead();
-			const namespaceStart = content.indexOf('declare namespace');
+			const namespaceStart = content.indexOf('namespace BX.Test.Users {');
 
-			assert.isAbove(content.indexOf('/** Represents a user in the system */\n\tinterface User'), namespaceStart);
+			assert.isAbove(namespaceStart, 0);
+			assert.isAbove(content.indexOf('/** Represents a user in the system */\n\t\tinterface User'), namespaceStart);
 			assert.isAbove(
-				content.indexOf('/** Result of a user search operation */\n\tinterface SearchResult'),
+				content.indexOf('/** Result of a user search operation */\n\t\tinterface SearchResult'),
 				namespaceStart,
 			);
 		});

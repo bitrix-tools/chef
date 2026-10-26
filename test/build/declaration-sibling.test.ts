@@ -227,15 +227,16 @@ describe('DeclarationEmitter — sibling extensions', () => {
 		assert.include(output, 'Pick<globalThis.Event,');
 	});
 
-	it('should rename an internal type whose name a sibling in the same namespace declares', async () => {
+	async function emitStoreAndFilter(storeIndex: string): Promise<{ storeDts: string; output: string }>
+	{
 		const store = createSiblingExtension({
 			moduleName: 'ui',
 			extensionName: 'ui.store',
 			namespace: 'BX.UI.Lib',
 			files: {
-				'src/index.ts': `export { bookingStore } from './store';`,
+				'src/index.ts': storeIndex,
 				'src/store.ts': `
-					class BookingStore { get(): { count: number } { return { count: 0 }; } }
+					export class BookingStore { get(): { count: number } { return { count: 0 }; } }
 					export const bookingStore: BookingStore = new BookingStore();
 				`,
 			},
@@ -244,7 +245,6 @@ describe('DeclarationEmitter — sibling extensions', () => {
 		const storeDtsPath = PackageResolver.resolve('ui.store')!.getOutputJsPath().replace(/\.js$/, '.d.ts');
 		fs.mkdirSync(path.dirname(storeDtsPath), { recursive: true });
 		await new DeclarationEmitter().emit({ ...store, namespace: 'BX.UI.Lib', outputPath: storeDtsPath });
-		assert.include(fs.readFileSync(storeDtsPath, 'utf-8'), 'class BookingStore {');
 
 		const consumer = createSiblingExtension({
 			moduleName: 'ui',
@@ -265,8 +265,57 @@ describe('DeclarationEmitter — sibling extensions', () => {
 
 		const output = await emitConsumer(consumer, 'BX.UI.Lib', { 'ui.store': [store.input] });
 
+		return { storeDts: fs.readFileSync(storeDtsPath, 'utf-8'), output };
+	}
+
+	it('should rename an internal type whose name a sibling in the same namespace declares', async () => {
+		const { storeDts, output } = await emitStoreAndFilter(`export { bookingStore, BookingStore } from './store';`);
+
+		assert.include(storeDts, '\t\tclass BookingStore {');
 		assert.match(output, /type BookingStore\$1 = /);
 		assert.include(output, 'get store(): BookingStore$1;');
+	});
+
+	it('should keep the name of an internal type when a sibling uses it internally', async () => {
+		const { storeDts, output } = await emitStoreAndFilter(`export { bookingStore } from './store';`);
+
+		assert.include(storeDts, '\ndeclare class BookingStore {');
+		assert.match(output, /\ntype BookingStore = /);
+		assert.include(output, 'get store(): BookingStore;');
+	});
+
+	it('should rename an internal type whose name an enclosing namespace declares', async () => {
+		const core = createSiblingExtension({
+			moduleName: 'main',
+			extensionName: 'main.core',
+			namespace: 'BX',
+			files: {
+				'src/index.ts': 'export class Type { static isString(value: unknown): boolean { return false; } }',
+			},
+		});
+
+		const consumer = createSiblingExtension({
+			moduleName: 'ui',
+			extensionName: 'ui.widget',
+			namespace: 'BX.UI.Widget',
+			files: {
+				'src/index.ts': `
+					import { Type as CoreType } from 'main.core';
+
+					type Type = 'primary' | 'secondary';
+
+					export class Widget {
+						type: Type = 'primary';
+						core: typeof CoreType = CoreType;
+					}
+				`,
+			},
+		});
+
+		const output = await emitConsumer(consumer, 'BX.UI.Widget', { 'main.core': [core.input] });
+
+		assert.include(output, "\ntype Type$1 = 'primary' | 'secondary';");
+		assert.include(output, 'type: Type$1;');
 	});
 
 	it('should point an inferred import type at a renamed internal type', async () => {
