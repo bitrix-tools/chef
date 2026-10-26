@@ -1451,13 +1451,8 @@ class SymbolCollector
 					const owningExtension = this.#findExtensionReExportingPath(targetFile, qualifierText);
 					if (owningExtension)
 					{
-						const headStart = node.getStart(sourceFile, false) - textStart;
-						const headEnd = node.typeArguments && node.typeArguments.length > 0
-							? (node.typeArguments.pos - 1) - textStart
-							: node.getEnd() - textStart;
 						edits.push({
-							start: headStart,
-							end: headEnd,
+							...getImportTypeHeadRange(node, sourceFile, textStart),
 							replacement: `${owningExtension.namespace}.${owningExtension.exportedName}`,
 						});
 					}
@@ -1674,12 +1669,7 @@ class SymbolCollector
 		const qualifierLeft = getEntityNameLeft(ts, node.qualifier);
 		if (!qualifierLeft) return null;
 
-		// The "head" of an ImportTypeNode is the part before type arguments:
-		// `import("pkg").QualifierPath` — everything up to `<` (or the end of node if no `<`).
-		const headStart = node.getStart(sourceFile, false) - textStart;
-		const headEnd = node.typeArguments && node.typeArguments.length > 0
-			? (node.typeArguments.pos - 1) - textStart // position of '<'
-			: node.getEnd() - textStart;
+		const { start: headStart, end: headEnd } = getImportTypeHeadRange(node, sourceFile, textStart);
 		const qualifierText = node.qualifier.getText(sourceFile);
 
 		const symbol = this.#getSymbolAtLocation(qualifierLeft);
@@ -2320,19 +2310,24 @@ class SymbolCollector
 
 		for (const p of mapped)
 		{
-			const absolute = path.isAbsolute(p) ? p : path.resolve(baseUrl, p);
+			const mappedPath = path.isAbsolute(p) ? p : path.resolve(baseUrl, p);
 
-			// Try to fetch from the in-memory dts program first (faster, already parsed).
-			const inProgram = this.#program.getSourceFile(absolute);
-			if (inProgram) return inProgram;
-
-			// Fallback: read the file from disk and parse it ad-hoc — we only need to
-			// inspect its top-level imports/exports to determine npm ownership.
-			if (fs.existsSync(absolute))
+			// Like TypeScript, a `.js` path also matches the `.ts` file: an alias generated before
+			// the extension moved to TypeScript still points at its old entry.
+			for (const absolute of getSourceCandidates(mappedPath))
 			{
-				const text = fs.readFileSync(absolute, 'utf-8');
+				// Try to fetch from the in-memory dts program first (faster, already parsed).
+				const inProgram = this.#program.getSourceFile(absolute);
+				if (inProgram) return inProgram;
 
-				return this.#parseStandaloneSourceFile(absolute, text, this.#ts.ScriptKind.TS);
+				// Fallback: read the file from disk and parse it ad-hoc — we only need to
+				// inspect its top-level imports/exports to determine npm ownership.
+				if (fs.existsSync(absolute))
+				{
+					const text = fs.readFileSync(absolute, 'utf-8');
+
+					return this.#parseStandaloneSourceFile(absolute, text, this.#ts.ScriptKind.TS);
+				}
 			}
 		}
 
@@ -2804,6 +2799,36 @@ function isGlobalAugmentation(
 		&& statement.name.text === 'global'
 		&& statement.body !== undefined
 		&& tsModule.isModuleBlock(statement.body);
+}
+
+function getSourceCandidates(filePath: string): string[]
+{
+	const extension = path.extname(filePath);
+	const stem = filePath.slice(0, -extension.length);
+
+	if (extension === '.js') return [filePath, `${stem}.ts`, `${stem}.tsx`];
+	if (extension === '.jsx') return [filePath, `${stem}.tsx`];
+
+	return [filePath];
+}
+
+/**
+ * The "head" of an import type that a replacement takes: `import("pkg").QualifierPath` up to
+ * the type arguments. A leading `typeof` stays, so the replacement still refers to the value.
+ */
+function getImportTypeHeadRange(
+	node: ts.ImportTypeNode,
+	sourceFile: ts.SourceFile,
+	textStart: number,
+): { start: number; end: number }
+{
+	const nodeStart = node.getStart(sourceFile, false);
+	const start = node.isTypeOf ? sourceFile.text.indexOf('import', nodeStart) : nodeStart;
+	const end = node.typeArguments && node.typeArguments.length > 0
+		? node.typeArguments.pos - 1 // position of '<'
+		: node.getEnd();
+
+	return { start: start - textStart, end: end - textStart };
 }
 
 function isSameOrEnclosingNamespace(candidate: string, namespace: string): boolean

@@ -360,4 +360,91 @@ describe('DeclarationEmitter — sibling extensions', () => {
 		assert.include(output, 'frame(): Frame$1;');
 		assert.notInclude(output, 'import(');
 	});
+	/**
+	 * `ui.buttons` exports a class and a class used as a set of constants; `ui.vue-button`, written
+	 * in JavaScript, passes both on, so the types of the consumer reach `ui.buttons` through its sources.
+	 */
+	async function emitThroughJavaScriptSibling(buttonsEntryAlias: string): Promise<string>
+	{
+		const buttons = createSiblingExtension({
+			moduleName: 'ui',
+			extensionName: 'ui.buttons',
+			namespace: 'BX.UI',
+			files: {
+				'src/index.ts': `
+					import AirButtonStyle from './air-button-style';
+					import Button from './button';
+					export { AirButtonStyle, Button };
+				`,
+				'src/air-button-style.ts': `
+					export default class AirButtonStyle {
+						static FILLED = 'filled' as const;
+						static OUTLINE = 'outline' as const;
+					}
+				`,
+				'src/button.ts': 'export default class Button { render(): void {} }',
+			},
+		});
+
+		const component = createSiblingExtension({
+			moduleName: 'ui',
+			extensionName: 'ui.vue-button',
+			namespace: 'BX.UI.VueButton',
+			files: {
+				'src/index.js': `
+					import { AirButtonStyle, Button } from 'ui.buttons';
+					export const ButtonComponent = {
+						data() { return { AirButtonStyle }; },
+						create() { return new Button(); },
+					};
+				`,
+			},
+		});
+
+		const consumer = createSiblingExtension({
+			moduleName: 'disk',
+			extensionName: 'disk.header',
+			namespace: 'BX.Disk',
+			files: {
+				'src/index.ts': `
+					import { ButtonComponent } from 'ui.vue-button';
+					export const Header = { components: { ButtonComponent } };
+				`,
+			},
+		});
+
+		const outputPath = path.join(consumer.packageRoot, 'dist', 'bundle.d.ts');
+		fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+		await new DeclarationEmitter().emit({
+			packageRoot: consumer.packageRoot,
+			input: consumer.input,
+			namespace: 'BX.Disk',
+			outputPath,
+			compilerOptions: {
+				allowJs: true,
+				paths: {
+					'ui.buttons': [path.join(path.dirname(buttons.input), buttonsEntryAlias)],
+					'ui.vue-button': [path.join(path.dirname(component.input), 'index.js')],
+				},
+			},
+		});
+
+		return fs.readFileSync(outputPath, 'utf-8');
+	}
+
+	it('should keep typeof of a sibling value reached through another sibling', async () => {
+		const output = await emitThroughJavaScriptSibling('index.ts');
+
+		assert.include(output, 'AirButtonStyle: typeof BX.UI.AirButtonStyle;');
+		assert.include(output, 'create(): BX.UI.Button;');
+		assert.notInclude(output, 'import(');
+	});
+
+	it('should find a TypeScript sibling whose alias still points at a JavaScript entry', async () => {
+		const output = await emitThroughJavaScriptSibling('index.js');
+
+		assert.include(output, 'AirButtonStyle: typeof BX.UI.AirButtonStyle;');
+		assert.include(output, 'create(): BX.UI.Button;');
+		assert.notInclude(output, 'import(');
+	});
 });
