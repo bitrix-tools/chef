@@ -2101,6 +2101,25 @@ readonly tags?: string[];
 			assert.deepEqual(errors, [], `Type errors in generated .d.ts:\n${content}`);
 		});
 
+		it('should not take exports of an untyped module for names of one symbol', async () => {
+			const content = await emitAndRead({
+				'index.ts': `
+					// @ts-ignore the module has no types
+					export { Color as ButtonColor, Size as ButtonSize } from 'untyped.module';
+					export class Button {}
+				`,
+			});
+
+			assert.notInclude(content, 'ButtonColor', content);
+			assert.notInclude(content, 'ButtonSize', content);
+
+			const errors = await validateDeclarations(content, `
+				const button: BX.Test.Button = new BX.Test.Button();
+			`);
+
+			assert.deepEqual(errors, [], `Type errors in generated .d.ts:\n${content}`);
+		});
+
 		it('should produce valid declarations with generics', async () => {
 			const content = await emitAndRead({
 				'index.ts': `

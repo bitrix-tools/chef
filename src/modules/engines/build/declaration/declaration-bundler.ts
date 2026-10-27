@@ -463,9 +463,11 @@ class SymbolCollector
 		// sibling-aliased identifier in the emitted dts.
 		this.#registerSiblingsFromSourceImports();
 
+		// Exports from untyped modules resolve to one shared `unknown` symbol with no declarations:
+		// there is nothing to declare, and they must not be taken for names of one symbol.
 		const exports = this.#sortBySourceOrder(entryFile, this.#checker.getExportsOfModule(moduleSymbol))
 			.map((exportSymbol) => ({ name: exportSymbol.name, symbol: this.#resolveAliasDeep(exportSymbol) }))
-			.filter((exported) => exported.symbol);
+			.filter((exported) => exported.symbol && getDeclarations(exported.symbol).length > 0);
 
 		// An export may reference a symbol that a later one exports under another name,
 		// so all export names are known before the first one is collected.
