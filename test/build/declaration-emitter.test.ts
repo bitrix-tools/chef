@@ -2055,6 +2055,52 @@ readonly tags?: string[];
 			assert.deepEqual(errors, [], `Type errors in generated .d.ts:\n${content}`);
 		});
 
+		it('should declare a symbol exported under several names once and refer to it by the others', async () => {
+			const content = await emitAndRead({
+				'index.ts': `
+					export { Manager, Manager as WindowManager } from './manager';
+					export { Box, Box as Container, type Options, type Options as Settings } from './box';
+					export { create as make, create as build } from './create';
+				`,
+				'manager.ts': `
+					export class Manager {
+						static create(id: string): Manager { return new Manager(); }
+					}
+				`,
+				'box.ts': `
+					export type Options = { size: number };
+					export class Box<T extends string = string> {
+						value: T;
+					}
+				`,
+				'create.ts': `
+					import { Manager } from './manager';
+					export function create(id: string): Manager { return Manager.create(id); }
+				`,
+			});
+
+			assert.equal(content.match(/class Manager\b/g)?.length, 1, content);
+			assert.include(content, '\t\tconst WindowManager: typeof Manager;');
+			assert.include(content, '\t\ttype WindowManager = Manager;');
+			assert.include(content, '\t\ttype Container<T extends string = string> = Box<T>;');
+			assert.include(content, '\t\ttype Settings = Options;');
+			assert.notInclude(content, 'const Settings');
+			assert.equal(content.match(/function make\b/g)?.length, 1, content);
+			assert.include(content, '\t\tconst build: typeof make;');
+			assert.notInclude(content, 'type build');
+			assert.notMatch(content, /function create\b/);
+
+			const errors = await validateDeclarations(content, `
+				const manager: BX.Test.WindowManager = BX.Test.WindowManager.create('id');
+				const instance: BX.Test.Manager = new BX.Test.WindowManager();
+				const container: BX.Test.Container<'a'> = new BX.Test.Box<'a'>();
+				const settings: BX.Test.Settings = { size: 1 };
+				const built: BX.Test.Manager = BX.Test.build('id');
+			`);
+
+			assert.deepEqual(errors, [], `Type errors in generated .d.ts:\n${content}`);
+		});
+
 		it('should produce valid declarations with generics', async () => {
 			const content = await emitAndRead({
 				'index.ts': `

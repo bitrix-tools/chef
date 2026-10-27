@@ -478,7 +478,15 @@ class SymbolCollector
 
 		for (const { name, symbol } of exports)
 		{
-			this.#collectExportSymbol(symbol, name);
+			const declaredName = this.#getDeclaredName(symbol);
+			if (declaredName === name)
+			{
+				this.#collectExportSymbol(symbol, name);
+			}
+			else
+			{
+				this.#collectExportAlias(symbol, name, declaredName);
+			}
 		}
 
 		const siblingExports = this.#collectSiblingNamespaceExports();
@@ -513,7 +521,8 @@ class SymbolCollector
 		const result = new Map<TypeScriptSymbol, string>();
 		for (const member of this.#result)
 		{
-			if (member.name && this.#isPublicMember(member))
+			// Other export names of a symbol are pre-rendered references to its declaration.
+			if (member.name && member.sourceDecl && this.#isPublicMember(member))
 			{
 				result.set(member.symbol!, member.name);
 			}
@@ -1787,6 +1796,48 @@ class SymbolCollector
 		if (ts.isHeritageClause(parent)) return true;
 
 		return false;
+	}
+
+	/**
+	 * A symbol exported under several names is declared once: under its own name when that is
+	 * exported, otherwise under the first export name. The other names refer to it.
+	 */
+	#getDeclaredName(symbol: TypeScriptSymbol): string
+	{
+		const publicNames = this.#publicNames.get(symbol);
+		const ownName = this.#extractDeclarationName(symbol, getDeclarations(symbol));
+
+		return publicNames.has(ownName) ? ownName : publicNames.values().next().value;
+	}
+
+	/**
+	 * Another export name of a declared symbol: `const` for its value and `type` for its type.
+	 */
+	#collectExportAlias(symbol: TypeScriptSymbol, name: string, declaredName: string): void
+	{
+		const ts = this.#ts;
+
+		if ((symbol.flags & ts.SymbolFlags.Value) !== 0)
+		{
+			this.#result.push({ text: `const ${name}: typeof ${declaredName};`, name, kind: 'namespaceMember', symbol });
+		}
+
+		if ((symbol.flags & ts.SymbolFlags.Type) !== 0)
+		{
+			const typeParameters = getDeclarations(symbol)
+				.filter((decl) => ts.isClassDeclaration(decl) || ts.isInterfaceDeclaration(decl) || ts.isTypeAliasDeclaration(decl))
+				.map((decl) => decl.typeParameters)
+				.find((parameters) => parameters && parameters.length > 0);
+
+			const params = typeParameters
+				? `<${typeParameters.map((parameter) => parameter.getText(parameter.getSourceFile())).join(', ')}>`
+				: '';
+			const args = typeParameters
+				? `<${typeParameters.map((parameter) => parameter.name.text).join(', ')}>`
+				: '';
+
+			this.#result.push({ text: `type ${name}${params} = ${declaredName}${args};`, name, kind: 'type', symbol });
+		}
 	}
 
 	#collectExportSymbol(resolved: TypeScriptSymbol, publicName: string): void
