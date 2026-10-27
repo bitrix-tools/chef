@@ -127,8 +127,7 @@ describe('DeclarationEmitter', () => {
 				`,
 			});
 
-			assert.include(content, 'declare global {\n\tnamespace BX.Test {');
-			assert.include(content, 'class Widget');
+			assert.include(content, 'declare namespace BX.Test {\n\texport class Widget');
 			assert.include(content, 'render(): string');
 		});
 
@@ -554,7 +553,7 @@ describe('DeclarationEmitter', () => {
 			});
 
 			assert.include(content, 'class Token');
-			assert.include(content, '\ndeclare const tag: unique symbol;');
+			assert.include(content, '\n\tconst tag: unique symbol;');
 		});
 
 		it('should resolve default import alias for builtin re-export', async () => {
@@ -649,8 +648,8 @@ describe('DeclarationEmitter', () => {
 
 			const nsStart = content.indexOf('namespace BX.Test {');
 			assert.isAbove(nsStart, 0);
-			assert.isAbove(content.indexOf('\ttype Mode'), nsStart);
-			assert.isAbove(content.indexOf('\tinterface Theme'), nsStart);
+			assert.isAbove(content.indexOf('\texport type Mode'), nsStart);
+			assert.isAbove(content.indexOf('\texport interface Theme'), nsStart);
 			assert.isAbove(content.indexOf('class ThemeManager'), content.indexOf('interface Theme'));
 		});
 
@@ -751,8 +750,8 @@ describe('DeclarationEmitter', () => {
 				`,
 			});
 
-			assert.include(content, 'type Options = {\n\t\t\treadonly: boolean;');
-			assert.include(content, '\ntype Options$1 = {\n\tdepth: number;');
+			assert.include(content, '\texport type Options = {\n\t\treadonly: boolean;');
+			assert.include(content, '\n\ttype Options$1 = {\n\t\tdepth: number;');
 			assert.include(content, 'options: Options$1;');
 			assert.include(content, 'constructor(helper: Helper, options: Options);');
 		});
@@ -810,7 +809,7 @@ describe('DeclarationEmitter', () => {
 				`,
 			});
 
-			assert.include(content, '\ntype ListenerMap = {\n\temitter: BX.Test.Emitter;');
+			assert.include(content, '\n\ttype ListenerMap = {\n\t\temitter: BX.Test.Emitter;');
 
 			const errors = await validateDeclarations(content, `
 				new BX.Test.Bus().listeners?.emitter.emit('change');
@@ -819,7 +818,7 @@ describe('DeclarationEmitter', () => {
 			assert.deepEqual(errors, [], `Type errors in generated .d.ts:\n${content}`);
 		});
 
-		it('should keep internal members out of the namespace and the global scope', async () => {
+		it('should keep internal members private to the namespace', async () => {
 			const content = await emitAndRead({
 				'index.ts': `
 					export { Widget } from './widget';
@@ -836,9 +835,10 @@ describe('DeclarationEmitter', () => {
 				`,
 			});
 
-			assert.include(content, '\ntype WidgetOptions = {');
-			assert.include(content, '\ndeclare class Renderer {');
-			assert.match(content, /\nexport \{\};\n$/);
+			assert.include(content, '\n\ttype WidgetOptions = {');
+			assert.include(content, '\n\tclass Renderer {');
+			assert.match(content, /\n\texport \{\};\n\}\n$/);
+			assert.notInclude(content, 'declare global');
 
 			const errors = await validateDeclarations(content, `
 				const html: string = new BX.Test.Widget({ title: 'Title' }).getRenderer().render();
@@ -894,8 +894,8 @@ describe('DeclarationEmitter', () => {
 
 			const nsStart = content.indexOf('namespace BX.Test {');
 			assert.isAbove(nsStart, 0);
-			assert.isAbove(content.indexOf('\ttype Flag'), nsStart);
-			assert.isAbove(content.indexOf('\tinterface Coords'), nsStart);
+			assert.isAbove(content.indexOf('\texport type Flag'), nsStart);
+			assert.isAbove(content.indexOf('\texport interface Coords'), nsStart);
 		});
 
 		it('should produce output with only namespace members (no top-level types)', async () => {
@@ -936,13 +936,13 @@ describe('DeclarationEmitter', () => {
 				'index.ts': 'export class Item { value: string = ""; }',
 			});
 
-			const nsBody = content.split('namespace BX.Test {\n')[1]?.split('\n\t}\n')[0];
+			const nsBody = content.split('namespace BX.Test {\n')[1]?.split('\n}\n')[0];
 			assert.isOk(nsBody);
 
 			const lines = nsBody.split('\n').filter((l) => l.trim().length > 0);
 			for (const line of lines)
 			{
-				assert.isTrue(line.startsWith('\t\t'), `Line should start with two tabs: "${line}"`);
+				assert.isTrue(line.startsWith('\t'), `Line should start with a tab: "${line}"`);
 			}
 		});
 
@@ -975,7 +975,7 @@ describe('DeclarationEmitter', () => {
 			assert.include(content, 'getSecret(): string');
 		});
 
-		it('should strip export and declare keywords from declarations', async () => {
+		it('should export public members without declare keywords', async () => {
 			const content = await emitAndRead({
 				'index.ts': `
 					export class Widget {}
@@ -983,7 +983,9 @@ describe('DeclarationEmitter', () => {
 				`,
 			});
 
-			assert.notMatch(content, /^\s*(export|declare)\s+(class|type)\b/m);
+			assert.notMatch(content, /^\s*(export\s+)?declare\s+(class|type)\b/m);
+			assert.match(content, /^\texport class Widget\b/m);
+			assert.match(content, /^\texport type Mode\b/m);
 		});
 	});
 
@@ -1988,6 +1990,37 @@ readonly tags?: string[];
 			const errors = await validateDeclarations(content, `
 				const service: BX.Test.UserService = new BX.Test.UserService();
 				const user: { id: number } = service.get();
+			`);
+
+			assert.deepEqual(errors, [], `Type errors in generated .d.ts:\n${content}`);
+		});
+
+		it('should declare a type exported under another name only under that name', async () => {
+			const content = await emitAndRead({
+				'index.ts': `
+					export type { Refusal as RefusalModel } from './types';
+					export { Editor } from './editor';
+				`,
+				'types.ts': `
+					export type Refusal = { reason: string };
+				`,
+				'editor.ts': `
+					import type { Refusal as RefusalModel } from './types';
+					export class Editor {
+						refusal(): RefusalModel | null { return null; }
+					}
+				`,
+			});
+
+			// The alias would be a second, local declaration of the exported name.
+			assert.include(content, 'export type RefusalModel = {');
+			assert.notMatch(content, /^\s*type RefusalModel =/m);
+			assert.include(content, 'refusal(): RefusalModel | null;');
+
+			const errors = await validateDeclarations(content, `
+				const model: BX.Test.RefusalModel | null = new BX.Test.Editor().refusal();
+				// @ts-expect-error the entry exports the type under another name
+				const refusal: BX.Test.Refusal = { reason: '' };
 			`);
 
 			assert.deepEqual(errors, [], `Type errors in generated .d.ts:\n${content}`);

@@ -117,7 +117,7 @@ describe('DeclarationEmitter — npm types inline', () => {
 			],
 		});
 
-		assert.include(content, '\ndeclare namespace npm$axios {\n\texport interface AxiosInstance');
+		assert.include(content, '\n\tnamespace npm$axios {\n\t\texport interface AxiosInstance');
 		assert.include(content, 'class HttpClient');
 		assert.include(content, 'client: npm$axios.AxiosInstance;');
 		assert.notInclude(content, 'declare module');
@@ -169,8 +169,8 @@ describe('DeclarationEmitter — npm types inline', () => {
 			],
 		});
 
-		assert.include(content, 'declare namespace npm$pkg_a {');
-		assert.include(content, 'declare namespace npm$pkg_b {');
+		assert.include(content, '\tnamespace npm$pkg_a {');
+		assert.include(content, '\tnamespace npm$pkg_b {');
 		assert.include(content, 'a: npm$pkg_a.Foo;');
 		assert.include(content, 'b: npm$pkg_b.Bar;');
 	});
@@ -192,7 +192,7 @@ describe('DeclarationEmitter — npm types inline', () => {
 			],
 		});
 
-		assert.include(content, 'declare namespace npm$scope_foo {');
+		assert.include(content, '\tnamespace npm$scope_foo {');
 		assert.include(content, 'widget: npm$scope_foo.Widget;');
 	});
 
@@ -251,7 +251,7 @@ describe('DeclarationEmitter — npm types inline', () => {
 			],
 		});
 
-		assert.include(content, 'declare namespace npm$parent {');
+		assert.include(content, '\tnamespace npm$parent {');
 		assert.include(content, 'interface Client');
 		assert.include(content, 'interface ChildOption');
 	});
