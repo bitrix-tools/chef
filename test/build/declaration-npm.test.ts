@@ -224,6 +224,60 @@ describe('DeclarationEmitter — npm types inline', () => {
 		assert.deepEqual(diagnostics, [], `Type errors in bundle.d.ts:\n${content}\n@ ${dtsFile}`);
 	});
 
+	it('should inline values referenced by npm types', async () => {
+		const content = await emitAndRead({
+			'index.ts': `
+				import type { VNodeTypes, Ref, Modifier, Instance } from 'vue';
+
+				export class View {
+					type: VNodeTypes = null as any;
+					ref: Ref<number> = null as any;
+					modifier: Modifier = null as any;
+					instance: Instance = null as any;
+				}
+			`,
+		}, {
+			extensionName: 'bx.view',
+			namespace: 'BX.View',
+			npmPackages: [
+				{
+					name: 'vue',
+					typings: `
+						export declare const Fragment: { new (): { $props: {} } };
+						export declare const Text: unique symbol;
+						export declare const RefMarker: unique symbol;
+						export declare const keyNames: Record<'esc' | 'space', string>;
+						export declare function nextTick(): Promise<void>;
+						export type VNodeTypes = string | typeof Fragment | typeof Text;
+						export interface Ref<T> { value: T; [RefMarker]: true; }
+						export type Modifier = keyof typeof keyNames;
+						export interface Instance { $nextTick: typeof nextTick; }
+					`,
+				},
+			],
+		});
+
+		assert.include(content, '\texport const Fragment: {');
+		assert.include(content, '\texport const Text: unique symbol;');
+		assert.include(content, '\texport const RefMarker: unique symbol;');
+		assert.include(content, '\texport const keyNames: Record<');
+		assert.include(content, '\texport function nextTick(): Promise<void>;');
+
+		const dtsFile = path.join(tmpDir, 'dist', 'bundle.d.ts');
+		const testFile = path.join(tmpDir, 'dist', 'validate.ts');
+		fs.writeFileSync(testFile, `/// <reference path="./bundle.d.ts" />\n`
+			+ `const view = new BX.View.View();\n`
+			+ `const value: number = view.ref.value;\n`
+			+ `const modifier: 'esc' | 'space' = view.modifier;\n`
+			+ `const tick: Promise<void> = view.instance.$nextTick();\n`
+			+ `// @ts-expect-error the DOM Text is not a node type of the package\n`
+			+ `const type: BX.View.View['type'] = document.createTextNode('');\n`);
+
+		const diagnostics = await getSemanticErrors([testFile]);
+
+		assert.deepEqual(diagnostics, [], `Type errors in bundle.d.ts:\n${content}\n@ ${dtsFile}`);
+	});
+
 	it('should inline transitive references (duplicated into same container)', async () => {
 		const content = await emitAndRead({
 			'index.ts': `

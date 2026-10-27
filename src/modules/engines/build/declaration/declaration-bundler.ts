@@ -2323,6 +2323,21 @@ class SymbolCollector
 				this.#tryInlineReferencedNpmSymbol(node.expression, buffer);
 			}
 
+			// Values referenced by types: `typeof Fragment`, `[ShallowRefMarker]: true`.
+			if (ts.isTypeQueryNode(node))
+			{
+				const nameNode = getEntityNameLeft(ts, node.exprName);
+				if (nameNode)
+				{
+					this.#tryInlineReferencedNpmSymbol(nameNode, buffer);
+				}
+			}
+
+			if (ts.isComputedPropertyName(node) && ts.isIdentifier(node.expression))
+			{
+				this.#tryInlineReferencedNpmSymbol(node.expression, buffer);
+			}
+
 			node.forEachChild(visit);
 		};
 
