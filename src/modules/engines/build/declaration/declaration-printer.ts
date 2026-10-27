@@ -12,7 +12,7 @@ export interface PrintOptions
 export function printBundle(bundle: DeclarationBundle, options: PrintOptions): string
 {
 	const parts = options.mode === 'ambient'
-		? printAmbientNamespace(bundle, options.namespace)
+		? printAmbientModule(bundle, options.namespace)
 		: printScript(bundle, options);
 
 	if (parts.length === 0)
@@ -24,36 +24,53 @@ export function printBundle(bundle: DeclarationBundle, options: PrintOptions): s
 }
 
 /**
- * Only the extension namespace is declared globally. Members are exported explicitly, so
- * internal members and npm types stay private to the namespace block: they collide with
- * nothing and cannot be referenced from outside.
+ * The file is a module, so only the extension namespace reaches the global scope, through
+ * `declare global`. Internal members and npm types stay private to the file: they collide
+ * with nothing and cannot be referenced from outside.
  */
-function printAmbientNamespace(bundle: DeclarationBundle, namespace: string): string[]
+function printAmbientModule(bundle: DeclarationBundle, namespace: string): string[]
 {
-	// `declare module '...'` would make npm types global, so they become private namespaces
-	// and import types point at them.
+	// In a module file `declare module '...'` augments a module instead of declaring it,
+	// so npm types become private namespaces and import types point at them.
 	const npmNamespaces = new Map(
 		bundle.npmModules.map((npmModule) => [npmModule.moduleName, getNpmNamespaceName(npmModule)]),
 	);
 
 	const render = (text: string): string => replaceNpmImports(convertIndentationToTabs(text), npmNamespaces);
-	const npmParts = bundle.npmModules.map((npmModule) => {
-		return `namespace ${npmNamespaces.get(npmModule.moduleName)} {\n${indentBody(render(npmModule.body))}\n}`;
-	});
+	const renderMembers = (members: DeclarationMember[]): string[] => {
+		return members.map((member) => render(member.text)).filter((text) => text.length > 0);
+	};
 
-	const body = printNamespaceBody(bundle, render, npmParts);
-	if (body.length === 0)
+	const publicMembers = renderMembers([
+		...bundle.typeMembers.filter((member) => member.isPublic),
+		...bundle.valueMembers.filter((member) => member.isPublic),
+	]);
+
+	if (publicMembers.length === 0)
 	{
 		return [];
 	}
 
-	return [`declare namespace ${namespace} {\n${indentBody(body)}\n}`];
+	const parts = [
+		`declare global {\n${indentBody(`namespace ${namespace} {\n${indentBody(publicMembers.join('\n\n'))}\n}`)}\n}`,
+		...renderMembers(bundle.typeMembers.filter((member) => !member.isPublic)),
+		...renderMembers(bundle.valueMembers.filter((member) => !member.isPublic)).map((text) => addDeclareKeyword(text)),
+	];
+
+	for (const npmModule of bundle.npmModules)
+	{
+		const name = npmNamespaces.get(npmModule.moduleName);
+		parts.push(`declare namespace ${name} {\n${indentBody(render(npmModule.body))}\n}`);
+	}
+
+	parts.push('export {};');
+
+	return parts;
 }
 
 /**
  * Module declarations need a script file, where every top-level declaration is global.
- * npm types are therefore declared as modules, and the extension namespace keeps its
- * internal members private the same way as in the ambient mode.
+ * Internal members are therefore declared in the extension namespace along with the public ones.
  */
 function printScript(bundle: DeclarationBundle, options: PrintOptions): string[]
 {
@@ -68,7 +85,11 @@ function printScript(bundle: DeclarationBundle, options: PrintOptions): string[]
 
 	if (options.mode === 'both')
 	{
-		const namespaceBody = printNamespaceBody(bundle, convertIndentationToTabs);
+		const namespaceBody = members
+			.map((member) => convertIndentationToTabs(member.text))
+			.filter((text) => text.length > 0)
+			.join('\n\n');
+
 		if (namespaceBody.length > 0)
 		{
 			parts.push(`declare namespace ${options.namespace} {\n${indentBody(namespaceBody)}\n}`);
@@ -88,40 +109,6 @@ function printScript(bundle: DeclarationBundle, options: PrintOptions): string[]
 	}
 
 	return parts;
-}
-
-/**
- * Public members are exported. Once a namespace block has an explicit export, the members
- * without one are not exported, so `export {};` closes the block when it has private members.
- */
-function printNamespaceBody(
-	bundle: DeclarationBundle,
-	render: (text: string) => string,
-	privateParts: string[] = [],
-): string
-{
-	const members = [...bundle.typeMembers, ...bundle.valueMembers];
-	const renderMembers = (selected: DeclarationMember[]): string[] => {
-		return selected.map((member) => render(member.text)).filter((text) => text.length > 0);
-	};
-
-	const publicMembers = renderMembers(members.filter((member) => member.isPublic)).map(addExportKeyword);
-	if (publicMembers.length === 0)
-	{
-		return '';
-	}
-
-	const internalParts = [
-		...renderMembers(members.filter((member) => !member.isPublic)),
-		...privateParts,
-	];
-
-	if (internalParts.length === 0)
-	{
-		return publicMembers.join('\n\n');
-	}
-
-	return [...publicMembers, ...internalParts, 'export {};'].join('\n\n');
 }
 
 function getNpmNamespaceName(npmModule: NpmModule): string
@@ -153,16 +140,19 @@ function convertIndentationToTabs(text: string): string
 	return text.replace(/^( {4})+/gm, (match) => '\t'.repeat(match.length / 4));
 }
 
-/**
- * `export` goes after the leading JSDoc, so the comment still documents the declaration.
- */
 function addExportKeyword(rendered: string): string
 {
-	const [comments] = /^(?:\s*(?:\/\*[\s\S]*?\*\/|\/\/[^\n]*))*\s*/.exec(rendered);
-	const declaration = rendered.slice(comments.length);
-	if (/^export\s/.test(declaration)) return rendered;
+	if (/^\s*export\s/.test(rendered)) return rendered;
 
-	return `${comments}export ${declaration}`;
+	return `export ${rendered}`;
+}
+
+/**
+ * Top-level values of a .d.ts must be declared with `declare`; it goes after the leading JSDoc.
+ */
+function addDeclareKeyword(rendered: string): string
+{
+	return rendered.replace(/^((?:\s*(?:\/\*[\s\S]*?\*\/|\/\/[^\n]*))*\s*)/, '$1declare ');
 }
 
 export function hasAnyStatements(bundle: DeclarationBundle): boolean

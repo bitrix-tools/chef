@@ -516,8 +516,8 @@ describe('build', () => {
 		it('should generate .d.ts with namespace declaration', async () => {
 			const content = await emitAndRead();
 
-			assert.include(content, 'declare namespace BX.Test.Users {');
-			assert.include(content, 'export class UserService');
+			assert.include(content, 'declare global {\n\tnamespace BX.Test.Users {');
+			assert.include(content, 'class UserService');
 			assert.include(content, 'findByName');
 			assert.include(content, 'get count(): number');
 			assert.notInclude(content, '#private');
@@ -589,9 +589,9 @@ describe('build', () => {
 			const namespaceStart = content.indexOf('namespace BX.Test.Users {');
 
 			assert.isAbove(namespaceStart, 0);
-			assert.isAbove(content.indexOf('/** Represents a user in the system */\n\texport interface User'), namespaceStart);
+			assert.isAbove(content.indexOf('/** Represents a user in the system */\n\t\tinterface User'), namespaceStart);
 			assert.isAbove(
-				content.indexOf('/** Result of a user search operation */\n\texport interface SearchResult'),
+				content.indexOf('/** Result of a user search operation */\n\t\tinterface SearchResult'),
 				namespaceStart,
 			);
 		});

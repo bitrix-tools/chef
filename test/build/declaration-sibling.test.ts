@@ -271,7 +271,7 @@ describe('DeclarationEmitter — sibling extensions', () => {
 	it('should rename an internal type whose name a sibling in the same namespace declares', async () => {
 		const { storeDts, output } = await emitStoreAndFilter(`export { bookingStore, BookingStore } from './store';`);
 
-		assert.include(storeDts, '\texport class BookingStore {');
+		assert.include(storeDts, '\t\tclass BookingStore {');
 		assert.match(output, /type BookingStore\$1 = /);
 		assert.include(output, 'get store(): BookingStore$1;');
 	});
@@ -279,8 +279,8 @@ describe('DeclarationEmitter — sibling extensions', () => {
 	it('should keep the name of an internal type when a sibling uses it internally', async () => {
 		const { storeDts, output } = await emitStoreAndFilter(`export { bookingStore } from './store';`);
 
-		assert.include(storeDts, '\n\tclass BookingStore {');
-		assert.match(output, /\n\ttype BookingStore = /);
+		assert.include(storeDts, '\ndeclare class BookingStore {');
+		assert.match(output, /\ntype BookingStore = /);
 		assert.include(output, 'get store(): BookingStore;');
 	});
 
@@ -314,7 +314,7 @@ describe('DeclarationEmitter — sibling extensions', () => {
 
 		const output = await emitConsumer(consumer, 'BX.UI.Widget', { 'main.core': [core.input] });
 
-		assert.include(output, "\n\ttype Type$1 = 'primary' | 'secondary';");
+		assert.include(output, "\ntype Type$1 = 'primary' | 'secondary';");
 		assert.include(output, 'type: Type$1;');
 	});
 
