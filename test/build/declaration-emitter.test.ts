@@ -2024,6 +2024,37 @@ readonly tags?: string[];
 			assert.deepEqual(errors, [], `Type errors in generated .d.ts:\n${content}`);
 		});
 
+		it('should reference a type exported under another name by that name', async () => {
+			const content = await emitAndRead({
+				'index.ts': `
+					export { Editor } from './editor';
+					export type { Refusal as RefusalModel } from './types';
+				`,
+				'types.ts': `
+					export type Refusal = { reason: string };
+				`,
+				'editor.ts': `
+					import type { Refusal } from './types';
+					type EditorState = { refusal: Refusal | null };
+					export class Editor {
+						state: EditorState;
+						refusal(): Refusal | null { return null; }
+					}
+				`,
+			});
+
+			assert.equal(content.match(/type \w+ = \{\s*reason/g)?.length, 1, content);
+			assert.include(content, 'refusal(): RefusalModel | null;');
+			assert.include(content, 'refusal: BX.Test.RefusalModel | null;');
+			assert.notMatch(content, /\bRefusal\b/);
+
+			const errors = await validateDeclarations(content, `
+				const model: BX.Test.RefusalModel | null = new BX.Test.Editor().refusal();
+			`);
+
+			assert.deepEqual(errors, [], `Type errors in generated .d.ts:\n${content}`);
+		});
+
 		it('should produce valid declarations with generics', async () => {
 			const content = await emitAndRead({
 				'index.ts': `

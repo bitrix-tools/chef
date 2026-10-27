@@ -463,11 +463,22 @@ class SymbolCollector
 		// sibling-aliased identifier in the emitted dts.
 		this.#registerSiblingsFromSourceImports();
 
-		const exports = this.#sortBySourceOrder(entryFile, this.#checker.getExportsOfModule(moduleSymbol));
+		const exports = this.#sortBySourceOrder(entryFile, this.#checker.getExportsOfModule(moduleSymbol))
+			.map((exportSymbol) => ({ name: exportSymbol.name, symbol: this.#resolveAliasDeep(exportSymbol) }))
+			.filter((exported) => exported.symbol);
 
-		for (const exportSymbol of exports)
+		// An export may reference a symbol that a later one exports under another name,
+		// so all export names are known before the first one is collected.
+		for (const { name, symbol } of exports)
 		{
-			this.#collectExportSymbol(exportSymbol, exportSymbol.name);
+			const publicNames = this.#publicNames.get(symbol) ?? new Set<string>();
+			publicNames.add(name);
+			this.#publicNames.set(symbol, publicNames);
+		}
+
+		for (const { name, symbol } of exports)
+		{
+			this.#collectExportSymbol(symbol, name);
 		}
 
 		const siblingExports = this.#collectSiblingNamespaceExports();
@@ -1248,6 +1259,17 @@ class SymbolCollector
 			}
 		}
 
+		// Own names of symbols exported only under other names: references to them are renamed.
+		const exportRenamedNames = new Set<string>();
+		for (const [symbol, publicNames] of this.#publicNames)
+		{
+			const name = this.#extractDeclarationName(symbol, getDeclarations(symbol));
+			if (name && !publicNames.has(name))
+			{
+				exportRenamedNames.add(name);
+			}
+		}
+
 		for (const member of this.#result)
 		{
 			if (member.aliasTarget)
@@ -1303,18 +1325,20 @@ class SymbolCollector
 				member.sourceDecl,
 				member.sourceTextStart,
 				shadowingNames,
+				exportRenamedNames,
+				publicMemberNames,
 			).filter((edit) => {
 				return ![...externalEditsFiltered, ...nsEdits].some((other) => rangesOverlap(other, edit));
 			});
 
-			const unqualifiedExternalEdits = externalEditsFiltered.map((edit) => ({
+			const unqualifiedEdits = [...externalEditsFiltered, ...nsEdits].map((edit) => ({
 				...edit,
 				replacement: edit.unqualifiedReplacement ?? edit.replacement,
 			}));
 
 			member.textUnqualified = applyPositionalEdits(
 				sourceText,
-				[...unqualifiedExternalEdits, ...referenceEdits],
+				[...unqualifiedEdits, ...referenceEdits],
 				renames,
 			);
 
@@ -1347,7 +1371,7 @@ class SymbolCollector
 				{
 					const nodeStart = node.getStart(sourceFile, false) - textStart;
 					const nodeEnd = node.getEnd() - textStart;
-					edits.push({ start: nodeStart, end: nodeEnd, replacement: `${namespace}.${name}` });
+					edits.push({ start: nodeStart, end: nodeEnd, replacement: `${namespace}.${name}`, unqualifiedReplacement: name });
 				}
 			}
 
@@ -1360,13 +1384,16 @@ class SymbolCollector
 	}
 
 	/**
-	 * Points references at renamed members, and references to builtin types whose name is
-	 * also declared in the namespace tree at the global ones (`globalThis.Event`).
+	 * Points references at renamed members and at the export names of symbols exported under
+	 * other names, and references to builtin types whose name is also declared in the namespace
+	 * tree at the global ones (`globalThis.Event`).
 	 */
 	#findReferenceRenameEdits(
 		decl: ts.Node,
 		textStart: number,
 		shadowingNames: Set<string>,
+		exportRenamedNames: Set<string>,
+		publicMemberNames: Map<TypeScriptSymbol, string>,
 	): Array<{ start: number; end: number; replacement: string }>
 	{
 		const ts = this.#ts;
@@ -1378,13 +1405,17 @@ class SymbolCollector
 		const visit = (node: ts.Node): void => {
 			if (
 				ts.isIdentifier(node)
-				&& (hasRenames || shadowingNames.has(node.text))
+				&& (hasRenames || shadowingNames.has(node.text) || exportRenamedNames.has(node.text))
 				&& this.#isReferencePosition(node)
 			)
 			{
 				const symbol = this.#getSymbolAtLocation(node);
 				const resolved = symbol ? (this.#resolveAliasDeep(symbol) ?? symbol) : null;
-				const newName = resolved ? this.#renamedSymbols.get(resolved) : undefined;
+				const isExportRenamed = resolved !== null && exportRenamedNames.has(node.text)
+					&& !this.#isPublicName(resolved, node.text);
+				const newName = resolved
+					? this.#renamedSymbols.get(resolved) ?? (isExportRenamed ? publicMemberNames.get(resolved) : undefined)
+					: undefined;
 				const isBuiltin = !newName && resolved !== null && shadowingNames.has(node.text)
 					&& getDeclarations(resolved).some((d) => this.#isBuiltinLibFile(d.getSourceFile()));
 
@@ -1660,11 +1691,11 @@ class SymbolCollector
 		if (declarations.length === 0) return null;
 
 		const targetFile = declarations[0].getSourceFile().fileName;
-		const symName = this.#renamedSymbols.get(symbol) ?? symbol.name;
+		const names = this.#publicNames.get(symbol) ?? new Set([this.#renamedSymbols.get(symbol) ?? symbol.name]);
 
 		for (const member of this.#result)
 		{
-			if (member.name !== symName) continue;
+			if (!names.has(member.name)) continue;
 			if (!member.sourceDecl) continue;
 
 			const memberFile = member.sourceDecl.getSourceFile().fileName;
@@ -1758,18 +1789,8 @@ class SymbolCollector
 		return false;
 	}
 
-	#collectExportSymbol(symbol: TypeScriptSymbol, publicName: string): void
+	#collectExportSymbol(resolved: TypeScriptSymbol, publicName: string): void
 	{
-		const resolved = this.#resolveAliasDeep(symbol);
-		if (!resolved)
-		{
-			return;
-		}
-
-		const publicNames = this.#publicNames.get(resolved) ?? new Set<string>();
-		publicNames.add(publicName);
-		this.#publicNames.set(resolved, publicNames);
-
 		const key = `${publicName}:${getSymbolKey(resolved)}`;
 		if (this.#seen.has(key))
 		{
@@ -2045,6 +2066,13 @@ class SymbolCollector
 		if (nodeName && nodeName !== name && isType)
 		{
 			this.#collectTypeAlias(symbol, nodeName, node);
+		}
+
+		// A symbol exported only under other names is declared under them, and references are renamed.
+		const publicNames = this.#publicNames.get(resolved);
+		if (publicNames && !publicNames.has(name))
+		{
+			return;
 		}
 
 		const key = `${name}:${getSymbolKey(resolved)}`;
