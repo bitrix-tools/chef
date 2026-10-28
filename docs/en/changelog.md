@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.2.0 <Badge type="tip" text="10/28/2026" />
+
+ESLint has been removed from chef. `chef lint` lints with oxlint only, and the `--linter` option has been removed. If your scripts or CI pass it, drop it, otherwise `chef lint` fails with `unknown option`. The `CHEF_LINTER` variable is no longer read. ESLint and its dependencies are no longer installed with chef.
+
 ## v2.1.0 <Badge type="tip" text="10/28/2026" />
 
 The generated `.d.ts` of an extension adds only the extension namespace to the global scope. It declares exactly what the entry point exports, under the export names, including types and interfaces: `BX.Main.PopupOptions` instead of a global `PopupOptions`. Internal types and classes referenced by public signatures stay private to the file: they cannot be reached from outside and do not collide with same-named types of other extensions. npm package types are private as well.
