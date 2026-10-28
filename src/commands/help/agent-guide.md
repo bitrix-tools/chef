@@ -27,6 +27,7 @@ chef (`@bitrix/chef`) builds, type-checks, lints and tests Bitrix JS extensions.
 - Without a target (`<name>` or `-p <path>`), `build`, `lint`, `typecheck` and `test` process every extension below the current directory.
 - Names accept glob patterns: `*` — one level, `**` — all levels (`'ui.bbcode.*'`). Unquoted patterns are expanded or rejected by the shell.
 - Types are checked by the TypeScript 7 bundled with chef, not by the project's `typescript` package: an editor or `npx tsc` running TypeScript 5 or 6 can report different errors, mostly for types taken from JS dependencies.
+- A TypeScript build also writes `dist/*.bundle.d.ts`: it adds only the extension namespace to the global scope, holding exactly what the entry exports under the export names (`BX.Main.PopupOptions`); internal types stay private to the file. In TypeScript code, take another extension's types with `import type { … } from '<extension>'`.
 - `--force` builds even when type or import checks fail.
 - `--watch` keeps running until interrupted.
 - A test file that fails to build or load (syntax error, missing import, a throw outside `it`) does not stop the run: the other files still run, and the broken one is reported as a failed test (`Failed to build` / `Failed to load`) in a suite named after the file, with the cause and its location.
