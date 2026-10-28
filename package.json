@@ -92,7 +92,7 @@
     "playwright": "^1.63.0",
     "postcss": "^8.5.28",
     "prettier": "^3.9.9",
-    "prettier-plugin-brace-style": "^0.8.2",
+    "prettier-plugin-brace-style": "^0.10.4",
     "rollup": "^4.63.5",
     "svgo": "^4.1.0",
     "terser": "^5.51.2",
