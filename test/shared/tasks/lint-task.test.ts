@@ -79,14 +79,14 @@ describe('lintTask', () => {
 		const mockPackage = createMockPackage();
 		mockPackage.lint.resolves(createMockLintResult({
 			skipped: true,
-			skipReason: 'No eslint.config.js found',
+			skipReason: 'No matching lint strategy found',
 		}));
 
 		const task = lintTask(mockPackage);
 		const result = await task.run();
 
 		assert.equal(result.status, 'skipped');
-		assert.include(result.title, 'No eslint.config.js found');
+		assert.include(result.title, 'No matching lint strategy found');
 	});
 
 	it('should return generic skip message when no skip reason', async () => {

@@ -93,10 +93,9 @@ function toLintResult(linted: LintedFile[]): LintResult
 
 export class OxlintStrategy extends LintStrategy
 {
-	// oxlint is the default linter; ESLint only on request
-	match(options: LintOptions): boolean
+	match(): boolean
 	{
-		return (options.linter ?? process.env.CHEF_LINTER) !== 'eslint';
+		return true;
 	}
 
 	async lint(options: LintOptions): Promise<LintResult>

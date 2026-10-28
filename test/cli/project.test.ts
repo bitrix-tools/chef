@@ -156,14 +156,14 @@ describe('chef (project environment)', () => {
 	});
 
 	describe('lint', () => {
-		it('should skip lint with ESLint when no eslint config in project', async () => {
+		it('should lint project extensions with oxlint', async () => {
 			const { exitCode, output } = await runChef(
-				['lint', 'local.buttons', '--linter', 'eslint'],
+				['lint', 'local.buttons'],
 				{ cwd: tmpProject },
 			);
 
 			assert.equal(exitCode, 0);
-			assert.include(output, 'No matching lint strategy');
+			assert.include(output, 'local.buttons');
 		});
 	});
 });

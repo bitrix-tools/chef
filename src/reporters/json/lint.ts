@@ -5,7 +5,7 @@ import { initializeEnvironment } from './initialize-environment';
 import { toErrorPayload } from './to-error-payload';
 import { resolveTargets, type TargetSelector } from './resolve-targets';
 
-import type { LintResult as EngineLintResult, LinterName } from '../../modules/engines/lint/lint-types';
+import type { LintResult as EngineLintResult } from '../../modules/engines/lint/lint-types';
 import type { BasePackage } from '../../modules/packages/base-package';
 import type {
 	JsonInputOptions, JsonErrorPayload, JsonExtensionResult,
@@ -17,7 +17,6 @@ export type LintOptions = JsonInputOptions & TargetSelector & {
 	files?: string[],
 	cache?: boolean,
 	exclude?: string[],
-	linter?: LinterName,
 };
 
 export type LintDetails = {
@@ -93,7 +92,6 @@ function lintOptions(options: LintOptions)
 		files: options.files,
 		cache: options.cache,
 		exclude: options.exclude,
-		linter: options.linter,
 	};
 }
 

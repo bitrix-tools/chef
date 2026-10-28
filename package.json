@@ -44,7 +44,6 @@
   "devDependencies": {
     "@types/babel__core": "^7.20.5",
     "@types/chai": "^5.2.3",
-    "@types/eslint": "^9.6.1",
     "@types/mocha": "^10.0.10",
     "@types/node": "^24.19.0",
     "@types/sinon": "^21.0.1",
@@ -82,7 +81,6 @@
     "chokidar": "^5.0.0",
     "commander": "^14.0.3",
     "concat-with-sourcemaps": "^1.1.0",
-    "eslint": "^9.39.5",
     "fast-glob": "^3.3.3",
     "flow-remove-types": "^2.334.0",
     "log-symbols": "^7.0.1",

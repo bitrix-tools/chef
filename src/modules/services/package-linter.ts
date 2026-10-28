@@ -1,19 +1,17 @@
 import * as path from 'node:path';
 
 import { LintEngine } from '../engines/lint/lint-engine';
-import { ESLintStrategy } from '../engines/lint/eslint/eslint-strategy';
 import { OxlintStrategy } from '../engines/lint/oxlint/oxlint-strategy';
 import { Environment } from '../../environment/environment';
 
 import type { BasePackage } from '../packages/base-package';
-import type { LintOptions, LintResult, LinterName } from '../engines/lint/lint-types';
+import type { LintOptions, LintResult } from '../engines/lint/lint-types';
 
 type PackageLinterOptions = {
 	fix?: boolean;
 	files?: string[];
 	cache?: boolean;
 	exclude?: string[];
-	linter?: LinterName;
 };
 
 export type PackageLintBatch = {
@@ -36,18 +34,11 @@ export class PackageLinter
 	/**
 	 * Starts a batch that lints the packages added to it with oxlint, in groups and as they
 	 * come (see `OxlintStrategy.createBatch`); `lint()` of an added package then returns its
-	 * result from the batch. Null for ESLint, which lints package by package and is reused
-	 * in-process anyway.
+	 * result from the batch.
 	 */
-	static startBatch(linter?: LinterName): PackageLintBatch | null
+	static startBatch(): PackageLintBatch
 	{
-		const strategy = new OxlintStrategy();
-		if (!strategy.match({ sourcePath: '', rootPath: '', linter }))
-		{
-			return null;
-		}
-
-		const batch = strategy.createBatch();
+		const batch = new OxlintStrategy().createBatch();
 
 		return {
 			add: (extensionPackage, options) => {
@@ -65,13 +56,12 @@ export class PackageLinter
 	 */
 	static async prefetch(items: Array<{ extensionPackage: BasePackage; options: PackageLinterOptions }>): Promise<void>
 	{
-		const linters = new Set(items.map(({ options }) => options.linter));
-		const batch = items.length > 1 && linters.size === 1 ? PackageLinter.startBatch([...linters][0]) : null;
-		if (!batch)
+		if (items.length < 2)
 		{
 			return;
 		}
 
+		const batch = PackageLinter.startBatch();
 		items.forEach(({ extensionPackage, options }) => batch.add(extensionPackage, options));
 		batch.close();
 	}
@@ -88,7 +78,6 @@ export class PackageLinter
 
 		const engine = new LintEngine([
 			new OxlintStrategy(),
-			new ESLintStrategy(),
 		]);
 
 		return engine.lint(this.#request(options));
@@ -107,7 +96,6 @@ export class PackageLinter
 				this.#package.getOutputCssPath(),
 				...(options.exclude ?? []),
 			],
-			linter: options.linter,
 		};
 	}
 }

@@ -26,41 +26,7 @@ describe('chef lint', () => {
 		assert.include(output, path.join('src', 'legacy.js'));
 	});
 
-	it('should skip lint with ESLint when no eslint config is found', async () => {
-		const { exitCode, output } = await runChef(['lint', 'ui.buttons', '--linter', 'eslint'], { cwd: tmpRepo });
-
-		assert.equal(exitCode, 0);
-		assert.include(output, 'No matching lint strategy');
-	});
-
-	it('should lint with eslint config', async () => {
-		// Create a minimal eslint config that reports unused variables
-		fs.writeFileSync(path.join(tmpRepo, 'eslint.config.mjs'), `
-export default [
-	{
-		rules: {
-			'no-unused-vars': 'error',
-		},
-	},
-];
-`);
-
-		const { exitCode } = await runChef(['lint', 'ui.lint-errors', '--linter', 'eslint'], { cwd: tmpRepo });
-
-		assert.equal(exitCode, 1);
-	});
-
 	it('should exclude files with --exclude exact path', async () => {
-		fs.writeFileSync(path.join(tmpRepo, 'eslint.config.mjs'), `
-export default [
-	{
-		rules: {
-			'no-unused-vars': 'error',
-		},
-	},
-];
-`);
-
 		const { output } = await runChef(
 			['lint', 'ui.lint-errors', '--exclude', 'src/legacy.js'],
 			{ cwd: tmpRepo },
@@ -71,16 +37,6 @@ export default [
 	});
 
 	it('should exclude files with --exclude glob pattern', async () => {
-		fs.writeFileSync(path.join(tmpRepo, 'eslint.config.mjs'), `
-export default [
-	{
-		rules: {
-			'no-unused-vars': 'error',
-		},
-	},
-];
-`);
-
 		const { exitCode, output } = await runChef(
 			['lint', 'ui.lint-errors', '--exclude', 'src/*.js'],
 			{ cwd: tmpRepo },

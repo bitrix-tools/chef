@@ -108,7 +108,7 @@ chef typecheck                                     # Проверить всё �
 
 ## chef lint
 
-Линтинг расширений через oxlint (ESLint на время перехода остаётся: `--linter eslint`).
+Линтинг расширений через oxlint.
 
 ```bash
 chef lint [extensions...] [options]
@@ -122,7 +122,6 @@ chef lint [extensions...] [options]
 | `--file <patterns...>` | Линтить конкретные файлы (glob-паттерны относительно `src/`) |
 | `--exclude <patterns...>` | Исключить файлы из линтинга (glob-паттерны относительно директории расширения) |
 | `--no-cache` | Отключить кеширование (по умолчанию кеш включён) |
-| `--linter <eslint\|oxlint>` | Линтер, по умолчанию `oxlint`; можно задать и через `CHEF_LINTER` |
 | `--lsp` | Запустить языковой сервер oxlint для редакторов на stdin/stdout |
 
 ```bash
@@ -133,13 +132,9 @@ chef lint main.core --file "*.ts"          # Линтить только .ts ф�
 chef lint main.core --exclude 'src/old/**' # Исключить файлы из линтинга
 ```
 
-::: tip
-С `--linter eslint` (или `CHEF_LINTER=eslint`) для работы `chef lint` необходим файл `eslint.config.{js,mjs,cjs,ts,mts,cts}` в проекте. Если конфиг не найден, линтинг пропускается.
-:::
-
 ### oxlint
 
-oxlint — линтер по умолчанию. chef берёт конфиг проекта, `oxlint.config.ts` или `.oxlintrc.json`,
+chef берёт конфиг проекта, `oxlint.config.ts` или `.oxlintrc.json`,
 а если его нет — пресеты Bitrix24: `@bitrix24/oxlint-config-bitrix24` и
 `@bitrix24/oxlint-config-bitrix24-mobile`. Файлы, подходящие под `ignorePatterns` конфига проекта,
 не линтятся, Flow-файлы тоже.
@@ -147,7 +142,6 @@ oxlint — линтер по умолчанию. chef берёт конфиг п
 ```bash
 chef lint main.core                        # Линтинг через oxlint
 chef lint -p ui --fix                      # Исправить весь модуль
-chef lint main.core --linter eslint        # Линтинг через ESLint, как раньше
 ```
 
 - **Flow-файлы.** Парсера Flow в oxlint нет. chef линтит Flow-файл через копию, которую oxlint

@@ -39,7 +39,7 @@ chef build ui.buttons
 ### Инструменты
 
 - **@bitrix/chef** вместо `@bitrix/cli` — новый сборщик
-- **oxlint** вместо ESLint 8 — линтер по умолчанию с пресетами Bitrix24; ESLint 9 с flat config доступен через `--linter eslint`
+- **oxlint** вместо ESLint 8 — линтер с пресетами Bitrix24
 - **Минимальные версии браузеров подняты** — вместо `IE >= 11` теперь поддержка по [`baseline widely available`](https://developer.mozilla.org/en-US/docs/Glossary/Baseline/Compatibility)
 
 ### Разработка и тестирование
@@ -115,15 +115,13 @@ chef build ui.buttons
 
 ## Линтинг
 
-Линтер по умолчанию — oxlint. Если в проекте нет своего конфига (`oxlint.config.ts` или `.oxlintrc.json`), chef использует пресеты Bitrix24. Flow-файлы тоже линтятся. Подробнее — в разделе [chef lint](./commands.md#oxlint).
+Линтер — oxlint. Если в проекте нет своего конфига (`oxlint.config.ts` или `.oxlintrc.json`), chef использует пресеты Bitrix24. Flow-файлы тоже линтятся. Подробнее — в разделе [chef lint](./commands.md#oxlint).
 
 ```bash
 chef lint ui.buttons           # Линтинг расширения
 chef lint ui.bbcode.*          # Группа расширений
 chef lint ui.buttons --fix     # С автоисправлением
 ```
-
-ESLint на время перехода остаётся: `chef lint --linter eslint` или `CHEF_LINTER=eslint`. Для него нужен `eslint.config.js` (flat config ESLint 9), старые `.eslintrc.*` не используются.
 
 ::: tip PhpStorm
 Находки oxlint в редакторе показывает плагин Oxc через языковой сервер chef — см. [настройку в PhpStorm](./phpstorm-plugin.md#oxlint).

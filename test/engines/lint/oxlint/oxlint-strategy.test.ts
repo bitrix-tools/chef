@@ -37,13 +37,6 @@ describe('OxlintStrategy', function ()
 		fs.rmSync(root, { recursive: true, force: true });
 	});
 
-	it('matches when oxlint is requested', () => {
-		const strategy = new OxlintStrategy();
-
-		assert.isTrue(strategy.match({ sourcePath, rootPath: root, linter: 'oxlint' }));
-		assert.isFalse(strategy.match({ sourcePath, rootPath: root, linter: 'eslint' }));
-	});
-
 	it('lints the sources of a batch as they come, before the batch is closed', async () => {
 		// enough files to fill the first group
 		const manyPath = path.join(root, 'many', 'src');
@@ -54,8 +47,8 @@ describe('OxlintStrategy', function ()
 		}
 
 		const batch = new OxlintStrategy().createBatch();
-		const many = await batch.add({ sourcePath: manyPath, rootPath: root, linter: 'oxlint' });
-		const flow = batch.add({ sourcePath, rootPath: root, linter: 'oxlint' });
+		const many = await batch.add({ sourcePath: manyPath, rootPath: root });
+		const flow = batch.add({ sourcePath, rootPath: root });
 		batch.close();
 
 		assert.lengthOf(many.files, 50);
@@ -63,7 +56,7 @@ describe('OxlintStrategy', function ()
 	});
 
 	it('lints a Flow file and reports positions of the original', async () => {
-		const result = await new OxlintStrategy().lint({ sourcePath, rootPath: root, linter: 'oxlint' });
+		const result = await new OxlintStrategy().lint({ sourcePath, rootPath: root });
 		const messages = result.files.find((file) => file.filePath === filePath)?.messages ?? [];
 		const byRule = (ruleId: string) => messages.filter((message) => message.ruleId === ruleId);
 
@@ -76,7 +69,7 @@ describe('OxlintStrategy', function ()
 	});
 
 	it('fixes a Flow file without touching its types', async () => {
-		const result = await new OxlintStrategy().lint({ sourcePath, rootPath: root, linter: 'oxlint', fix: true });
+		const result = await new OxlintStrategy().lint({ sourcePath, rootPath: root, fix: true });
 
 		assert.equal(result.getFixedCount(), 1);
 		assert.equal(
@@ -104,7 +97,7 @@ describe('OxlintStrategy', function ()
 			'}',
 			'',
 		].join('\n'));
-		const result = await new OxlintStrategy().lint({ sourcePath, rootPath: root, linter: 'oxlint' });
+		const result = await new OxlintStrategy().lint({ sourcePath, rootPath: root });
 		const messages = result.files.find((file) => file.filePath === filePath)?.messages ?? [];
 
 		assert.deepEqual(
@@ -126,7 +119,7 @@ describe('OxlintStrategy', function ()
 			fs.writeFileSync(file, 'export function f(a: ?string) { debugger; }\n');
 		}
 
-		const result = await new OxlintStrategy().lint({ sourcePath, rootPath: root, linter: 'oxlint' });
+		const result = await new OxlintStrategy().lint({ sourcePath, rootPath: root });
 		const linted = result.files.map((file) => file.filePath);
 
 		assert.include(linted, filePath);
@@ -136,7 +129,7 @@ describe('OxlintStrategy', function ()
 
 	it('reports a file nothing parses', async () => {
 		fs.writeFileSync(filePath, 'const = ;\n');
-		const result = await new OxlintStrategy().lint({ sourcePath, rootPath: root, linter: 'oxlint' });
+		const result = await new OxlintStrategy().lint({ sourcePath, rootPath: root });
 		const messages = result.files[0].messages;
 
 		assert.equal(messages.length, 1);

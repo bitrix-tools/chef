@@ -152,7 +152,6 @@ lintCommand
 	.addOption(new Option('--exclude <patterns...>', 'Exclude files from linting (glob patterns relative to extension root)'))
 	.addOption(new Option('--no-cache', 'Disable caching (cache is enabled by default)'))
 	.addOption(new Option('--lsp', 'Run the oxlint language server for editors (stdio); Flow files are supported'))
-	.addOption(new Option('--linter <name>', 'Linter to use (default: oxlint); ESLint is kept for the transition').choices(['eslint', 'oxlint']))
 	.addOption(createReporterOption())
 	.action(async (extensions: string[], args) => {
 		if (args.lsp)
@@ -172,7 +171,6 @@ lintCommand
 				files: args.file,
 				cache: args.cache,
 				exclude: args.exclude,
-				linter: args.linter,
 			});
 			await emitJson(result);
 			process.exit(result.success ? 0 : 1);
@@ -187,9 +185,8 @@ lintCommand
 			files: args.file,
 			cache: args.cache,
 			exclude: args.exclude,
-			linter: args.linter,
 		};
-		// oxlint lints the extensions in batches as they are found, ESLint one by one;
+		// extensions are linted in batches as they are found;
 		// results are reported in the order the extensions are found
 		const batch = await startLintBatch(lintOptions);
 
@@ -213,14 +210,14 @@ lintCommand
 				console.log(message);
 			})
 			.on('data', ({ extension }: { extension: BasePackage }) => {
-				batch?.add(extension);
+				batch.add(extension);
 				queue.add(async () => {
 					const result = await lint(extension, lintOptions)();
 					lintResults.push(result);
 				});
 			})
 			.on('done', async () => {
-				batch?.close();
+				batch.close();
 				await queue.onIdle();
 
 				printSummary(lintResults, startTime);

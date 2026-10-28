@@ -7,14 +7,13 @@ import { pluralize } from '../../../utils/pluralize';
 
 import type { BasePackage } from '../../../modules/packages/base-package';
 import type { Task, TaskResult, TaskDetail, TaskGroupResult } from '../../../modules/task/task-types';
-import type { LintResult, LinterName } from '../../../modules/engines/lint/lint-types';
+import type { LintResult } from '../../../modules/engines/lint/lint-types';
 
 type LintCommandOptions = {
 	fix?: boolean;
 	files?: string[];
 	cache?: boolean;
 	exclude?: string[];
-	linter?: LinterName;
 };
 
 export type LintRunResult = {
@@ -44,7 +43,6 @@ function packageLintOptions(extension: BasePackage, options: LintCommandOptions)
 		files: options.files?.map(resolve),
 		cache: options.cache,
 		exclude: options.exclude?.map(resolve),
-		linter: options.linter,
 	};
 }
 
@@ -54,18 +52,13 @@ export type ExtensionLintBatch = {
 };
 
 /**
- * Starts linting extensions in batches as they are added when the linter supports it
- * (oxlint); `lint()` of an added extension then picks its result up as soon as it is ready.
- * Null for ESLint, which lints extension by extension.
+ * Starts linting extensions in batches as they are added; `lint()` of an added extension
+ * then picks its result up as soon as it is ready.
  */
-export async function startLintBatch(options: LintCommandOptions = {}): Promise<ExtensionLintBatch | null>
+export async function startLintBatch(options: LintCommandOptions = {}): Promise<ExtensionLintBatch>
 {
 	const { PackageLinter } = await import('../../../modules/services/package-linter');
-	const batch = PackageLinter.startBatch(options.linter);
-	if (!batch)
-	{
-		return null;
-	}
+	const batch = PackageLinter.startBatch();
 
 	return {
 		add: (extension) => batch.add(extension, packageLintOptions(extension, options)),
