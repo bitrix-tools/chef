@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.1.0 <Badge type="tip" text="10/28/2026" />
+
+The generated `.d.ts` of an extension adds only the extension namespace to the global scope. It declares exactly what the entry point exports, under the export names, including types and interfaces: `BX.Main.PopupOptions` instead of a global `PopupOptions`. Internal types and classes referenced by public signatures stay private to the file: they cannot be reached from outside and do not collide with same-named types of other extensions. npm package types are private as well.
+
+Edge cases of `.d.ts` generation are fixed. A type exported under another name (`Refusal as RefusalModel`) is declared only under that name, and references point to it instead of a copy. A symbol exported under several names (`PopupManager` and `PopupWindowManager`) is declared once, and the other names refer to it; previously they were missing. References to values of other extensions keep `typeof`, and an extension's TypeScript sources are found even when its alias points at a JS entry. Inlined npm types now include the values they reference, such as `typeof Fragment` and `typeof nextTick` in Vue; previously these were errors.
+
 ## v2.0.2 <Badge type="tip" text="10/22/2026" />
 
 `chef diag find-usages` and `chef diag unused` no longer read JS files in `lang` directories. These hold phrase files, not code: Bitrix can keep an extension's phrases in a JS file in `lang/<language>/` instead of `config.php`. Previously such files were scanned as sources, and phrase text could produce a false usage of an extension. PHP files in `lang` were already skipped. JS files are now skipped too, as the command help states.
