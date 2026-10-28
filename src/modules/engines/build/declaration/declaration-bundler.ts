@@ -2658,10 +2658,12 @@ class SymbolCollector
 	#findReExportName(entry: ts.SourceFile, targetFile: string, qualifierText: string): string | null
 	{
 		const ts = this.#ts;
-		const entryDir = path.dirname(entry.fileName);
+		// TypeScript writes paths with `/`; the target path uses the separators of the platform.
+		const entryFile = path.normalize(entry.fileName);
+		const entryDir = path.dirname(entryFile);
 
 		// The target is the entry itself, which exports the symbol directly under this name.
-		const entryStem = stripKnownExtension(entry.fileName);
+		const entryStem = stripKnownExtension(entryFile);
 		const targetStem = stripKnownExtension(targetFile);
 		if (entryStem === targetStem || entryStem === path.join(targetStem, 'index'))
 		{
