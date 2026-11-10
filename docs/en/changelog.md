@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.3.0 <Badge type="tip" text="11/10/2026" />
+
+The build writes `namespace` from `bundle.config` to the extension's `config.php`, or an empty string if there is none. The server can take the namespace from `config.php` instead of reading `bundle.config` on every hit.
+
 ## v2.2.0 <Badge type="tip" text="10/28/2026" />
 
 ESLint has been removed from chef. `chef lint` lints with oxlint only, and the `--linter` option has been removed. If your scripts or CI pass it, drop it, otherwise `chef lint` fails with `unknown option`. The `CHEF_LINTER` variable is no longer read. ESLint and its dependencies are no longer installed with chef.
