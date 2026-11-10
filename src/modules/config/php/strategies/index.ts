@@ -10,3 +10,4 @@ export * from './oninit-strategy';
 export * from './includes-strategy';
 export * from './bundle-js-strategy';
 export * from './bundle-css-strategy';
+export * from './namespace-strategy';

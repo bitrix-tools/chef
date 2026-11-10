@@ -86,7 +86,48 @@ export class PhpConfigManager extends ConfigManager<{ [key: string]: any }>
 				);
 			}
 
+			const namespace = this.get('namespace');
+			if (typeof namespace === 'string')
+			{
+				configContent = applyNamespace(configContent, namespace);
+			}
+
 			fs.writeFileSync(configPath, configContent);
 		}
 	}
+}
+
+/**
+ * Writes the top-level `namespace` entry next to `rel`: replaces the value of an existing entry
+ * or adds the entry right before `rel` with the same indentation. Entries of nested arrays
+ * (`settings` and others) are told apart by their deeper indentation and stay as they are.
+ */
+export function applyNamespace(configContent: string, namespace: string): string
+{
+	const relLine = configContent.match(/^([ \t]*)['"]rel['"] =>/m);
+	if (!relLine)
+	{
+		return configContent;
+	}
+
+	const indent = relLine[1];
+	const entry = `${indent}'namespace' => '${escapePhpString(namespace)}',`;
+	const entryExp = new RegExp(
+		`^${indent}['"]namespace['"]\\s*=>\\s*(?:'(?:[^'\\\\]|\\\\.)*'|"(?:[^"\\\\]|\\\\.)*"),?[ \\t]*$`,
+		'm',
+	);
+
+	if (entryExp.test(configContent))
+	{
+		return configContent.replace(entryExp, () => entry);
+	}
+
+	const relIndex = relLine.index ?? 0;
+
+	return `${configContent.slice(0, relIndex)}${entry}\n${configContent.slice(relIndex)}`;
+}
+
+function escapePhpString(value: string): string
+{
+	return value.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
 }
