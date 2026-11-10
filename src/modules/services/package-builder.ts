@@ -115,6 +115,12 @@ export class PackageBuilder
 
 			phpConfig.set('rel', dependencies);
 
+			// The server reads the namespace from config.php instead of parsing bundle.config on every hit.
+			// An extension without a namespace gets an empty one, as the server reports it for such
+			// extensions, not the `window` default of the build.
+			const bundleConfig = this.#package.getBundleConfig();
+			phpConfig.set('namespace', bundleConfig.has('namespace') ? bundleConfig.get('namespace') : '');
+
 			if (this.#package.shouldUpdatePhpConfig())
 			{
 				phpConfig.save(this.#package.getPhpConfigFilePath(), this.#package.getName());

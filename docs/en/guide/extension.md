@@ -103,6 +103,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 return [
     'js'  => './dist/ui.buttons.bundle.js',
     'css' => './dist/ui.buttons.bundle.css',
+    'namespace' => 'BX.UI',
     'rel' => [
         'main.core',
     ],
@@ -111,6 +112,8 @@ return [
 ```
 
 Chef automatically updates the `rel` array on build — it analyzes imports and writes dependencies. No need to update `rel` manually.
+
+On build Chef also writes `namespace` from `bundle.config`, so the server takes the namespace of the extension from `config.php` instead of reading `bundle.config` on every hit. An extension without `namespace` gets an empty string.
 
 ## Loading on a Page
 

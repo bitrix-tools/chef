@@ -103,6 +103,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 return [
     'js'  => './dist/ui.buttons.bundle.js',
     'css' => './dist/ui.buttons.bundle.css',
+    'namespace' => 'BX.UI',
     'rel' => [
         'main.core',
     ],
@@ -111,6 +112,8 @@ return [
 ```
 
 Chef автоматически обновляет массив `rel` при сборке — анализирует импорты и записывает зависимости. Вручную менять `rel` не нужно.
+
+Также при сборке Chef записывает `namespace` из `bundle.config` — сервер берёт неймспейс расширения из `config.php`, не читая `bundle.config` на каждом хите. У расширения без `namespace` записывается пустая строка.
 
 ## Подключение на страницу
 

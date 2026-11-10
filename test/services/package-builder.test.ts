@@ -572,6 +572,7 @@ describe('PackageBuilder', () => {
 		function createMockPackage(overrides: {
 			phpConfig?: { get: any; set?: any; save?: any };
 			shouldUpdatePhpConfig?: boolean;
+			namespace?: string;
 		} = {}): any {
 			const phpConfig = overrides.phpConfig ?? {
 				get: () => null,
@@ -597,11 +598,12 @@ describe('PackageBuilder', () => {
 								css: './dist/extension.bundle.css',
 							},
 							standalone: { enabled: false },
+							...(overrides.namespace === undefined ? {} : { namespace: overrides.namespace }),
 						};
 
 						return config[key];
 					},
-					has: () => false,
+					has: (key: string) => key === 'namespace' && overrides.namespace !== undefined,
 				}),
 				getPhpConfig: () => phpConfig,
 				getPhpConfigFilePath: () => '/tmp/fake-extension/config.php',
@@ -722,6 +724,42 @@ describe('PackageBuilder', () => {
 			assert.isEmpty(result.errors);
 			assert.isTrue(phpConfig.set.calledWith('rel', ['main.core', 'ui.vue3']), 'rel must be saved on successful build');
 			assert.isTrue(phpConfig.save.calledOnce, 'config.php must be saved on successful build');
+		});
+
+		it('sets the namespace of bundle.config for config.php on successful build', async () => {
+			const phpConfig = {
+				get: () => null,
+				set: sinon.stub(),
+				save: sinon.stub().resolves(),
+			};
+
+			stubBuildEngine(sandbox, createMockBuildResult({
+				dependencies: ['main.core'],
+				errors: [],
+			}));
+
+			const builder = new PackageBuilder(createMockPackage({ phpConfig, namespace: 'BX.Test' }));
+			await builder.build();
+
+			assert.isTrue(phpConfig.set.calledWith('namespace', 'BX.Test'));
+		});
+
+		it('sets an empty namespace for config.php when bundle.config has none', async () => {
+			const phpConfig = {
+				get: () => null,
+				set: sinon.stub(),
+				save: sinon.stub().resolves(),
+			};
+
+			stubBuildEngine(sandbox, createMockBuildResult({
+				dependencies: ['main.core'],
+				errors: [],
+			}));
+
+			const builder = new PackageBuilder(createMockPackage({ phpConfig }));
+			await builder.build();
+
+			assert.isTrue(phpConfig.set.calledWith('namespace', ''), 'not the window default of the build');
 		});
 
 		it('DOES call phpConfig.set with empty array when build succeeded with no dependencies (regression guard)', async () => {
