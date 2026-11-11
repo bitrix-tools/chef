@@ -397,13 +397,13 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 			{
 				printListingSummary(testResults);
 
-				process.exit(0);
+				process.exit(testResults.some((result) => result.failed > 0) ? 1 : 0);
 			}
 			else
 			{
 				printSummary(testResults, startTime, { isTestRun: true });
 
-				process.exit(0);
+				process.exit(testResults.some((result) => result.failed > 0) ? 1 : 0);
 			}
 		})
 		.on('error', (err: Error) => {
@@ -600,7 +600,8 @@ async function runModuleTests(rawModules: string[], args: Record<string, any>): 
 	{
 		printSummary(testResults, startTime, { isTestRun: true, unitLabel: 'Modules' });
 	}
-	process.exit(0);
+
+	process.exit(testResults.some((result) => result.failed > 0) ? 1 : 0);
 }
 
 async function runModuleTestsWatch(
