@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.3.1 <Badge type="tip" text="11/16/2026" />
+
+The browser-support check during the build reports fewer false positives. A method call is compared with a builtin method only when the object may be of that builtin type: `BX.defer()`, `app.use()` and `this.move()` are no longer taken for `DisposableStack` methods. Code behind feature detection (`if (typeof X === 'function')`, `X.foo ? X.foo() : …`) is no longer reported.
+
 ## v2.3.0 <Badge type="tip" text="11/10/2026" />
 
 The build writes `namespace` from `bundle.config` to the extension's `config.php`, or an empty string if there is none. The server can take the namespace from `config.php` instead of reading `bundle.config` on every hit.
