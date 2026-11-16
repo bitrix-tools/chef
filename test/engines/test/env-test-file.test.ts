@@ -64,6 +64,34 @@ describe('env-test-file', () => {
 			assert.isNotNull(result);
 			assert.isFalse(fs.existsSync(result as string));
 		});
+
+		it('should resolve next to playwright.config.ts in standalone checkout (project root null)', () => {
+			writePlaywrightConfig();
+
+			const originalCwd = process.cwd();
+			process.chdir(tmpDir);
+			try
+			{
+				assert.equal(findEnvTestFile(packageDir, null), path.join(tmpDir, '.env.test'));
+			}
+			finally
+			{
+				process.chdir(originalCwd);
+			}
+		});
+
+		it('should return null when no Playwright config exists in standalone checkout (project root null)', () => {
+			const originalCwd = process.cwd();
+			process.chdir(tmpDir);
+			try
+			{
+				assert.isNull(findEnvTestFile(packageDir, null));
+			}
+			finally
+			{
+				process.chdir(originalCwd);
+			}
+		});
 	});
 
 	describe('readEnvTestFile', () => {
