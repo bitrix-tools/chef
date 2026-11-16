@@ -123,7 +123,16 @@ export function checkCode(options: CheckCodeOptions): BaselineWarning[]
 	const index = buildBcdIndex(bcd);
 	const ignored = collectIgnoredLines(options.code);
 
-	const usages = extractFeatureUsages(options.code, options.id, index);
+	const usages = extractFeatureUsages(options.code, options.id, index, (usage) => {
+		if (usage.kind === 'instanceMethod')
+		{
+			return usage.owners.some((owner) => !isSupported(owner.entry, targetMins));
+		}
+
+		const entry = resolveBcdEntry(bcd, usage.bcdPath);
+
+		return entry !== undefined && !isSupported(entry, targetMins);
+	});
 	for (const usage of usages)
 	{
 		if (ignored.has(usage.line))
@@ -136,22 +145,15 @@ export function checkCode(options: CheckCodeOptions): BaselineWarning[]
 
 		if (usage.kind === 'instanceMethod')
 		{
-			// Multiple owners share a method name (e.g. `.some()` exists on Array,
-			// TypedArray, and Iterator). Without type information we can't tell
-			// which one is called, so we report a warning ONLY when no owner has
-			// supported it at the targets — otherwise an old method like
-			// `Array.prototype.some` (supported everywhere) would falsely warn
-			// just because the new `Iterator.prototype.some` (Chrome 122+) is
-			// also indexed under the same key.
+			// Several owners share a method name (e.g. `.some()` exists on Array,
+			// TypedArray, and Iterator), and the receiver type is usually unknown, so
+			// a warning is reported ONLY when no possible owner supports the method
+			// at the targets — otherwise an old method like `Array.prototype.some`
+			// (supported everywhere) would falsely warn just because the new
+			// `Iterator.prototype.some` (Chrome 122+) shares its name.
 			const methodName = usage.label.slice(1, -2);
-			const owners = index.instanceMethods.get(methodName);
-			if (!owners || owners.length === 0)
-			{
-				continue;
-			}
-
-			const anySupported = owners.some((o) => isSupported(o.entry, targetMins));
-			if (anySupported)
+			const owners = usage.owners ?? [];
+			if (owners.length === 0 || owners.some((o) => isSupported(o.entry, targetMins)))
 			{
 				continue;
 			}

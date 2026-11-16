@@ -7,16 +7,32 @@ import { parseJsFile, nodePosition, traverseShallow } from '../../utils/ast/pars
 import type { BcdIndex } from './bcd-index';
 import type { FeatureUsage } from './types';
 import { findSyntaxFeature } from './syntax-map';
+import { ESTREE_FACT_NODE_TYPES, filterOwners, isGuarded, ModuleFactsRecorder, ReceiverResolver } from './receiver-analysis';
 
-type Position = { line: number; column: number };
+import type { ModuleFacts } from './receiver-analysis';
+
+type Position = { line: number; column: number; offset: number };
 
 /**
  * A usage of a global name (`Promise.allSettled`, `new WeakRef`, `structuredClone()`) is only
  * reported when the module does not declare that name itself (`const Promise = require(...)`).
+ *
+ * `guardKeys` are the names a feature-detection condition around the usage would test for;
+ * `methodName` and `receiver` describe an instance method call.
  */
 type PendingUsage = {
 	usage: FeatureUsage;
 	globalName: string | null;
+	offset: number;
+	guardKeys: string[];
+	methodName?: string;
+	receiver?: unknown;
+};
+
+type CollectedUsages = {
+	usages: PendingUsage[];
+	declared: Set<string>;
+	facts: ModuleFacts;
 };
 
 /**
@@ -27,8 +43,16 @@ type PendingUsage = {
  * Oxc parses the module natively; `.js` is parsed as TypeScript, which also covers
  * the Flow annotations of Bitrix sources. Modules Oxc cannot parse (Flow-only syntax,
  * JSX in `.js`) fall back to Babel.
+ *
+ * `mayBeUnsupported` lets the caller drop usages that are supported whatever the receiver is, so the
+ * receiver and guard analysis runs only for the rare modules that need it.
  */
-export function extractFeatureUsages(code: string, id: string, index: BcdIndex): FeatureUsage[]
+export function extractFeatureUsages(
+	code: string,
+	id: string,
+	index: BcdIndex,
+	mayBeUnsupported: (usage: FeatureUsage) => boolean = () => true,
+): FeatureUsage[]
 {
 	const pending = collectWithOxc(code, id, index) ?? collectWithBabel(code, id, index);
 	if (!pending)
@@ -36,11 +60,61 @@ export function extractFeatureUsages(code: string, id: string, index: BcdIndex):
 		return [];
 	}
 
-	const { usages, declared } = pending;
+	const { declared, facts } = pending;
+	const usages = pending.usages.filter(({ usage, globalName }) => {
+		return (globalName === null || !declared.has(globalName)) && mayBeUnsupported(usage);
+	});
 
-	return usages
-		.filter(({ globalName }) => globalName === null || !declared.has(globalName))
-		.map(({ usage }) => usage);
+	if (usages.every(({ guardKeys }) => guardKeys.length === 0))
+	{
+		return usages.map(({ usage }) => usage);
+	}
+
+	const resolver = new ReceiverResolver(facts);
+
+	return usages.flatMap((pendingUsage) => {
+		if (isGuarded(facts, pendingUsage.offset, pendingUsage.guardKeys))
+		{
+			return [];
+		}
+
+		if (pendingUsage.usage.kind !== 'instanceMethod')
+		{
+			return [pendingUsage.usage];
+		}
+
+		const usage = narrowInstanceOwners(pendingUsage, resolver, index);
+
+		return usage ? [usage] : [];
+	});
+}
+
+/**
+ * Keeps only the owners of the method the receiver may be an instance of: `this.move()` in a module
+ * class is not `DisposableStack.prototype.move`, `new Set(a).union(b)` is only `Set.prototype.union`.
+ */
+function narrowInstanceOwners(pendingUsage: PendingUsage, resolver: ReceiverResolver, index: BcdIndex): FeatureUsage | null
+{
+	const { usage, methodName, receiver, offset } = pendingUsage;
+	const owners = filterOwners(index.instanceMethods.get(methodName) ?? [], resolver.resolveExpression(receiver, offset));
+	if (owners.length === 0)
+	{
+		return null;
+	}
+
+	return {
+		...usage,
+		bcdPath: ['javascript', 'builtins', owners[0].owner, methodName],
+		owners,
+	};
+}
+
+/**
+ * Line and column of a usage; the offset only serves the analysis and stays out of the usage.
+ */
+function usagePosition({ line, column }: Position): { line: number; column: number }
+{
+	return { line, column };
 }
 
 function staticUsage(index: BcdIndex, ownerName: string, memberName: string, position: Position): PendingUsage | null
@@ -56,9 +130,11 @@ function staticUsage(index: BcdIndex, ownerName: string, memberName: string, pos
 			kind: 'static',
 			label: key,
 			bcdPath: ['javascript', 'builtins', ownerName, memberName],
-			...position,
+			...usagePosition(position),
 		},
 		globalName: ownerName,
+		offset: position.offset,
+		guardKeys: [key],
 	};
 }
 
@@ -74,9 +150,11 @@ function constructorUsage(index: BcdIndex, name: string, position: Position): Pe
 			kind: 'constructor',
 			label: name,
 			bcdPath: ['javascript', 'builtins', name],
-			...position,
+			...usagePosition(position),
 		},
 		globalName: name,
+		offset: position.offset,
+		guardKeys: [name],
 	};
 }
 
@@ -92,35 +170,35 @@ function globalUsage(index: BcdIndex, name: string, position: Position): Pending
 			kind: 'global',
 			label: name,
 			bcdPath: ['api', name],
-			...position,
+			...usagePosition(position),
 		},
 		globalName: name,
+		offset: position.offset,
+		guardKeys: [name],
 	};
 }
 
-function instanceMethodUsage(index: BcdIndex, methodName: string, position: Position): PendingUsage | null
+function instanceMethodUsage(index: BcdIndex, methodName: string, receiver: unknown, position: Position): PendingUsage | null
 {
-	const ownerInfo = index.instanceMethods.get(methodName);
-	if (!ownerInfo)
+	const owners = index.instanceMethods.get(methodName);
+	if (!owners)
 	{
 		return null;
 	}
-
-	const owners = ownerInfo.map(({ owner }) => `${owner}.prototype.${methodName}`);
-	const ownerLabel = owners.length <= 2
-		? owners.join(' / ')
-		: owners[0];
 
 	return {
 		usage: {
 			kind: 'instanceMethod',
 			label: `.${methodName}()`,
-			bcdPath: ['javascript', 'builtins', ownerInfo[0].owner, methodName],
-			ownerLabel,
-			ownerLabels: owners,
-			...position,
+			bcdPath: ['javascript', 'builtins', owners[0].owner, methodName],
+			owners,
+			...usagePosition(position),
 		},
 		globalName: null,
+		offset: position.offset,
+		guardKeys: [methodName],
+		methodName,
+		receiver,
 	};
 }
 
@@ -140,9 +218,11 @@ function syntaxUsage(node: unknown, position: Position): PendingUsage | null
 			kind: 'syntax',
 			label: found.label,
 			bcdPath: ['javascript', 'operators', found.bcdKey],
-			...position,
+			...usagePosition(position),
 		},
 		globalName: null,
+		offset: position.offset,
+		guardKeys: [],
 	};
 }
 
@@ -187,7 +267,7 @@ function addDeclaredNames(id: any, names: Set<string>): void
 	}
 }
 
-function collectWithOxc(code: string, id: string, index: BcdIndex): { usages: PendingUsage[]; declared: Set<string> } | null
+function collectWithOxc(code: string, id: string, index: BcdIndex): CollectedUsages | null
 {
 	const lang = /\.[cm]?tsx$|\.jsx$/.test(id) ? 'tsx' : 'ts';
 	const result = parseSync(id, code, { lang, sourceType: 'module' });
@@ -210,7 +290,7 @@ function collectWithOxc(code: string, id: string, index: BcdIndex): { usages: Pe
 	// so the same links are skipped here.
 	const optionalChainLinks = new Set<unknown>();
 
-	const visitor = new Visitor({
+	const handlers: Record<string, (node: any) => void> = {
 		VariableDeclarator(node: any) { addDeclaredNames(node.id, declared); },
 		FunctionDeclaration(node: any) { if (node.id) declared.add(node.id.name); },
 		ClassDeclaration(node: any) { if (node.id) declared.add(node.id.name); },
@@ -261,7 +341,7 @@ function collectWithOxc(code: string, id: string, index: BcdIndex): { usages: Pe
 			}
 			else if (callee.type === 'MemberExpression' && !callee.computed && callee.property.type === 'Identifier')
 			{
-				push(instanceMethodUsage(index, callee.property.name, positionOf(callee.property.start)));
+				push(instanceMethodUsage(index, callee.property.name, callee.object, positionOf(callee.property.start)));
 			}
 		},
 
@@ -269,11 +349,20 @@ function collectWithOxc(code: string, id: string, index: BcdIndex): { usages: Pe
 		AssignmentExpression(node: any) { push(syntaxUsage(node, positionOf(node.start))); },
 		BinaryExpression(node: any) { push(syntaxUsage(node, positionOf(node.start))); },
 		SpreadElement(node: any) { push(syntaxUsage(node, positionOf(node.start))); },
-	});
+	};
 
-	visitor.visit(result.program);
+	const recorder = new ModuleFactsRecorder();
+	for (const type of ESTREE_FACT_NODE_TYPES)
+	{
+		const handler = handlers[type];
+		handlers[type] = handler
+			? (node: any) => { recorder.record(node); handler(node); }
+			: (node: any) => recorder.record(node);
+	}
 
-	return { usages, declared };
+	new Visitor(handlers).visit(result.program);
+
+	return { usages, declared, facts: recorder.facts };
 }
 
 /**
@@ -297,7 +386,7 @@ function getOptionalChainLinks(chain: any): unknown[]
 	return links.slice(0, innermostOptional + 1);
 }
 
-function collectWithBabel(code: string, id: string, index: BcdIndex): { usages: PendingUsage[]; declared: Set<string> } | null
+function collectWithBabel(code: string, id: string, index: BcdIndex): CollectedUsages | null
 {
 	const ast = parseJsFile(code, id) as BabelNode | null;
 	if (!ast)
@@ -307,6 +396,7 @@ function collectWithBabel(code: string, id: string, index: BcdIndex): { usages: 
 
 	const usages: PendingUsage[] = [];
 	const declared = new Set<string>();
+	const recorder = new ModuleFactsRecorder();
 	const push = (usage: PendingUsage | null): void => {
 		if (usage) usages.push(usage);
 	};
@@ -327,7 +417,7 @@ function collectWithBabel(code: string, id: string, index: BcdIndex): { usages: 
 				return;
 			}
 
-			push(staticUsage(index, object.name, property.name, nodePosition(path.node)));
+			push(staticUsage(index, object.name, property.name, babelPosition(path.node)));
 		},
 
 		NewExpression(path: any)
@@ -335,13 +425,14 @@ function collectWithBabel(code: string, id: string, index: BcdIndex): { usages: 
 			const callee = path.node.callee;
 			if (callee?.type === 'Identifier')
 			{
-				push(constructorUsage(index, callee.name, nodePosition(path.node)));
+				push(constructorUsage(index, callee.name, babelPosition(path.node)));
 			}
 		},
 
 		enter(path: any)
 		{
-			push(syntaxUsage(path.node, nodePosition(path.node)));
+			recorder.record(path.node);
+			push(syntaxUsage(path.node, babelPosition(path.node)));
 		},
 
 		CallExpression(path: any)
@@ -349,17 +440,21 @@ function collectWithBabel(code: string, id: string, index: BcdIndex): { usages: 
 			const callee = path.node.callee;
 			if (callee.type === 'Identifier')
 			{
-				push(globalUsage(index, callee.name, nodePosition(path.node)));
+				push(globalUsage(index, callee.name, babelPosition(path.node)));
 			}
 			else if (callee.type === 'MemberExpression' && !callee.computed && callee.property.type === 'Identifier')
 			{
-				const start = callee.property.loc?.start;
-				push(instanceMethodUsage(index, callee.property.name, { line: start?.line ?? 1, column: start?.column ?? 0 }));
+				push(instanceMethodUsage(index, callee.property.name, callee.object, babelPosition(callee.property)));
 			}
 		},
 	});
 
-	return { usages, declared };
+	return { usages, declared, facts: recorder.facts };
+}
+
+function babelPosition(node: BabelNode): Position
+{
+	return { ...nodePosition(node), offset: node.start ?? 0 };
 }
 
 function computeLineStarts(code: string): number[]
@@ -393,5 +488,5 @@ function getPosition(lineStarts: number[], offset: number): Position
 		}
 	}
 
-	return { line: low + 1, column: offset - lineStarts[low] };
+	return { line: low + 1, column: offset - lineStarts[low], offset };
 }

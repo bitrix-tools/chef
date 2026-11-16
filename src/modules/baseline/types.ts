@@ -87,10 +87,9 @@ export interface FeatureUsage
 	ownerLabel?: string;
 
 	/**
-	 * For instance methods that exist on several prototypes — labels of all owners
-	 * (used for the "Array.prototype.at / String.prototype.at" message).
+	 * For instance methods — the builtins the receiver may be an instance of that have the method.
 	 */
-	ownerLabels?: string[];
+	owners?: Array<{ owner: string; entry: CompatEntry }>;
 
 	line: number;
 	column: number;
