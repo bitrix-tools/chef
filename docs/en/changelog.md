@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.4.0 <Badge type="tip" text="11/23/2026" />
+
+The new `deny.targets` rule in `chef.config` prevents extensions from setting their own browser targets. Own targets are `targets` (or `browserslist`) set to a string or an array in `bundle.config`, a browserslist config in the extension directory or between it and the project root, and the `BROWSERSLIST` and `BROWSERSLIST_CONFIG` environment variables. `browserslist: true` does not violate the rule. Own targets are never applied, whatever the `severity`: with `error` the build stops with a `CF2001` error listing the sources found, and with `warning` the extension is built with the project targets and a warning is shown. Project targets come from `enforce.targets`, then from the browserslist config in the project root, then from `defaults.targets`, and if none of them is set, `baseline widely available` is used.
+
+Builds, unit tests, `chef diag` and `chef baseline` now use the same targets. Previously unit tests and `chef baseline` ignored `enforce.targets` and `defaults.targets`. `defaults.targets` used to never apply; now it is used when the extension has no own targets and no browserslist config is found. `enforce.targets` is now resolved into a list of browsers before the build. Previously the query was passed as is, and the browser-support check could fail to recognize it.
+
 ## v2.3.1 <Badge type="tip" text="11/16/2026" />
 
 The browser-support check during the build reports fewer false positives. A method call is compared with a builtin method only when the object may be of that builtin type: `BX.defer()`, `app.use()` and `this.move()` are no longer taken for `DisposableStack` methods. Code behind feature detection (`if (typeof X === 'function')`, `X.foo ? X.foo() : …`) is no longer reported.
