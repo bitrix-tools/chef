@@ -9,16 +9,17 @@ export const DEFAULT_MOCHA_WRAPPER = '/dev/ui/cli/mocha-wrapper.php';
  * `.env.test` lives next to the Playwright config, which is where `chef init tests`
  * puts both and where the config's own `dotenv.config()` looks for it.
  */
-export function findEnvTestFile(packageRoot: string, projectRoot: string): string | null
+export function findEnvTestFile(packageRoot: string, projectRoot: string | null): string | null
 {
+	const rootDir = projectRoot ?? process.cwd();
 	const playwrightConfigPath = FileFinder.findUpFile({
 		fileName: 'playwright.config.ts',
 		fromDir: packageRoot,
-		rootDir: projectRoot,
+		rootDir,
 	}) ?? FileFinder.findUpFile({
 		fileName: 'playwright.config.js',
 		fromDir: packageRoot,
-		rootDir: projectRoot,
+		rootDir,
 	});
 
 	if (!playwrightConfigPath)
