@@ -6,9 +6,13 @@ By default, Chef targets `baseline widely available` — browsers with [widely a
 
 ## How it works
 
-1. If `targets` is specified in `bundle.config.ts`, Chef uses it directly
-2. Otherwise, Chef looks for a `.browserslistrc` file up the directory tree from the extension
-3. If no file is found, the default `baseline widely available` is used
+1. If `enforce.targets` is set in `chef.config`, Chef uses it
+2. If `targets` is specified in `bundle.config.ts`, Chef uses it directly
+3. Otherwise, Chef looks for a `.browserslistrc` file up the directory tree from the extension
+4. If no file is found, `defaults.targets` from `chef.config` is used
+5. If it is not set either, the default `baseline widely available` is used
+
+A project can deny extensions their own targets with the [`deny.targets`](/en/config/chef-config#deny-targets) rule in `chef.config` — then only the config in the project root is taken into account.
 
 ## Browser data
 

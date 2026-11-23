@@ -33,9 +33,12 @@ export class PackageBuilder
 	async build(options: { force?: boolean } = {}): Promise<BuildResult>
 	{
 		const buildEngine = await PackageBuilder.getBuildEngine();
-		const buildOptions = this.#getBuildOptions();
+		const resolvedTargets = this.#package.resolveTargets();
+		const buildOptions = this.#getBuildOptions(resolvedTargets.targets);
 
-		const validation = options.force ? null : await this.#validateBuildOptions(buildOptions);
+		const validation = options.force
+			? null
+			: await this.#validateBuildOptions(buildOptions, resolvedTargets.deniedOverrides);
 		if (validation && 'denied' in validation)
 		{
 			return validation.denied;
@@ -133,9 +136,10 @@ export class PackageBuilder
 	async generate(overrides: Partial<BuildOptions> = {}): Promise<BuildResult>
 	{
 		const buildEngine = await PackageBuilder.getBuildEngine();
-		const buildOptions: BuildOptions = { ...this.#getBuildOptions(), ...overrides };
+		const resolvedTargets = this.#package.resolveTargets();
+		const buildOptions: BuildOptions = { ...this.#getBuildOptions(resolvedTargets.targets), ...overrides };
 
-		const validation = await this.#validateBuildOptions(buildOptions);
+		const validation = await this.#validateBuildOptions(buildOptions, resolvedTargets.deniedOverrides);
 		if (validation && 'denied' in validation)
 		{
 			return validation.denied;
@@ -151,7 +155,7 @@ export class PackageBuilder
 		return buildResult;
 	}
 
-	#getBuildOptions(): BuildOptions
+	#getBuildOptions(targets: string[]): BuildOptions
 	{
 		const bundleConfig = this.#package.getBundleConfig();
 		const chefConfig = ChefConfigManager.getInstance().getConfig();
@@ -168,7 +172,7 @@ export class PackageBuilder
 			},
 			packageRoot: this.#package.getPath(),
 			publicPath: this.#package.getPublicPath(),
-			targets: [enforce?.targets ?? this.#package.getTargets() ?? defaults?.targets].flat(),
+			targets,
 			namespace: bundleConfig.get('namespace'),
 			packageName: this.#package.getName(),
 			typescript: this.#package.isTypeScriptMode(),
@@ -206,10 +210,13 @@ export class PackageBuilder
 		};
 	}
 
-	async #validateBuildOptions(buildOptions: BuildOptions): Promise<{ denied: BuildResult } | { warnings: string[] } | null>
+	async #validateBuildOptions(
+		buildOptions: BuildOptions,
+		deniedTargetOverrides: string[],
+	): Promise<{ denied: BuildResult } | { warnings: string[] } | null>
 	{
 		const chefConfig = ChefConfigManager.getInstance().getConfig();
-		const issues = await validateBuildOptions(buildOptions, chefConfig);
+		const issues = await validateBuildOptions(buildOptions, chefConfig, { deniedTargetOverrides });
 
 		if (issues.length === 0)
 		{

@@ -33,6 +33,7 @@ chef (`@bitrix/chef`) builds, type-checks, lints and tests Bitrix JS extensions.
 - `--force` builds even when type or import checks fail.
 - `--watch` keeps running until interrupted.
 - A test file that fails to build or load (syntax error, missing import, a throw outside `it`) does not stop the run: the other files still run, and the broken one is reported as a failed test (`Failed to build` / `Failed to load`) in a suite named after the file, with the cause and its location.
+- Browser targets come from `enforce.targets` of `chef.config`, then the extension's own targets (`targets` in `bundle.config`, the nearest browserslist config, the `BROWSERSLIST` env variable), then `defaults.targets`, then `baseline widely available`. With `deny.targets` in `chef.config` own targets are never applied: only the browserslist config of the project root counts, and own targets fail the build with `CF2001` (or give a warning).
 - `CF2001` — an option is not allowed: the project's `chef.config` denies it, or it conflicts with another option.
 
 ## Machine-readable output

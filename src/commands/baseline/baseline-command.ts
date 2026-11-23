@@ -2,12 +2,12 @@ import { createRequire } from 'node:module';
 
 import chalk from 'chalk';
 import stripAnsi from 'strip-ansi';
-import browserslist from 'browserslist';
 import table from 'text-table';
 import { Command } from 'commander';
 
 import { createPathOption } from '../../shared/options/path-option';
 import { warnIfBrowserDataIsOutdated } from '../../utils/browser-data-age';
+import { resolveTargets } from '../../modules/packages/resolve-targets';
 
 const browserLabels: Record<string, string> = {
 	chrome: 'Chrome',
@@ -20,12 +20,7 @@ function resolveTargetMins(cwd: string): Record<string, number>
 {
 	warnIfBrowserDataIsOutdated();
 
-	const fileTargets = browserslist.loadConfig({ path: cwd });
-	const query = fileTargets && fileTargets.length > 0
-		? fileTargets
-		: 'baseline widely available';
-
-	const resolved = browserslist(query);
+	const resolved = resolveTargets({ packagePath: cwd }).targets;
 	const nameMap: Record<string, string> = {
 		chrome: 'chrome',
 		edge: 'edge',

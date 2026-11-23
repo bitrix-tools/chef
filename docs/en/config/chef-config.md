@@ -24,6 +24,7 @@ export default {
     transformClasses: true,       // block class transformation
     sourceMaps: true,             // block source maps
     exportDefault: true,          // block export default in entry point
+    targets: true,                // block own browser targets
   },
 };
 ```
@@ -50,9 +51,39 @@ export default {
 | `severity` | `'error' \| 'warning'` | `error` — build stops, `warning` — build continues with a warning |
 | `message` | `string` | Custom error or warning text |
 
+### deny.targets — own browser targets {#deny-targets}
+
+Prevents extensions from setting their own browser targets: every extension is built with the project targets. Own targets are:
+
+- `targets` (or the deprecated `browserslist`) set to a string or an array in `bundle.config`. `browserslist: true` does not violate the rule;
+- a `.browserslistrc` or `browserslist` file, or a `browserslist` field in `package.json`, in the extension directory or in any directory between it and the project root;
+- the `BROWSERSLIST` and `BROWSERSLIST_CONFIG` environment variables.
+
+Own targets are never applied, whatever the `severity`: with `error` the build stops, with `warning` the extension is built with the project targets and a warning lists the sources found. Project targets are taken in this order:
+
+1. `enforce.targets`
+2. the browserslist config in the project root (for example, `.browserslistrc`)
+3. `defaults.targets`
+4. `baseline widely available`
+
+Unit tests, `chef baseline` and `chef diag baseline` use the same targets.
+
+```ts
+export default {
+  deny: {
+    targets: {
+      severity: 'error',
+      message: 'Browser targets are set only in .browserslistrc in the project root',
+    },
+  },
+};
+```
+
 ## defaults — default values
 
 Sets default values for all extensions. An extension can override them in its `bundle.config`.
+
+`defaults.targets` applies when the extension has no own targets and no browserslist config is found — neither for the extension nor in the project root.
 
 ```ts
 export default {
@@ -68,6 +99,8 @@ export default {
 ## enforce — forced values
 
 Forces values for all extensions. An extension **cannot** override them in `bundle.config`.
+
+`enforce.targets` silently overrides any other targets. To report attempts to set own targets, add [`deny.targets`](#deny-targets).
 
 ```ts
 export default {

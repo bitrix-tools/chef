@@ -258,7 +258,7 @@ Read the warning text. If the issue is unclear, report it to Chef developers wit
 
 ### CF2001 — Option Denied by Project Config {#CF2001}
 
-A setting in `bundle.config` is denied by the project's `chef.config`.
+A setting in `bundle.config` is denied by the project's `chef.config`. With the `deny.targets` rule the message lists the own targets found for the extension: an option in `bundle.config`, a browserslist file inside the project or an environment variable.
 
 **How to fix:**
 

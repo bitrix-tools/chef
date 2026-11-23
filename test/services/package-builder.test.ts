@@ -98,7 +98,7 @@ describe('PackageBuilder', () => {
 				getName: () => 'test.basic',
 				getPath: () => extensionPath,
 				getPublicPath: () => '/test/',
-				getTargets: () => 'defaults',
+				resolveTargets: () => ({ targets: ['defaults'], deniedOverrides: [] }),
 				getInputPath: () => path.join(extensionPath, bundleConfig.get('input')),
 				getOutputJsPath: () => path.join(extensionPath, bundleConfig.get('output').js),
 				getOutputCssPath: () => path.join(extensionPath, bundleConfig.get('output').css),
@@ -148,7 +148,7 @@ describe('PackageBuilder', () => {
 				getName: () => 'test.basic',
 				getPath: () => extensionPath,
 				getPublicPath: () => '/test/',
-				getTargets: () => 'defaults',
+				resolveTargets: () => ({ targets: ['defaults'], deniedOverrides: [] }),
 				getInputPath: () => path.join(extensionPath, bundleConfig.get('input')),
 				getOutputJsPath: () => path.join(extensionPath, bundleConfig.get('output').js),
 				getOutputCssPath: () => path.join(extensionPath, bundleConfig.get('output').css),
@@ -202,7 +202,7 @@ describe('PackageBuilder', () => {
 				getName: () => 'test.basic',
 				getPath: () => extensionPath,
 				getPublicPath: () => '/test/',
-				getTargets: () => 'defaults',
+				resolveTargets: () => ({ targets: ['defaults'], deniedOverrides: [] }),
 				getInputPath: () => path.join(extensionPath, bundleConfig.get('input')),
 				getOutputJsPath: () => path.join(extensionPath, bundleConfig.get('output').js),
 				getOutputCssPath: () => path.join(extensionPath, bundleConfig.get('output').css),
@@ -232,15 +232,8 @@ describe('PackageBuilder', () => {
 			}
 		});
 
-		it('should apply enforce targets from chef config', async () => {
-			sandbox.restore();
-			sandbox = sinon.createSandbox();
-			sandbox.stub(ChefConfigManager, 'getInstance').returns({
-				getConfig: () => ({
-					enforce: { targets: 'chrome 100' },
-				}),
-			} as any);
-
+		function createTargetsPackage(resolvedTargets: { targets: string[]; deniedOverrides: string[] })
+		{
 			const bundleConfig = new BundleConfigManager();
 			bundleConfig.loadFromFile(path.join(extensionPath, 'bundle.config.js'));
 
@@ -250,11 +243,11 @@ describe('PackageBuilder', () => {
 				save: sinon.stub().resolves(),
 			};
 
-			const mockPackage = {
+			return {
 				getName: () => 'test.basic',
 				getPath: () => extensionPath,
 				getPublicPath: () => '/test/',
-				getTargets: () => ['firefox 90'],
+				resolveTargets: () => resolvedTargets,
 				getInputPath: () => path.join(extensionPath, bundleConfig.get('input')),
 				getOutputJsPath: () => path.join(extensionPath, bundleConfig.get('output').js),
 				getOutputCssPath: () => path.join(extensionPath, bundleConfig.get('output').css),
@@ -264,12 +257,51 @@ describe('PackageBuilder', () => {
 				getPhpConfigFilePath: () => path.join(extensionPath, 'config.php'),
 				shouldUpdatePhpConfig: () => true,
 			} as any;
+		}
 
-			const builder = new PackageBuilder(mockPackage);
+		function stubChefConfig(config: Record<string, any>)
+		{
+			sandbox.restore();
+			sandbox = sinon.createSandbox();
+			sandbox.stub(ChefConfigManager, 'getInstance').returns({
+				getConfig: () => config,
+			} as any);
+		}
+
+		it('should pass resolved targets to the build engine', async () => {
+			const buildEngine = await PackageBuilder.getBuildEngine();
+			const buildStub = sandbox.stub(buildEngine, 'build').resolves(createMockBuildResult());
+
+			const builder = new PackageBuilder(createTargetsPackage({ targets: ['chrome 100'], deniedOverrides: [] }));
+			await builder.build();
+
+			assert.deepEqual(buildStub.firstCall.args[0].targets, ['chrome 100']);
+		});
+
+		it('should fail the build when own targets are denied', async () => {
+			stubChefConfig({ deny: { targets: true } });
+
+			const builder = new PackageBuilder(createTargetsPackage({
+				targets: ['chrome 109'],
+				deniedOverrides: ['targets in bundle.config'],
+			}));
 			const result = await builder.build();
 
-			// Should build successfully regardless of target
+			assert.lengthOf(result.errors, 1);
+			assert.include(result.errors[0].message, 'targets in bundle.config');
+		});
+
+		it('should build with project targets and warn when denial is a warning', async () => {
+			stubChefConfig({ deny: { targets: { severity: 'warning' } } });
+
+			const builder = new PackageBuilder(createTargetsPackage({
+				targets: ['chrome 109'],
+				deniedOverrides: ['ui/install/js/ui/basic-extension/.browserslistrc'],
+			}));
+			const result = await builder.build();
+
 			assert.isEmpty(result.errors);
+			assert.isTrue(result.warnings.some((warning) => warning.message.includes('.browserslistrc')));
 		});
 	});
 
@@ -298,7 +330,7 @@ describe('PackageBuilder', () => {
 				getName: () => 'test.basic',
 				getPath: () => extensionPath,
 				getPublicPath: () => '/test/',
-				getTargets: () => 'defaults',
+				resolveTargets: () => ({ targets: ['defaults'], deniedOverrides: [] }),
 				getInputPath: () => path.join(extensionPath, bundleConfig.get('input')),
 				getOutputJsPath: () => path.join(extensionPath, bundleConfig.get('output').js),
 				getOutputCssPath: () => path.join(extensionPath, bundleConfig.get('output').css),
@@ -334,7 +366,7 @@ describe('PackageBuilder', () => {
 				getName: () => 'test.basic',
 				getPath: () => extensionPath,
 				getPublicPath: () => '/test/',
-				getTargets: () => 'defaults',
+				resolveTargets: () => ({ targets: ['defaults'], deniedOverrides: [] }),
 				getInputPath: () => path.join(extensionPath, bundleConfig.get('input')),
 				getOutputJsPath: () => path.join(extensionPath, bundleConfig.get('output').js),
 				getOutputCssPath: () => path.join(extensionPath, bundleConfig.get('output').css),
@@ -381,7 +413,7 @@ describe('PackageBuilder', () => {
 				getName: () => 'test.basic',
 				getPath: () => extensionPath,
 				getPublicPath: () => '/test/',
-				getTargets: () => 'defaults',
+				resolveTargets: () => ({ targets: ['defaults'], deniedOverrides: [] }),
 				getInputPath: () => path.join(extensionPath, bundleConfig.get('input')),
 				getOutputJsPath: () => path.join(extensionPath, bundleConfig.get('output').js),
 				getOutputCssPath: () => path.join(extensionPath, bundleConfig.get('output').css),
@@ -421,7 +453,7 @@ describe('PackageBuilder', () => {
 				getName: () => 'ext.aa',
 				getPath: () => extensionPath,
 				getPublicPath: () => '/test/',
-				getTargets: () => 'defaults',
+				resolveTargets: () => ({ targets: ['defaults'], deniedOverrides: [] }),
 				getInputPath: () => path.join(extensionPath, bundleConfig.get('input')),
 				getOutputJsPath: () => path.join(extensionPath, bundleConfig.get('output').js),
 				getOutputCssPath: () => path.join(extensionPath, bundleConfig.get('output').css),
@@ -468,7 +500,7 @@ describe('PackageBuilder', () => {
 				getName: () => 'ext.aa',
 				getPath: () => extensionPath,
 				getPublicPath: () => '/test/',
-				getTargets: () => 'defaults',
+				resolveTargets: () => ({ targets: ['defaults'], deniedOverrides: [] }),
 				getInputPath: () => path.join(extensionPath, bundleConfig.get('input')),
 				getOutputJsPath: () => path.join(extensionPath, bundleConfig.get('output').js),
 				getOutputCssPath: () => path.join(extensionPath, bundleConfig.get('output').css),
@@ -524,7 +556,7 @@ describe('PackageBuilder', () => {
 				getName: () => 'ext.aa',
 				getPath: () => extensionPath,
 				getPublicPath: () => '/test/',
-				getTargets: () => 'defaults',
+				resolveTargets: () => ({ targets: ['defaults'], deniedOverrides: [] }),
 				getInputPath: () => path.join(extensionPath, bundleConfig.get('input')),
 				getOutputJsPath: () => path.join(extensionPath, bundleConfig.get('output').js),
 				getOutputCssPath: () => path.join(extensionPath, bundleConfig.get('output').css),
@@ -584,7 +616,7 @@ describe('PackageBuilder', () => {
 				getName: () => 'test.basic',
 				getPath: () => '/tmp/fake-extension',
 				getPublicPath: () => '/test/',
-				getTargets: () => 'defaults',
+				resolveTargets: () => ({ targets: ['defaults'], deniedOverrides: [] }),
 				getInputPath: () => '/tmp/fake-extension/src/extension.js',
 				getOutputJsPath: () => '/tmp/fake-extension/dist/extension.bundle.js',
 				getOutputCssPath: () => '/tmp/fake-extension/dist/extension.bundle.css',
@@ -929,7 +961,7 @@ describe('PackageBuilder', () => {
 				getName: () => 'test.ts-type-error',
 				getPath: () => tmpExtensionDir,
 				getPublicPath: () => '/test/',
-				getTargets: () => 'defaults',
+				resolveTargets: () => ({ targets: ['defaults'], deniedOverrides: [] }),
 				getInputPath: () => path.join(tmpExtensionDir, bundleConfig.get('input')),
 				getOutputJsPath: () => path.join(tmpExtensionDir, bundleConfig.get('output').js),
 				getOutputCssPath: () => path.join(tmpExtensionDir, bundleConfig.get('output').css ?? './dist/bundle.css'),

@@ -6,9 +6,13 @@ Chef использует [browserslist](https://github.com/browserslist/browser
 
 ## Как это работает
 
-1. Если в `bundle.config.ts` указан параметр `targets` — используется он
-2. Иначе Chef ищет файл `.browserslistrc` вверх по дереву директорий от расширения
-3. Если файл не найден — используется `baseline widely available`
+1. Если в `chef.config` задан `enforce.targets` — используется он
+2. Если в `bundle.config.ts` указан параметр `targets` — используется он
+3. Иначе Chef ищет файл `.browserslistrc` вверх по дереву директорий от расширения
+4. Если файл не найден — используется `defaults.targets` из `chef.config`
+5. Если и его нет — используется `baseline widely available`
+
+Проект может запретить расширениям собственные таргеты правилом [`deny.targets`](/config/chef-config#deny-targets) в `chef.config` — тогда учитывается только конфиг в корне проекта.
 
 ## Данные о браузерах
 

@@ -211,4 +211,41 @@ describe('validateBuildOptions', () => {
 			assert.isEmpty(issues);
 		});
 	});
+
+	describe('deny targets', () => {
+		it('should report own targets of the extension', async () => {
+			const issues = await validateBuildOptions(
+				createBuildOptions(),
+				{ deny: { targets: true } },
+				{ deniedTargetOverrides: ['targets in bundle.config', 'BROWSERSLIST environment variable'] },
+			);
+
+			assert.lengthOf(issues, 1);
+			assert.equal(issues[0].option, 'targets');
+			assert.equal(issues[0].severity, 'error');
+			assert.include(issues[0].message, 'targets in bundle.config, BROWSERSLIST environment variable');
+		});
+
+		it('should not report when the extension has no own targets', async () => {
+			const issues = await validateBuildOptions(
+				createBuildOptions(),
+				{ deny: { targets: true } },
+				{ deniedTargetOverrides: [] },
+			);
+
+			assert.isEmpty(issues);
+		});
+
+		it('should keep the list of sources with a custom message', async () => {
+			const issues = await validateBuildOptions(
+				createBuildOptions(),
+				{ deny: { targets: { severity: 'warning', message: 'Use project targets' } } },
+				{ deniedTargetOverrides: ['targets in bundle.config'] },
+			);
+
+			assert.lengthOf(issues, 1);
+			assert.equal(issues[0].severity, 'warning');
+			assert.equal(issues[0].message, 'Use project targets: targets in bundle.config');
+		});
+	});
 });

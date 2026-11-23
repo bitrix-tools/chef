@@ -24,7 +24,17 @@ const denyChecks: Array<{ key: string; check: (options: BuildOptions) => boolean
 	{ key: 'exportDefault', check: (o) => hasExportDefault(o.input) },
 ];
 
-export async function validateBuildOptions(options: BuildOptions, config: ChefConfig): Promise<ValidationIssue[]>
+export interface ValidationContext
+{
+	/** Own targets of the extension ignored because of `deny.targets`. */
+	deniedTargetOverrides?: string[];
+}
+
+export async function validateBuildOptions(
+	options: BuildOptions,
+	config: ChefConfig,
+	context: ValidationContext = {},
+): Promise<ValidationIssue[]>
 {
 	const issues: ValidationIssue[] = [];
 	const deny = config.deny;
@@ -32,6 +42,19 @@ export async function validateBuildOptions(options: BuildOptions, config: ChefCo
 	if (!deny)
 	{
 		return issues;
+	}
+
+	const targetsRule = parseDenyOption(deny.targets);
+	const deniedTargetOverrides = context.deniedTargetOverrides ?? [];
+	if (targetsRule.enabled && deniedTargetOverrides.length > 0)
+	{
+		const message = targetsRule.message ?? `${denyLabels.targets} denied by project config (chef.config)`;
+		issues.push({
+			code: CF.OPTION_DENIED,
+			option: 'targets',
+			severity: targetsRule.severity,
+			message: `${message}: ${deniedTargetOverrides.join(', ')}`,
+		});
 	}
 
 	for (const { key, check } of denyChecks)

@@ -2,7 +2,6 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 
 import fg from 'fast-glob';
-import browserslist from 'browserslist';
 
 import { BundleConfigManager } from '../config/bundle/bundle-config-manager';
 import { PhpConfigManager } from '../config/php/php-config-manager';
@@ -12,10 +11,12 @@ import { buildDependenciesTree } from '../../utils/package/build-dependencies-tr
 import { Environment } from '../../environment/environment';
 import { PackageSizeCalculator } from '../services/package-size-calculator';
 import { warnIfBrowserDataIsOutdated } from '../../utils/browser-data-age';
+import { resolveTargets } from './resolve-targets';
 
 import type { LintResult } from '../engines/lint/lint-types';
 import type { BuildOptions, BuildResult } from '../engines/build/build-types';
 import type { DependencyNode } from './types/dependency-node';
+import type { ResolvedTargets } from './resolve-targets';
 
 type BasePackageOptions = {
 	path: string,
@@ -194,26 +195,17 @@ export abstract class BasePackage
 
 	getTargets(): Array<string>
 	{
+		return this.resolveTargets().targets;
+	}
+
+	resolveTargets(): ResolvedTargets
+	{
 		warnIfBrowserDataIsOutdated();
 
-		const bundleConfig = this.getBundleConfig();
-		const value = bundleConfig.get('targets');
-
-		if (typeof value === 'string' || Array.isArray(value))
-		{
-			return browserslist(value);
-		}
-
-		const fileTargets = browserslist.loadConfig({
-			path: this.getPath(),
+		return resolveTargets({
+			packagePath: this.getPath(),
+			bundleTargets: this.getBundleConfig().get('targets'),
 		});
-
-		if (fileTargets && fileTargets.length > 0)
-		{
-			return browserslist(fileTargets);
-		}
-
-		return browserslist('baseline widely available');
 	}
 
 	getGlobal(): { [name: string]: string }

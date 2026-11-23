@@ -18,6 +18,7 @@ export interface ChefConfig
 		transformClasses?: DenyOption;
 		sourceMaps?: DenyOption;
 		exportDefault?: DenyOption;
+		targets?: DenyOption;
 	};
 	defaults?: {
 		targets?: string | string[];
@@ -44,6 +45,7 @@ export const denyLabels: Record<string, string> = {
 	transformClasses: 'Class transformation',
 	sourceMaps: 'Source maps',
 	exportDefault: 'export default',
+	targets: 'Own browser targets',
 };
 
 export function parseDenyOption(option: DenyOption | undefined): { enabled: boolean; severity: DenySeverity; message?: string }
