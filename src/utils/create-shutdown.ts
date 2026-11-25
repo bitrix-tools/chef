@@ -1,8 +1,11 @@
-export function createShutdown(action: () => any): () => Promise<any>
+import { constants } from 'node:os';
+
+// Exit code of a process stopped by a signal: 128 + the signal number (130 for Ctrl+C).
+export function createShutdown(action: () => any): (signal: NodeJS.Signals) => Promise<any>
 {
 	let isShuttingDown = false;
 
-	return async () => {
+	return async (signal: NodeJS.Signals) => {
 		if (isShuttingDown)
 		{
 			return;
@@ -12,6 +15,6 @@ export function createShutdown(action: () => any): () => Promise<any>
 
 		await action();
 
-		process.exit(0);
+		process.exit(128 + constants.signals[signal]);
 	};
 }

@@ -486,6 +486,7 @@ baselineCommand
 			console.log(chalk.red(`  No features found for "${query}"`));
 			console.log(`  Browse: ${chalk.dim('https://webstatus.dev/features')}`);
 			console.log('');
+			process.exitCode = 1;
 
 			return;
 		}

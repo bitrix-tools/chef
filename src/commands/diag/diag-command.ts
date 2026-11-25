@@ -720,6 +720,7 @@ async function checkSpecificCircularDeps(extensions: string[], args: { path: str
 		if (!extension)
 		{
 			console.log(` ${chalk.red('✗')} ${name} ${chalk.dim('not found')}`);
+			process.exitCode = 1;
 			continue;
 		}
 
@@ -885,6 +886,11 @@ async function checkAllCircularImports(args: { path: string; include?: string[];
 	const durationStr = (totalDuration / 1000).toFixed(2);
 	console.log(` ${chalk.dim(`Checked ${snapshots.length} extensions, found ${totalCycles} circular ${totalCycles === 1 ? 'import' : 'imports'} in ${results.length} ${results.length === 1 ? 'extension' : 'extensions'} in ${durationStr}s`)}`);
 	console.log('');
+
+	if (results.length > 0)
+	{
+		process.exitCode = 1;
+	}
 }
 
 async function checkSpecificCircularImports(extensions: string[]): Promise<void>
@@ -903,6 +909,7 @@ async function checkSpecificCircularImports(extensions: string[]): Promise<void>
 		if (!extension)
 		{
 			console.log(` ${chalk.red('✗')} ${name} ${chalk.dim('not found')}`);
+			process.exitCode = 1;
 			continue;
 		}
 
@@ -1467,6 +1474,7 @@ const depsTreeCommand = new Command('deps-tree')
 			console.log('');
 			console.log(` ${chalk.red('✗')} Extension ${chalk.bold(extensionName)} not found`);
 			console.log('');
+			process.exitCode = 1;
 			return;
 		}
 
@@ -1557,6 +1565,7 @@ const bundleSizeCommand = new Command('bundle-size')
 			console.log('');
 			console.log(` ${chalk.red('✗')} Extension ${chalk.bold(extensionName)} not found`);
 			console.log('');
+			process.exitCode = 1;
 			return;
 		}
 
@@ -1963,6 +1972,7 @@ async function checkSpecificBaseline(extensions: string[], args: { errorsOnly?: 
 		if (!extension)
 		{
 			console.log(` ${chalk.red('✗')} ${name} ${chalk.dim('not found')}`);
+			process.exitCode = 1;
 			continue;
 		}
 
@@ -2061,6 +2071,7 @@ async function checkSpecificBaseline(extensions: string[], args: { errorsOnly?: 
 			spinner.stop();
 			const message = error instanceof Error ? error.message : String(error);
 			console.log(` ${chalk.red('✗')} ${name} ${chalk.dim(`build failed: ${message}`)}`);
+			process.exitCode = 1;
 		}
 	}
 

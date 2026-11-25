@@ -91,9 +91,11 @@ buildCommand
 		const watchers: Array<FSWatcher> = [];
 		const timers = new Map<string, NodeJS.Timeout>();
 		const mergeLock = new MergeLock(Environment.getRoot());
+		let hasNotFound = false;
 
 		extensionsStream
 			.on('not-found', ({ message }: { message: string }) => {
+				hasNotFound = true;
 				console.log('');
 				console.log(message);
 			})
@@ -158,7 +160,8 @@ buildCommand
 				{
 					printSummary(buildResults, startTime);
 
-					process.exit(0);
+					const hasFailed = buildResults.some((result) => result.failed > 0);
+					process.exit(hasFailed || hasNotFound ? 1 : 0);
 				}
 			})
 			.on('error', (err: Error) => {

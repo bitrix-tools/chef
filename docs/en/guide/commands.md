@@ -447,3 +447,14 @@ chef help agent              # Guide for AI coding agents
 ```
 
 `chef help agent` prints a guide for AI coding agents that matches the installed chef version. See [AI Agents](/en/guide/ai-agents) for details.
+
+## Exit codes
+
+An error can be detected by the exit code, so chef can run in CI and git hooks without parsing the output.
+
+| Code | When |
+|------|------|
+| `0` | The command finished without errors |
+| `1` | A build, lint or type check error, or failed tests; an extension was not found; `chef diag` found problems (with `--reporter json` — only if the check could not run) |
+| `2` | Incompatible options (e.g. `--watch` with `--reporter json`) |
+| `130`, `143` | `--watch` mode stopped with `Ctrl+C` (`SIGINT`) or `SIGTERM` |

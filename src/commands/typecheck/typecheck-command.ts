@@ -153,6 +153,7 @@ typecheckCommand
 		const queue = new SequentialQueue();
 		const results: TaskResult[] = [];
 		const startTime = Date.now();
+		let hasNotFound = false;
 
 		const typecheckOptions: TypecheckOptions = {
 			files: args.file,
@@ -175,6 +176,7 @@ typecheckCommand
 
 		extensionsStream
 			.on('not-found', ({ message }: { message: string }) => {
+				hasNotFound = true;
 				console.log('');
 				console.log(message);
 			})
@@ -221,7 +223,7 @@ typecheckCommand
 				console.log('');
 
 				const hasFailed = results.some((r) => r.status === 'failed');
-				process.exit(hasFailed ? 1 : 0);
+				process.exit(hasFailed || hasNotFound ? 1 : 0);
 			})
 			.on('error', (err: Error) => {
 				console.log(formatInternalError({ code: CF.PACKAGE_READ_ERROR, message: err.message, stack: err.stack }));

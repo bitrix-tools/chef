@@ -25,6 +25,8 @@ flowToTsCommand
 	.option('--rm-js', 'Remove original .js sources after migration', false)
 	.action((extensions: string[], args): void => {
 		const queue = new SequentialQueue();
+		let hasNotFound = false;
+		let hasFailed = false;
 
 		const extensionsStream: NodeJS.ReadableStream = (() => {
 			if (extensions.length > 0)
@@ -41,6 +43,7 @@ flowToTsCommand
 
 		extensionsStream
 			.on('not-found', ({ message }: { message: string }) => {
+				hasNotFound = true;
 				console.log('');
 				console.log(message);
 			})
@@ -148,7 +151,7 @@ flowToTsCommand
 						},
 					];
 
-					await TaskRunner.run({
+					const result = await TaskRunner.run({
 						title: `Migrate ${extension.getName()} to TypeScript`,
 						tasks: [
 							...renameTasks,
@@ -156,11 +159,16 @@ flowToTsCommand
 							...configTasks,
 						],
 					});
+
+					if (result.failed > 0)
+					{
+						hasFailed = true;
+					}
 				});
 			})
 			.on('done', async () => {
 				await queue.onIdle();
-				process.exit(0);
+				process.exit(hasFailed || hasNotFound ? 1 : 0);
 			})
 			.on('error', (err: Error) => {
 				console.log(formatInternalError({ code: CF.PACKAGE_READ_ERROR, message: err.message, stack: err.stack }));

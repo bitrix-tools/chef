@@ -39,7 +39,7 @@ chef (`@bitrix/chef`) builds, type-checks, lints and tests Bitrix JS extensions.
 ## Machine-readable output
 
 - With `--reporter json`, commands that support it print a single JSON document to stdout and nothing else. Format: `{{docsDirectory}}/guide/json/response-format.md`.
-- Exit codes with `--reporter json`: `0` — success, `1` — errors (build, lint, tests), `2` — incompatible options.
+- Exit codes are the same with and without `--reporter json`: `0` — success, `1` — errors (build, lint, type check, tests, an extension not found), `2` — incompatible options. `chef diag` also exits with `1` when it finds problems, but with `--reporter json` only when the check could not run. A stopped `--watch` exits with `130` (`SIGINT`) or `143` (`SIGTERM`).
 - Every error and warning carries a `CFxxxx` code — see "Error codes" below.
 
 ## Commands

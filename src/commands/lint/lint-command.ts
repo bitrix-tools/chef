@@ -179,6 +179,7 @@ lintCommand
 		const queue = new SequentialQueue();
 		const lintResults: LintRunResult[] = [];
 		const startTime = Date.now();
+		let hasNotFound = false;
 
 		const lintOptions = {
 			fix: args.fix ?? false,
@@ -206,6 +207,7 @@ lintCommand
 
 		extensionsStream
 			.on('not-found', ({ message }: { message: string }) => {
+				hasNotFound = true;
 				console.log('');
 				console.log(message);
 			})
@@ -224,7 +226,7 @@ lintCommand
 				console.log('');
 
 				const hasFailed = lintResults.some((r) => r.lintResult.hasErrors());
-				process.exit(hasFailed ? 1 : 0);
+				process.exit(hasFailed || hasNotFound ? 1 : 0);
 			})
 			.on('error', (err: Error) => {
 				console.log(formatInternalError({ code: CF.PACKAGE_READ_ERROR, message: err.message, stack: err.stack }));

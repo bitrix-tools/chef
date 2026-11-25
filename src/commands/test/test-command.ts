@@ -86,9 +86,12 @@ function runTestsTeamcity({ extensions, args, type }: RunTestsOptions): void
 	const queue = new SequentialQueue();
 	const extensionsStream = createExtensionsStream(extensions, args);
 	const reporter = new TeamcityReporter();
+	let hasNotFound = false;
+	let hasErrors = false;
 
 	extensionsStream
 		.on('not-found', ({ message }: { message: string }) => {
+			hasNotFound = true;
 			console.log('');
 			console.log(message);
 		})
@@ -127,6 +130,11 @@ function runTestsTeamcity({ extensions, args, type }: RunTestsOptions): void
 							onToken: (token) => reporter.handleToken(token, label),
 						});
 
+						if (result.errors.length > 0)
+						{
+							hasErrors = true;
+						}
+
 						if (result.debugCleanup)
 						{
 							await result.debugCleanup();
@@ -138,17 +146,26 @@ function runTestsTeamcity({ extensions, args, type }: RunTestsOptions): void
 
 				if (type !== 'unit')
 				{
-					await runE2eForTarget(extensionTarget(extension), {
+					const result = await runE2eForTarget(extensionTarget(extension), {
 						...args,
 						onToken: (token, browser) => reporter.handleToken(token, browser),
 					});
+
+					if (result.errors.length > 0)
+					{
+						hasErrors = true;
+					}
 				}
 			});
 		})
 		.on('done', async () => {
 			await queue.onIdle();
 
-			reporter.finish();
+			const { failed } = reporter.finish();
+			if (failed > 0 || hasErrors || hasNotFound)
+			{
+				process.exitCode = 1;
+			}
 
 			await new Promise<void>((resolve) => {
 				process.stdout.write('', () => resolve());
@@ -294,9 +311,11 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 	const testResults: TaskGroupResult[] = [];
 	const startTime = Date.now();
 	const watchers: Array<FSWatcher> = [];
+	let hasNotFound = false;
 
 	extensionsStream
 		.on('not-found', ({ message }: { message: string }) => {
+			hasNotFound = true;
 			console.log('');
 			console.log(message);
 		})
@@ -393,17 +412,19 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 					console.log(`\n${chalk.green('✔')} Watcher started for ${count} extensions`);
 				}
 			}
-			else if (args.list)
-			{
-				printListingSummary(testResults);
-
-				process.exit(0);
-			}
 			else
 			{
-				printSummary(testResults, startTime, { isTestRun: true });
+				if (args.list)
+				{
+					printListingSummary(testResults);
+				}
+				else
+				{
+					printSummary(testResults, startTime, { isTestRun: true });
+				}
 
-				process.exit(0);
+				const hasFailed = testResults.some((result) => result.failed > 0);
+				process.exit(hasFailed || hasNotFound ? 1 : 0);
 			}
 		})
 		.on('error', (err: Error) => {
@@ -498,16 +519,27 @@ function runModuleTestsTeamcity(modules: string[], args: Record<string, any>): v
 	const reporter = new TeamcityReporter();
 
 	void (async () => {
+		let hasErrors = false;
+
 		for (const moduleName of modules)
 		{
 			// eslint-disable-next-line no-await-in-loop
-			await runE2eForTarget(moduleTarget(moduleName), {
+			const result = await runE2eForTarget(moduleTarget(moduleName), {
 				...args,
 				onToken: (token: TestToken, browser?: string) => reporter.handleToken(token, browser),
 			});
+
+			if (result.errors.length > 0)
+			{
+				hasErrors = true;
+			}
 		}
 
-		reporter.finish();
+		const { failed } = reporter.finish();
+		if (failed > 0 || hasErrors)
+		{
+			process.exitCode = 1;
+		}
 
 		await new Promise<void>((resolve) => {
 			process.stdout.write('', () => resolve());
@@ -600,7 +632,9 @@ async function runModuleTests(rawModules: string[], args: Record<string, any>): 
 	{
 		printSummary(testResults, startTime, { isTestRun: true, unitLabel: 'Modules' });
 	}
-	process.exit(0);
+
+	const hasFailed = testResults.some((result) => result.failed > 0);
+	process.exit(hasFailed ? 1 : 0);
 }
 
 async function runModuleTestsWatch(
