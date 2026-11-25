@@ -82,7 +82,7 @@ type JsonSummary = {
 |-------------|----------------------------------------------------------------------------|
 | `build`     | —                                                                          |
 | `lint`      | `fixedCount`                                                               |
-| `test`      | `tests: { total, passed, failed, skipped }` — агрегат по самим тестам      |
+| `test`      | `tests: { total, passed, failed, skipped, flaky }` — агрегат по самим тестам |
 | `typecheck` | `skippedCount` — количество расширений, пропущенных как не-TypeScript      |
 
 ### `JsonErrorPayload`
@@ -174,28 +174,33 @@ type TestDetails = {
 
 type TestKindDetails = {
   ran: boolean;
+  listed?: boolean;        // true — тесты только перечислены (--list), не запускались
   skipReason?: string;
   durationMs: number;
   browsers: string[];      // 'chromium', 'firefox', 'webkit' — реальные имена
   passed: number;
   failed: number;
   skipped: number;
+  flaky: number;           // из passed: прошли не с первой попытки (повторы, --retries)
   total: number;
   tests: TestEntry[];
   consoleLogs: { type: string; text: string }[];
+  runErrors: JsonErrorPayload[];  // ошибки запуска, не привязанные к тесту: сломанный конфиг, спека не компилируется
 };
 
 type TestEntry = {
   suite: string[];                                  // путь suite через describe/context
   title: string;
-  status: 'passed' | 'failed' | 'skipped';
+  status: 'passed' | 'failed' | 'skipped' | 'listed';
   results: Record<string, BrowserTestResult>;       // ключ — имя браузера
 };
 
 type BrowserTestResult = {
-  status: 'passed' | 'failed' | 'skipped';
+  status: 'passed' | 'failed' | 'skipped' | 'listed';
   durationMs?: number;
   failure?: TestFailure;
+  retries?: number;                                 // сколько повторов понадобилось; > 0 у passed — тест нестабилен
+  attachments?: { name: string; contentType: string; path: string }[];  // скриншоты, видео, trace
 };
 
 type TestFailure = {
@@ -209,6 +214,8 @@ type TestFailure = {
 ```
 
 По умолчанию unit-тесты прогоняются во **всех** браузерах из `playwright.config.ts`. `--project chromium` сужает до одного.
+
+Повторы считаются по итоговой попытке: тест, прошедший со второго раза, попадает в `passed` и в `flaky`, а упавший на всех попытках — в `failed`. Повторы включаются через `retries` в `playwright.config.ts` или опцию `--retries`.
 
 В корневом `extensions[].errors[]` для каждого упавшего теста создаётся запись с `frame`/`file`/`line`/`column` — без полного стек-трейса.
 

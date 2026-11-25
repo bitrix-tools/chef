@@ -82,7 +82,7 @@ Command-specific extras:
 |-------------|---------------------------------------------------------------------------|
 | `build`     | —                                                                         |
 | `lint`      | `fixedCount`                                                              |
-| `test`      | `tests: { total, passed, failed, skipped }` — totals across actual tests  |
+| `test`      | `tests: { total, passed, failed, skipped, flaky }` — totals across actual tests |
 | `typecheck` | `skippedCount` — extensions skipped as non-TypeScript                     |
 
 ### `JsonErrorPayload`
@@ -174,28 +174,33 @@ type TestDetails = {
 
 type TestKindDetails = {
   ran: boolean;
+  listed?: boolean;        // true — tests were only listed (--list), not run
   skipReason?: string;
   durationMs: number;
   browsers: string[];      // 'chromium', 'firefox', 'webkit' — actual names
   passed: number;
   failed: number;
   skipped: number;
+  flaky: number;           // part of passed: passed only on a retry (--retries)
   total: number;
   tests: TestEntry[];
   consoleLogs: { type: string; text: string }[];
+  runErrors: JsonErrorPayload[];  // run errors not tied to a test: broken config, a spec that won't compile
 };
 
 type TestEntry = {
   suite: string[];                                  // suite path (describe/context chain)
   title: string;
-  status: 'passed' | 'failed' | 'skipped';
+  status: 'passed' | 'failed' | 'skipped' | 'listed';
   results: Record<string, BrowserTestResult>;       // key = browser name
 };
 
 type BrowserTestResult = {
-  status: 'passed' | 'failed' | 'skipped';
+  status: 'passed' | 'failed' | 'skipped' | 'listed';
   durationMs?: number;
   failure?: TestFailure;
+  retries?: number;                                 // retries it took; > 0 on a passed test means it is flaky
+  attachments?: { name: string; contentType: string; path: string }[];  // screenshots, video, trace
 };
 
 type TestFailure = {
@@ -209,6 +214,8 @@ type TestFailure = {
 ```
 
 By default unit tests run in **all** browsers configured in `playwright.config.ts`. Use `--project chromium` to narrow to one.
+
+Retries are counted by the final attempt: a test that passed on a retry counts in both `passed` and `flaky`, one that failed every attempt counts in `failed`. Retries come from `retries` in `playwright.config.ts` or the `--retries` option.
 
 For each failed test a record lands in `extensions[].errors[]` with `frame`/`file`/`line`/`column` — without a full stack trace.
 
