@@ -11,6 +11,19 @@
 npm install -g @bitrix/chef
 ```
 
+### Updating
+
+Once a day chef checks in the background whether a new version is out. If it is, chef shows how to update after the command finishes:
+
+- in a terminal — in a box with the update command
+- without a terminal (an AI agent, a script) — as a single line in stderr, stdout is not changed:
+
+  ```
+  chef: update available 2.4.0 → 2.5.0, run: npm i -g @bitrix/chef
+  ```
+
+The notice appears from the run after the check. It is not shown when the `NO_UPDATE_NOTIFIER` or `CI` environment variable is set, or when chef runs from its sources (`npm link`).
+
 ## Project Initialization
 
 Navigate to the root of your Bitrix project and run:

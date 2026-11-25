@@ -36,6 +36,8 @@ export function runChef(args: string[], options?: {
 			env: {
 				...process.env,
 				NO_COLOR: '1',
+				// A cached newer version would add an update notice to stderr.
+				NO_UPDATE_NOTIFIER: '1',
 			},
 			timeout,
 		});
