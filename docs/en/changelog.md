@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.5.1 <Badge type="tip" text="11/25/2026" />
+
+With `--reporter json`, Playwright options that chef does not handle itself (`--workers`, `--retries`, `--repeat-each`, `--update-snapshots` and others) are now passed to the runner, as with the regular output. Previously they were lost in JSON mode for `chef test`, `chef test e2e` and `chef test module`. `--list` combined with `--reporter teamcity` now fails with an error: previously the flag was silently ignored and the tests actually ran. Playwright options passed to `chef test unit --reporter json` now produce an error in JSON instead of plain text.
+
 ## v2.5.0 <Badge type="tip" text="11/25/2026" />
 
 When a build, tests or a migration fail, chef now exits with code 1 for the regular output too, not only with `--reporter json`. Previously `chef build`, `chef test` and `chef flow-to-ts` exited with 0 even on errors, so CI and git hooks missed them. Code 1 is also returned in other cases: an extension is not found (`build`, `lint`, `typecheck`, `test`, `flow-to-ts`, `diag`); tests fail with `--reporter teamcity`; `chef baseline` finds nothing; `chef diag circular-imports` over all extensions finds cycles. A `--watch` run stopped with `Ctrl+C` or `SIGTERM` exits with 130 or 143.

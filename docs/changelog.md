@@ -1,5 +1,9 @@
 # История изменений
 
+## v2.5.1 <Badge type="tip" text="25.11.2026" />
+
+С `--reporter json` параметры Playwright, которые chef не обрабатывает сам (`--workers`, `--retries`, `--repeat-each`, `--update-snapshots` и другие), теперь передаются раннеру так же, как в обычном выводе. Раньше в JSON-режиме они терялись в `chef test`, `chef test e2e` и `chef test module`. `--list` вместе с `--reporter teamcity` теперь завершается с ошибкой: раньше флаг молча игнорировался, и тесты запускались по-настоящему. Если передать параметры Playwright в `chef test unit --reporter json`, ошибка приходит в JSON, а не текстом.
+
 ## v2.5.0 <Badge type="tip" text="25.11.2026" />
 
 Если сборка, тесты или миграция завершились с ошибкой, chef теперь возвращает код 1 и в обычном выводе, а не только с `--reporter json`. Раньше `chef build`, `chef test` и `chef flow-to-ts` возвращали 0 даже при ошибке, и CI и git-хуки её не замечали. Код 1 возвращается и в других случаях: расширение не найдено (`build`, `lint`, `typecheck`, `test`, `flow-to-ts`, `diag`); тесты упали при запуске с `--reporter teamcity`; `chef baseline` ничего не нашёл; `chef diag circular-imports` по всем расширениям нашёл циклы. Если остановить `--watch` через `Ctrl+C` или `SIGTERM`, код выхода будет 130 или 143.
