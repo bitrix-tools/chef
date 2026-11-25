@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.5.0 <Badge type="tip" text="11/25/2026" />
+
+When a build, tests or a migration fail, chef now exits with code 1 for the regular output too, not only with `--reporter json`. Previously `chef build`, `chef test` and `chef flow-to-ts` exited with 0 even on errors, so CI and git hooks missed them. Code 1 is also returned in other cases: an extension is not found (`build`, `lint`, `typecheck`, `test`, `flow-to-ts`, `diag`); tests fail with `--reporter teamcity`; `chef baseline` finds nothing; `chef diag circular-imports` over all extensions finds cycles. A `--watch` run stopped with `Ctrl+C` or `SIGTERM` exits with 130 or 143.
+
+When a newer chef is published and stdout is not a terminal (an AI agent, a script), chef prints a line to stderr after the command: `chef: update available <current> → <latest>, run: npm i -g @bitrix/chef`. A terminal still shows the box. There is no notice when the `NO_UPDATE_NOTIFIER` or `CI` environment variable is set, or when chef runs from its sources. Previously quick commands such as `chef --version` exited before the check for a new version finished; now the check completes.
+
 ## v2.4.0 <Badge type="tip" text="11/23/2026" />
 
 The new `deny.targets` rule in `chef.config` prevents extensions from setting their own browser targets. Own targets are `targets` (or `browserslist`) set to a string or an array in `bundle.config`, a browserslist config in the extension directory or between it and the project root, and the `BROWSERSLIST` and `BROWSERSLIST_CONFIG` environment variables. `browserslist: true` does not violate the rule. Own targets are never applied, whatever the `severity`: with `error` the build stops with a `CF2001` error listing the sources found, and with `warning` the extension is built with the project targets and a warning is shown. Project targets come from `enforce.targets`, then from the browserslist config in the project root, then from `defaults.targets`, and if none of them is set, `baseline widely available` is used.
