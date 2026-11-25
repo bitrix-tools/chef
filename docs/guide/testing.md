@@ -219,7 +219,7 @@ chef test vendor.my-extension --list
   E2E   25 tests · 25 runnable
 ```
 
-Работает для расширений (unit + e2e), модулей (`chef test module`) и всех репортеров (`--reporter default|json|teamcity`). С `--watch` несовместимо.
+Работает для расширений (unit + e2e), модулей (`chef test module`) и репортеров `default` и `json`. С `--watch` и `--reporter teamcity` несовместимо: сервисные сообщения TeamCity описывают только прогон.
 
 ### Аргументы Playwright
 
@@ -238,7 +238,7 @@ chef test e2e vendor.my-extension --trace=on
 
 Ходовые опции перечислены в `chef test e2e --help`, но список там не полный: любая опция Playwright работает, даже добавленная в свежей версии раннера — обновлять chef для этого не нужно.
 
-Работает для e2e — у unit-тестов нет отдельного процесса раннера, им передавать опции некуда, и chef скажет об этом явно.
+Опции передаются при любом репортере (`default`, `json`, `teamcity`) и для `chef test module`. Работает для e2e — у unit-тестов нет отдельного процесса раннера, им передавать опции некуда: `chef test unit` скажет об этом явно, а без подкоманды (`chef test vendor.my-extension`) опции применятся к e2e-части прогона.
 
 За chef остаются опции, которые управляют им самим: `--watch`, `--path`, `--console`, `--list`, `--reporter`, `--cdp-port`, а также `--headed`, `--debug`, `--grep` и `--project` — их chef переводит в аргументы Playwright сам. Всё прочее — Playwright.
 

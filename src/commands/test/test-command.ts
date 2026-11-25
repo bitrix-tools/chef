@@ -32,7 +32,7 @@ function parseConsoleOption(value: string): string
 
 	return value;
 }
-import { test as testJson, testModules as testModulesJson } from '../../reporters/json/test';
+import { test as testJson, testModules as testModulesJson, type TestOptions } from '../../reporters/json/test';
 import { emitJson } from '../../reporters/json/emit';
 import { createReporterOption } from '../../shared/options/reporter-option';
 
@@ -247,34 +247,73 @@ function printListingSummary(testResults: TaskGroupResult[]): void
 	console.log('');
 }
 
+/**
+ * Run options the JSON layer takes from the command line. Shared by extension and module
+ * runs so a new option cannot reach one of them and silently miss the other.
+ */
+function toJsonTestOptions(args: Record<string, any>): TestOptions
+{
+	return {
+		headed: args.headed,
+		debug: args.debug,
+		grep: args.grep,
+		project: args.project,
+		listOnly: args.list,
+		runnerArgs: args.runnerArgs,
+	};
+}
+
+/**
+ * JSON output must stay parseable even when the options themselves are rejected, so the
+ * refusal is reported as a JSON result rather than a line of text.
+ */
+async function denyJsonOption(message: string): Promise<never>
+{
+	await emitJson({
+		success: false,
+		command: 'test',
+		error: { code: CF.OPTION_DENIED, message },
+		extensions: [],
+		notFound: [],
+		summary: {
+			total: 0, passed: 0, failed: 0, durationMs: 0,
+			errorCount: 1, warningCount: 0,
+			tests: { total: 0, passed: 0, failed: 0, skipped: 0 },
+		},
+	});
+	process.exit(2);
+}
+
+/**
+ * TeamCity messages describe a test run: there is no way to report tests that were only
+ * listed, and running them instead (what happened before) is the opposite of --list.
+ */
+function reportTeamcityListing(args: Record<string, any>): boolean
+{
+	if (!args.list || args.reporter !== 'teamcity')
+	{
+		return false;
+	}
+
+	console.log('');
+	console.log(chalk.yellow('--list cannot be combined with --reporter teamcity.'));
+
+	return true;
+}
+
 async function runTestsJson({ extensions, args, type }: RunTestsOptions): Promise<void>
 {
 	if (args.watch)
 	{
-		await emitJson({
-			success: false,
-			command: 'test',
-			error: { code: CF.OPTION_DENIED, message: '--watch is not supported with --reporter json' },
-			extensions: [],
-			summary: {
-				total: 0, passed: 0, failed: 0, durationMs: 0,
-				errorCount: 1, warningCount: 0,
-				tests: { total: 0, passed: 0, failed: 0, skipped: 0 },
-			},
-		});
-		process.exit(2);
+		await denyJsonOption('--watch is not supported with --reporter json');
 	}
 
 	const result = await testJson({
+		...toJsonTestOptions(args),
 		extension: extensions.length > 0 ? extensions : undefined,
 		path: extensions.length > 0 ? undefined : args.path,
 		kind: type ?? 'all',
-		headed: args.headed,
-		debug: args.debug,
-		grep: args.grep,
 		file: args.file,
-		project: args.project,
-		listOnly: args.list,
 	});
 	await emitJson(result);
 	process.exit(result.success ? 0 : 1);
@@ -291,6 +330,11 @@ function runTests({ extensions, args, type }: RunTestsOptions): void
 	{
 		console.log('');
 		console.log(chalk.yellow('--list cannot be combined with --watch.'));
+		process.exit(1);
+	}
+
+	if (reportTeamcityListing(args))
+	{
 		process.exit(1);
 	}
 
@@ -556,19 +600,7 @@ async function runModuleTests(rawModules: string[], args: Record<string, any>): 
 	{
 		if (args.watch)
 		{
-			await emitJson({
-				success: false,
-				command: 'test',
-				error: { code: CF.OPTION_DENIED, message: '--watch is not supported with --reporter json' },
-				extensions: [],
-				notFound: [],
-				summary: {
-					total: 0, passed: 0, failed: 0, durationMs: 0,
-					errorCount: 1, warningCount: 0,
-					tests: { total: 0, passed: 0, failed: 0, skipped: 0 },
-				},
-			});
-			process.exit(2);
+			await denyJsonOption('--watch is not supported with --reporter json');
 		}
 
 		const { extensions: jsonModules, file: jsonFile } = splitExtensionsAndFile(rawModules);
@@ -578,12 +610,8 @@ async function runModuleTests(rawModules: string[], args: Record<string, any>): 
 		}
 
 		const result = await testModulesJson(jsonModules, {
+			...toJsonTestOptions(args),
 			file: jsonFile,
-			headed: args.headed,
-			debug: args.debug,
-			grep: args.grep,
-			project: args.project,
-			listOnly: args.list,
 		});
 		await emitJson(result);
 		process.exit(result.success ? 0 : 1);
@@ -592,7 +620,7 @@ async function runModuleTests(rawModules: string[], args: Record<string, any>): 
 	const { modules, file } = resolveModules(rawModules);
 	const moduleArgs = { ...args, file };
 
-	if (reportUnquotedGrep(modules, args))
+	if (reportUnquotedGrep(modules, args) || reportTeamcityListing(args))
 	{
 		process.exit(1);
 	}
@@ -809,7 +837,7 @@ const unitCommand = new Command('unit')
 	.argument('[args...]', 'Extensions to test and optionally a test file (e.g. main.core ui.buttons dom.test.ts)');
 
 commonOptions(unitCommand, false)
-	.action((rawArgs: string[], _opts, command: Command): void => {
+	.action(async (rawArgs: string[], _opts, command: Command): Promise<void> => {
 		const args = command.optsWithGlobals();
 		const runnerArgs = takeRunnerArgs();
 		if (runnerArgs.length > 0)
@@ -817,6 +845,13 @@ commonOptions(unitCommand, false)
 			// Unit tests run in-browser under chef's own harness, not the Playwright CLI —
 			// there is no runner process to forward these to, and silently dropping them
 			// would repeat exactly the bug this routing was added to fix.
+			if (args.reporter === 'json')
+			{
+				await denyJsonOption(
+					`Unknown option for unit tests: ${runnerArgs.join(' ')}. Playwright runner options apply to e2e tests only.`,
+				);
+			}
+
 			console.log('');
 			console.log(chalk.yellow(`Unknown option for unit tests: ${chalk.bold(runnerArgs.join(' '))}`));
 			console.log(chalk.yellow('Playwright runner options apply to e2e tests only (chef test e2e).'));

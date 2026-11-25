@@ -42,6 +42,8 @@ export type TestOptions = JsonInputOptions & TargetSelector & {
 	project?: string | string[],
 	// List tests without running them (--list).
 	listOnly?: boolean,
+	// Extra Playwright CLI arguments for e2e runs (e.g. ['--workers', '1']).
+	runnerArgs?: string[],
 };
 
 export type TestStatus = 'passed' | 'failed' | 'skipped' | 'listed';
@@ -404,6 +406,7 @@ async function runE2E(target: E2eTarget, options: TestOptions): Promise<TestKind
 		file: options.file,
 		project: options.project,
 		listOnly: options.listOnly,
+		runnerArgs: options.runnerArgs,
 	});
 	merger.absorb(result);
 	const durationMs = Date.now() - runStart;

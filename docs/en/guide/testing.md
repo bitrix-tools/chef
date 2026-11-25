@@ -217,7 +217,7 @@ Tests are grouped by describe block, with deferred ones (`skip`/`fixme`) marked.
   E2E   25 tests · 25 runnable
 ```
 
-Works for extensions (unit + e2e), modules (`chef test module`) and every reporter (`--reporter default|json|teamcity`). It can't be combined with `--watch`.
+Works for extensions (unit + e2e), modules (`chef test module`) and the `default` and `json` reporters. It can't be combined with `--watch` or `--reporter teamcity`: TeamCity service messages only describe a test run.
 
 ### Playwright arguments
 
@@ -236,7 +236,7 @@ chef test e2e vendor.my-extension --trace=on
 
 The common ones are listed in `chef test e2e --help`, but that list is not exhaustive: every Playwright option works, including one added in a fresh runner release — no chef update needed.
 
-This applies to e2e tests — unit tests have no separate runner process to pass options to, and chef says so explicitly.
+Options are passed with every reporter (`default`, `json`, `teamcity`) and for `chef test module`. This applies to e2e tests — unit tests have no separate runner process to pass options to: `chef test unit` says so explicitly, and without a subcommand (`chef test vendor.my-extension`) the options apply to the e2e part of the run.
 
 chef keeps the options that drive chef itself: `--watch`, `--path`, `--console`, `--list`, `--reporter`, `--cdp-port`, plus `--headed`, `--debug`, `--grep` and `--project`, which chef translates into runner arguments of its own. Everything else belongs to Playwright.
 
